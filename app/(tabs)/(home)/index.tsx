@@ -88,9 +88,13 @@ type GeminiListModelsResponse = {
 export default function HomeScreen() {
   const { addEntry, updateEntry } = useScanJournal();
   const currentEntryIdRef = useRef<string | null>(null);
-  const [image, setImage] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [imageMimeType, setImageMimeType] = useState<string>('image/jpeg');
+
+  type ScanImage = { uri: string; base64: string; mimeType: string };
+  const [scanImages, setScanImages] = useState<ScanImage[]>([]);
+  const primaryImage = scanImages.length > 0 ? scanImages[0] : null;
+
+  const [mode, setMode] = useState<'identify' | 'identify360'>('identify');
+
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -100,8 +104,8 @@ export default function HomeScreen() {
   const chatContextKeyRef = useRef<string | null>(null);
 
   const canScan = useMemo(() => {
-    return Boolean(imageBase64) && Boolean(apiKey);
-  }, [apiKey, imageBase64]);
+    return scanImages.length > 0 && Boolean(apiKey);
+  }, [apiKey, scanImages.length]);
 
   const tools = useMemo(() => ({}), []);
   const {
@@ -394,7 +398,10 @@ export default function HomeScreen() {
   );
 
   const analyzeWithGemini = useCallback(async (): Promise<void> => {
-    console.log('[Scan] analyzeWithGemini start', { hasImage: Boolean(image), hasBase64: Boolean(imageBase64) });
+    console.log('[Scan] analyzeWithGemini start', {
+      imageCount: scanImages.length,
+      mode,
+    });
 
     setScanError(null);
     setScanResult(null);
@@ -406,20 +413,29 @@ export default function HomeScreen() {
 
     console.log('[Scan] using gemini api key', { length: apiKey.length });
 
-    if (!imageBase64) {
+    if (scanImages.length === 0) {
       setScanError('No image data found. Please upload or take a photo again.');
+      return;
+    }
+
+    const expectedCount = mode === 'identify360' ? 3 : 1;
+    if (mode === 'identify360' && scanImages.length < expectedCount) {
+      setScanError('360 Identify needs 3 angles. Please take a front, side, and close-up shot.');
       return;
     }
 
     setAnalyzing(true);
 
-    const prompt = `You are an expert Australian bush tucker identification assistant. Use the photo to identify the MOST LIKELY plant/food item and provide practical, safety-first guidance.
+    const prompt = `You are an expert Australian bush tucker identification assistant. Use the photo(s) to identify the MOST LIKELY plant/food item and provide practical, safety-first guidance.
+
+If there are multiple photos, treat them as different angles of THE SAME specimen.
 
 Rules:
 - Respond ONLY as strict JSON (no markdown, no backticks).
 - If you are not highly confident, set bushTuckerLikely=false and safety.status='uncertain'.
 - When uncertain, DO NOT encourage eating. Emphasize verification with a local Indigenous guide / botanist.
 - Consider toxic lookalikes and common hazards (sap/latex, spines, fungi, berries, allergic reactions).
+- If the photos show multiple species or are too blurry/dark, reduce confidence and set safety.status='uncertain'.
 - Keep language concise, friendly, and Australia-specific.
 
 Return JSON with keys:
@@ -434,24 +450,24 @@ Return JSON with keys:
 - warnings: string[]
 - suggestedUses: string[]`;
 
+    const imageParts = scanImages.map((img, idx) => ({
+      inlineData: {
+        mimeType: img.mimeType || 'image/jpeg',
+        data: img.base64,
+      },
+      _debugIndex: idx + 1,
+    }));
+
     const body = {
       contents: [
         {
           role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: imageMimeType || 'image/jpeg',
-                data: imageBase64,
-              },
-            },
-          ],
+          parts: [{ text: prompt }, ...imageParts.map(({ inlineData }) => ({ inlineData }))],
         },
       ],
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 512,
+        temperature: 0.15,
+        maxOutputTokens: 700,
       },
     };
 
@@ -617,14 +633,14 @@ Return JSON with keys:
               commonName: parsed.commonName,
               scientificName: parsed.scientificName,
               confidence: parsed.confidence,
-              imageBase64,
-              imageUri: image,
+              imageBase64: scanImages[0]?.base64 ?? null,
+              imageUri: primaryImage?.uri ?? null,
             });
 
             await addEntry({
               id: entryId,
               title: parsed.commonName,
-              imageUri: image ?? undefined,
+              imageUri: primaryImage?.uri ?? undefined,
               chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
             });
@@ -659,66 +675,109 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [addEntry, apiKey, image, imageBase64, imageMimeType, getGeminiText, journalChatHistory, parseGeminiResult]);
+  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
+
+  const collectImages = useCallback(
+    async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
+      const count = mode === 'identify360' ? 3 : 1;
+      const label = source === 'camera' ? 'Take photo' : 'Select photo';
+
+      if (source === 'library') {
+        if (Platform.OS !== 'web') {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Sorry, we need photo library permissions to make this work!');
+            return null;
+          }
+        }
+      } else {
+        if (Platform.OS !== 'web') {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Sorry, we need camera permissions to make this work!');
+            return null;
+          }
+        }
+      }
+
+      const next: ScanImage[] = [];
+
+      for (let i = 0; i < count; i += 1) {
+        if (count > 1) {
+          const stepLabel = i === 0 ? 'front view' : i === 1 ? 'side view' : 'close-up (leaf/fruit)';
+          Alert.alert(
+            `360 Identify · ${i + 1} / ${count}`,
+            `Capture a ${stepLabel}. Keep the plant sharp and fill the frame.`,
+            [{ text: 'OK' }],
+          );
+        }
+
+        const result =
+          source === 'camera'
+            ? await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.92,
+                base64: true,
+              })
+            : await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.92,
+                base64: true,
+                selectionLimit: 1,
+              });
+
+        if (result.canceled) {
+          console.log('[Scan] collectImages cancelled', { source, index: i });
+          return null;
+        }
+
+        const asset = result.assets?.[0];
+        const base64 = asset?.base64;
+        const uri = asset?.uri;
+        if (!uri || !base64) {
+          console.log('[Scan] collectImages missing base64/uri', { hasUri: Boolean(uri), hasBase64: Boolean(base64) });
+          return null;
+        }
+
+        next.push({
+          uri,
+          base64,
+          mimeType: asset?.mimeType ?? 'image/jpeg',
+        });
+      }
+
+      console.log('[Scan] collectImages success', { label, count: next.length });
+      return next;
+    },
+    [mode],
+  );
 
   const pickImage = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
-        return;
-      }
+    const imgs = await collectImages('library');
+    if (!imgs) {
+      setScanError(mode === 'identify360' ? '360 Identify cancelled. Try again and capture all 3 angles.' : null);
+      return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.9,
-      base64: true,
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      setImage(asset.uri);
-      setImageBase64(asset.base64 ?? null);
-      setImageMimeType(asset.mimeType ?? 'image/jpeg');
-      setScanResult(null);
-      setScanError(null);
-      if (asset.base64) {
-        await analyzeWithGemini();
-      }
-    }
-  }, [analyzeWithGemini]);
+    setScanImages(imgs);
+    setScanResult(null);
+    setScanError(null);
+    await analyzeWithGemini();
+  }, [analyzeWithGemini, collectImages, mode]);
 
   const takePhoto = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Sorry, we need camera permissions to make this work!');
-        return;
-      }
+    const imgs = await collectImages('camera');
+    if (!imgs) {
+      setScanError(mode === 'identify360' ? '360 Identify cancelled. Try again and capture all 3 angles.' : null);
+      return;
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.9,
-      base64: true,
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      setImage(asset.uri);
-      setImageBase64(asset.base64 ?? null);
-      setImageMimeType(asset.mimeType ?? 'image/jpeg');
-      setScanResult(null);
-      setScanError(null);
-      if (asset.base64) {
-        await analyzeWithGemini();
-      }
-    }
-  }, [analyzeWithGemini]);
+    setScanImages(imgs);
+    setScanResult(null);
+    setScanError(null);
+    await analyzeWithGemini();
+  }, [analyzeWithGemini, collectImages, mode]);
 
   const onPressRescan = useCallback(() => {
     if (!canScan) {
@@ -728,7 +787,6 @@ Return JSON with keys:
     analyzeWithGemini();
   }, [analyzeWithGemini, canScan]);
 
-  const [mode, setMode] = useState<'identify' | 'identify360'>('identify');
   const shutterScale = useRef<Animated.Value>(new Animated.Value(1)).current;
 
   const pressShutter = useCallback(
@@ -814,8 +872,8 @@ Return JSON with keys:
               </View>
 
               <View style={styles.focusArea}>
-                {image ? (
-                  <Image source={{ uri: image }} style={styles.focusImage} />
+                {primaryImage?.uri ? (
+                  <Image source={{ uri: primaryImage.uri }} style={styles.focusImage} />
                 ) : (
                   <View style={styles.focusPlaceholder}>
                     <Scan size={70} color="rgba(255,255,255,0.18)" />
