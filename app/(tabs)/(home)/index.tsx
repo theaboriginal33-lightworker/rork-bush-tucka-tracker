@@ -21,7 +21,12 @@ import {
 import { COLORS } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRorkAgent } from '@rork-ai/toolkit-sdk';
-import { createScanEntryId, useScanJournal, type GeminiScanResult as JournalGeminiScanResult } from '@/app/providers/ScanJournalProvider';
+import {
+  createScanEntryId,
+  useScanJournal,
+  type GeminiScanResult as JournalGeminiScanResult,
+  type ScanJournalChatMessage,
+} from '@/app/providers/ScanJournalProvider';
 
 type SafetyEdibility = {
   status: 'safe' | 'unsafe' | 'uncertain';
@@ -81,7 +86,8 @@ type GeminiListModelsResponse = {
 };
 
 export default function HomeScreen() {
-  const { addEntry } = useScanJournal();
+  const { addEntry, updateEntry } = useScanJournal();
+  const currentEntryIdRef = useRef<string | null>(null);
   const [image, setImage] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageMimeType, setImageMimeType] = useState<string>('image/jpeg');
@@ -228,6 +234,25 @@ export default function HomeScreen() {
   }, [chatMessages]);
 
   const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
+
+  const journalChatHistory = useMemo((): ScanJournalChatMessage[] => {
+    return chatDisplayMessages.map((m) => ({
+      id: String(m.id),
+      role: m.role,
+      text: m.text,
+      createdAt: Date.now(),
+    }));
+  }, [chatDisplayMessages]);
+
+  useEffect(() => {
+    const entryId = currentEntryIdRef.current;
+    if (!entryId) return;
+    if (journalChatHistory.length === 0) return;
+    updateEntry(entryId, { chatHistory: journalChatHistory }).catch((e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[Scan] updateEntry chatHistory failed', { message });
+    });
+  }, [journalChatHistory, updateEntry]);
   const chatDisabled = !scanResult || chatBusy;
   const sendDisabled = chatDisabled || chatInput.trim().length === 0;
 
@@ -600,8 +625,10 @@ Return JSON with keys:
               id: entryId,
               title: parsed.commonName,
               imageUri: image ?? undefined,
+              chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
             });
+            currentEntryIdRef.current = entryId;
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             console.log('[Scan] saving scan to journal failed', { message });
@@ -632,7 +659,7 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [addEntry, apiKey, image, imageBase64, imageMimeType, getGeminiText, parseGeminiResult]);
+  }, [addEntry, apiKey, image, imageBase64, imageMimeType, getGeminiText, journalChatHistory, parseGeminiResult]);
 
   const pickImage = useCallback(async () => {
     if (Platform.OS !== 'web') {

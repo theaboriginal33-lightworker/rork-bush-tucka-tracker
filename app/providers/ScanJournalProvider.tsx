@@ -41,12 +41,27 @@ export type GeminiScanResult = {
   suggestedUses: string[];
 };
 
+export type ScanJournalChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  createdAt: number;
+};
+
+export type ScanJournalLocation = {
+  latitude: number;
+  longitude: number;
+};
+
 export type ScanJournalEntry = {
   id: string;
   createdAt: number;
   title: string;
   locationName?: string;
+  location?: ScanJournalLocation;
   imageUri?: string;
+  notes?: string;
+  chatHistory?: ScanJournalChatMessage[];
   scan: GeminiScanResult;
 };
 
@@ -62,12 +77,38 @@ function safeParseJson<T>(raw: string | null): T | null {
 }
 
 function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
+  const rawChat = Array.isArray(input.chatHistory) ? input.chatHistory : [];
+  const chatHistory: ScanJournalChatMessage[] = rawChat
+    .map((m): ScanJournalChatMessage => {
+      const role: ScanJournalChatMessage['role'] = (m as ScanJournalChatMessage).role === 'user' ? 'user' : 'assistant';
+      return {
+        id: String((m as ScanJournalChatMessage).id ?? `msg-${Math.random().toString(16).slice(2)}`),
+        role,
+        text: String((m as ScanJournalChatMessage).text ?? ''),
+        createdAt: Number.isFinite((m as ScanJournalChatMessage).createdAt) ? (m as ScanJournalChatMessage).createdAt : Date.now(),
+      };
+    })
+    .filter((m) => m.text.trim().length > 0);
+
+  const loc = input.location;
+  const location =
+    loc &&
+    typeof (loc as ScanJournalLocation).latitude === 'number' &&
+    Number.isFinite((loc as ScanJournalLocation).latitude) &&
+    typeof (loc as ScanJournalLocation).longitude === 'number' &&
+    Number.isFinite((loc as ScanJournalLocation).longitude)
+      ? { latitude: (loc as ScanJournalLocation).latitude, longitude: (loc as ScanJournalLocation).longitude }
+      : undefined;
+
   return {
     id: String(input.id),
     createdAt: Number.isFinite(input.createdAt) ? input.createdAt : Date.now(),
     title: String(input.title ?? input.scan?.commonName ?? 'Unknown'),
     locationName: input.locationName ? String(input.locationName) : undefined,
+    location,
     imageUri: input.imageUri ? String(input.imageUri) : undefined,
+    notes: typeof input.notes === 'string' ? input.notes : undefined,
+    chatHistory,
     scan: input.scan,
   };
 }
@@ -77,7 +118,10 @@ type ScanJournalContextValue = {
   isLoading: boolean;
   errorMessage: string | null;
 
+  getEntryById: (id: string) => ScanJournalEntry | undefined;
+
   addEntry: (entry: Omit<ScanJournalEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => Promise<ScanJournalEntry>;
+  updateEntry: (id: string, patch: Partial<Omit<ScanJournalEntry, 'id' | 'createdAt' | 'scan'>>) => Promise<ScanJournalEntry | null>;
   removeEntry: (id: string) => Promise<void>;
   clearAll: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -145,7 +189,10 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         createdAt,
         title: entryInput.title,
         locationName: entryInput.locationName,
+        location: entryInput.location,
         imageUri: entryInput.imageUri,
+        notes: entryInput.notes,
+        chatHistory: entryInput.chatHistory,
         scan: entryInput.scan,
       });
 
@@ -158,6 +205,49 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
       console.log('[ScanJournal] addEntry', { id: entry.id, title: entry.title });
       return entry;
+    },
+    [persistMutate],
+  );
+
+  const getEntryById = useCallback(
+    (id: string) => {
+      return entries.find((e) => e.id === id);
+    },
+    [entries],
+  );
+
+  const updateEntry = useCallback(
+    async (id: string, patch: Partial<Omit<ScanJournalEntry, 'id' | 'createdAt' | 'scan'>>) => {
+      console.log('[ScanJournal] updateEntry', { id, keys: Object.keys(patch) });
+      setErrorMessage(null);
+
+      let updated: ScanJournalEntry | null = null;
+      setEntries((prev) => {
+        const next = prev.map((e) => {
+          if (e.id !== id) return e;
+          updated = normalizeEntry({
+            ...e,
+            title: typeof patch.title === 'string' ? patch.title : e.title,
+            locationName: typeof patch.locationName === 'string' ? patch.locationName : e.locationName,
+            location: patch.location ?? e.location,
+            imageUri: typeof patch.imageUri === 'string' ? patch.imageUri : e.imageUri,
+            notes: typeof patch.notes === 'string' ? patch.notes : e.notes,
+            chatHistory: Array.isArray(patch.chatHistory) ? patch.chatHistory : e.chatHistory,
+            scan: e.scan,
+          });
+          return updated;
+        });
+
+        if (!next.some((e) => e.id === id)) {
+          console.log('[ScanJournal] updateEntry did not find entry', { id });
+          return prev;
+        }
+
+        persistMutate(next);
+        return next;
+      });
+
+      return updated;
     },
     [persistMutate],
   );
@@ -190,12 +280,14 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       entries,
       isLoading,
       errorMessage,
+      getEntryById,
       addEntry,
+      updateEntry,
       removeEntry,
       clearAll,
       refresh,
     }),
-    [addEntry, clearAll, entries, errorMessage, isLoading, refresh, removeEntry],
+    [addEntry, clearAll, entries, errorMessage, getEntryById, isLoading, refresh, removeEntry, updateEntry],
   );
 
   return value;

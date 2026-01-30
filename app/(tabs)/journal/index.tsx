@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { Alert, View, Text, StyleSheet, TouchableOpacity, FlatList, Image } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Brush, MapPin, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
@@ -36,7 +37,13 @@ export default function JournalScreen() {
       ].filter(Boolean) as string[];
 
       return (
-        <TouchableOpacity style={styles.entryCard} testID={`journal-entry-${item.id}`}>
+        <TouchableOpacity
+          style={styles.entryCard}
+          onPress={() => {
+            router.push(`/scan/${encodeURIComponent(item.id)}`);
+          }}
+          testID={`journal-entry-${item.id}`}
+        >
           <View style={styles.cardHeader}>
             <Image
               source={{ uri: item.imageUri ?? 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop' }}
