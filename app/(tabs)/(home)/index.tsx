@@ -21,6 +21,7 @@ import {
 import { COLORS } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRorkAgent } from '@rork-ai/toolkit-sdk';
+import { createScanEntryId, useScanJournal, type GeminiScanResult as JournalGeminiScanResult } from '@/app/providers/ScanJournalProvider';
 
 type SafetyEdibility = {
   status: 'safe' | 'unsafe' | 'uncertain';
@@ -80,6 +81,7 @@ type GeminiListModelsResponse = {
 };
 
 export default function HomeScreen() {
+  const { addEntry } = useScanJournal();
   const [image, setImage] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageMimeType, setImageMimeType] = useState<string>('image/jpeg');
@@ -585,6 +587,26 @@ Return JSON with keys:
 
           setScanResult(parsed);
 
+          try {
+            const entryId = createScanEntryId({
+              commonName: parsed.commonName,
+              scientificName: parsed.scientificName,
+              confidence: parsed.confidence,
+              imageBase64,
+              imageUri: image,
+            });
+
+            await addEntry({
+              id: entryId,
+              title: parsed.commonName,
+              imageUri: image ?? undefined,
+              scan: parsed as unknown as JournalGeminiScanResult,
+            });
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[Scan] saving scan to journal failed', { message });
+          }
+
           if (parsed.safety.status !== 'safe' && parsed.warnings.length === 0) {
             setScanError('Could not confidently confirm this is safe to eat. Please verify with a trusted local guide.');
           }
@@ -610,7 +632,7 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [apiKey, image, imageBase64, imageMimeType, getGeminiText, parseGeminiResult]);
+  }, [addEntry, apiKey, image, imageBase64, imageMimeType, getGeminiText, parseGeminiResult]);
 
   const pickImage = useCallback(async () => {
     if (Platform.OS !== 'web') {
