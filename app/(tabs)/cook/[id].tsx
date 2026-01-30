@@ -24,13 +24,25 @@ type RecipeIdea = {
   imageUri: string;
 };
 
-function buildUnsplashQueryUrl(query: string): string {
+function hashToSig(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return hash % 1000;
+}
+
+function buildUnsplashQueryUrl(query: string, stableKey: string): string {
   const q = encodeURIComponent(query.trim().replace(/\s+/g, ' '));
-  return `https://source.unsplash.com/featured/1200x800?${q}`;
+  const sig = hashToSig(stableKey);
+  return `https://source.unsplash.com/featured/1200x800?${q}&sig=${sig}`;
 }
 
 function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeIdea[] {
   const useHint = suggestedUses[0] ?? 'a versatile ingredient';
+
+  const baseTerms = `${commonName} native australian bush tucker ingredient`;
+
   return [
     {
       id: 'idea-1',
@@ -44,7 +56,7 @@ function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeId
         'Rub onto fish/meat/veg and rest 10 minutes.',
         'Cook as usual, then finish with a pinch of the rub.',
       ],
-      imageUri: buildUnsplashQueryUrl(`${commonName} spice rub food`),
+      imageUri: buildUnsplashQueryUrl(`${baseTerms}, spice rub, grilled fish, rustic plating, moody food photography`, 'idea-1'),
     },
     {
       id: 'idea-2',
@@ -58,7 +70,7 @@ function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeId
         'Cool completely, strain, and store chilled.',
         'Use in soda water, cocktails, or drizzle over fruit.',
       ],
-      imageUri: buildUnsplashQueryUrl(`${commonName} syrup cocktail`),
+      imageUri: buildUnsplashQueryUrl(`${baseTerms}, cocktail syrup, glass bottle, citrus, bar, bokeh`, 'idea-2'),
     },
     {
       id: 'idea-3',
@@ -72,7 +84,7 @@ function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeId
         'Add vinegar + sugar + pinch of salt and simmer until glossy.',
         'Cool and serve with grilled meats or cheese.',
       ],
-      imageUri: buildUnsplashQueryUrl(`${commonName} chutney bowl`),
+      imageUri: buildUnsplashQueryUrl(`${baseTerms}, chutney, jar, wooden board, artisan food, natural light`, 'idea-3'),
     },
   ];
 }
