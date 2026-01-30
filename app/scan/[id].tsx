@@ -254,8 +254,8 @@ export default function ScanDetailsScreen() {
       ]);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.log('[ScanDetails] addToCook failed', { message });
-      Alert.alert('Could not add', 'Please try again.');
+      console.log('[ScanDetails] addToCook failed', { message, scanEntryId: entry.id, title: entry.title, commonName: entry.scan?.commonName });
+      Alert.alert('Could not add to Cook', message || 'Please try again.');
     }
   }, [addFromScanEntry, cookAlreadySaved, entry]);
 

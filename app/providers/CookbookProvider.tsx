@@ -121,17 +121,24 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     async (scanEntry: ScanJournalEntry) => {
       const id = `cook-${scanEntry.id}`;
 
+      const scan = (scanEntry as ScanJournalEntry | undefined)?.scan;
+      const commonName = scan?.commonName;
+      if (!scan || typeof commonName !== 'string' || commonName.trim().length === 0) {
+        console.log('[Cookbook] addFromScanEntry: missing scan data', { scanEntryId: scanEntry.id, title: scanEntry.title });
+        throw new Error('Missing scan details for this collection item. Please re-scan it.');
+      }
+
       const cookEntry: CookRecipeEntry = normalizeCookEntry({
         id,
         createdAt: Date.now(),
         scanEntryId: scanEntry.id,
-        title: scanEntry.title ?? scanEntry.scan?.commonName ?? 'Untitled',
+        title: scanEntry.title ?? commonName ?? 'Untitled',
         imageUri: scanEntry.imageUri,
-        commonName: scanEntry.scan.commonName,
-        scientificName: scanEntry.scan.scientificName,
-        confidence: scanEntry.scan.confidence,
-        safetyStatus: scanEntry.scan?.safety?.status ?? 'uncertain',
-        suggestedUses: scanEntry.scan?.suggestedUses ?? [],
+        commonName,
+        scientificName: scan.scientificName,
+        confidence: scan.confidence,
+        safetyStatus: scan?.safety?.status ?? 'uncertain',
+        suggestedUses: scan?.suggestedUses ?? [],
       });
 
       console.log('[Cookbook] addFromScanEntry', { scanEntryId: scanEntry.id, cookId: cookEntry.id, title: cookEntry.title });
