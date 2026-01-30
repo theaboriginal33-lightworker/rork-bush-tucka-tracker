@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
-import { ChevronLeft, MapPin, Navigation, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
 
@@ -53,10 +53,20 @@ export default function ScanDetailsScreen() {
   const { getEntryById, updateEntry, removeEntry } = useScanJournal();
   const entry = getEntryById(entryId);
 
+  const [titleDraft, setTitleDraft] = useState<string>(entry?.title ?? '');
   const [notesDraft, setNotesDraft] = useState<string>(entry?.notes ?? '');
   const [locationNameDraft, setLocationNameDraft] = useState<string>(entry?.locationName ?? '');
   const [latDraft, setLatDraft] = useState<string>(entry?.location ? String(entry.location.latitude) : '');
   const [lngDraft, setLngDraft] = useState<string>(entry?.location ? String(entry.location.longitude) : '');
+
+  useEffect(() => {
+    if (!entry) return;
+    setTitleDraft(entry.title ?? '');
+    setNotesDraft(entry.notes ?? '');
+    setLocationNameDraft(entry.locationName ?? '');
+    setLatDraft(entry.location ? String(entry.location.latitude) : '');
+    setLngDraft(entry.location ? String(entry.location.longitude) : '');
+  }, [entry]);
 
   const safetyTone = useMemo((): 'good' | 'warn' | 'bad' => {
     const status = entry?.scan?.safety?.status;
@@ -79,6 +89,48 @@ export default function ScanDetailsScreen() {
       return '';
     }
   }, [entry?.createdAt]);
+
+  const onSaveTitle = useCallback(async () => {
+    if (!entry) return;
+
+    const nextTitle = titleDraft.trim();
+    if (nextTitle.length === 0) {
+      Alert.alert('Title required', 'Please enter a title.');
+      return;
+    }
+
+    try {
+      await updateEntry(entry.id, { title: nextTitle });
+      Alert.alert('Saved', 'Title updated.');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[ScanDetails] saveTitle failed', { message });
+      Alert.alert('Could not save', 'Please try again.');
+    }
+  }, [entry, titleDraft, updateEntry]);
+
+  const onShare = useCallback(async () => {
+    if (!entry) return;
+
+    const lines: string[] = [];
+    lines.push(entry.title);
+    lines.push(entry.scan.scientificName ? `${entry.scan.commonName} (${entry.scan.scientificName})` : entry.scan.commonName);
+    lines.push(`Safety: ${entry.scan.safety.status.toUpperCase()}`);
+    lines.push(`Confidence: ${Math.round(entry.scan.confidence * 100)}%`);
+    if (entry.locationName) lines.push(`Location: ${entry.locationName}`);
+    if (entry.notes) lines.push(`Notes: ${entry.notes}`);
+
+    const message = lines.filter((l) => l.trim().length > 0).join('\n');
+
+    try {
+      console.log('[ScanDetails] share', { entryId: entry.id });
+      await Share.share({ message, title: entry.title });
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.log('[ScanDetails] share failed', { errMsg });
+      Alert.alert('Share not available', message);
+    }
+  }, [entry]);
 
   const onSave = useCallback(async () => {
     if (!entry) return;
@@ -211,9 +263,14 @@ export default function ScanDetailsScreen() {
           <Text style={styles.topTitle} numberOfLines={1}>
             {entry.title}
           </Text>
-          <TouchableOpacity style={styles.trashButton} onPress={onDelete} testID="scan-details-delete">
-            <Trash2 size={18} color={COLORS.text} />
-          </TouchableOpacity>
+          <View style={styles.topActions}>
+            <TouchableOpacity style={styles.iconButton} onPress={onShare} testID="scan-details-share">
+              <Share2 size={18} color={COLORS.text} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.trashButton} onPress={onDelete} testID="scan-details-delete">
+              <Trash2 size={18} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -254,6 +311,20 @@ export default function ScanDetailsScreen() {
               {createdLabel ? <Text style={styles.heroMeta}>{createdLabel}</Text> : null}
             </View>
           </View>
+
+          <Section title="Edit title">
+            <TextInput
+              value={titleDraft}
+              onChangeText={setTitleDraft}
+              placeholder="e.g. Backyard find"
+              placeholderTextColor={COLORS.textSecondary}
+              style={styles.fieldInputSolo}
+              testID="scan-details-edit-title"
+            />
+            <TouchableOpacity style={styles.primaryButton} onPress={onSaveTitle} testID="scan-details-save-title">
+              <Text style={styles.primaryButtonText}>Save title</Text>
+            </TouchableOpacity>
+          </Section>
 
           <Section title="Safety">
             <Text style={styles.bodyText}>{entry.scan.safety.summary || 'No safety summary available.'}</Text>
@@ -462,6 +533,21 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: 'rgba(11,25,17,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconButton: {
     width: 44,
     height: 44,
     borderRadius: 16,
@@ -725,6 +811,17 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: '700',
+  },
+  fieldInputSolo: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.18)',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '800',
   },
   coordRow: {
     flexDirection: 'row',
