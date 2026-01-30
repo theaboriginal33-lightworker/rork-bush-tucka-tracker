@@ -21,7 +21,13 @@ type RecipeIdea = {
   difficulty: 'Easy' | 'Medium' | 'Hard';
   whyItFits: string;
   steps: string[];
+  imageUri: string;
 };
+
+function buildUnsplashQueryUrl(query: string): string {
+  const q = encodeURIComponent(query.trim().replace(/\s+/g, ' '));
+  return `https://source.unsplash.com/featured/1200x800?${q}`;
+}
 
 function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeIdea[] {
   const useHint = suggestedUses[0] ?? 'a versatile ingredient';
@@ -38,6 +44,7 @@ function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeId
         'Rub onto fish/meat/veg and rest 10 minutes.',
         'Cook as usual, then finish with a pinch of the rub.',
       ],
+      imageUri: buildUnsplashQueryUrl(`${commonName} spice rub food`),
     },
     {
       id: 'idea-2',
@@ -51,6 +58,7 @@ function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeId
         'Cool completely, strain, and store chilled.',
         'Use in soda water, cocktails, or drizzle over fruit.',
       ],
+      imageUri: buildUnsplashQueryUrl(`${commonName} syrup cocktail`),
     },
     {
       id: 'idea-3',
@@ -64,6 +72,7 @@ function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeId
         'Add vinegar + sugar + pinch of salt and simmer until glossy.',
         'Cool and serve with grilled meats or cheese.',
       ],
+      imageUri: buildUnsplashQueryUrl(`${commonName} chutney bowl`),
     },
   ];
 }
@@ -187,13 +196,25 @@ export default function CookDetailsScreen() {
 
         {ideas.map((idea) => (
           <View key={idea.id} style={styles.ideaCard} testID={`cook-idea-${idea.id}`}>
-            <View style={styles.ideaHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.ideaTitle}>{idea.title}</Text>
-                <Text style={styles.ideaMeta}>{idea.time} • {idea.difficulty}</Text>
-              </View>
-              <View style={styles.ideaIcon}>
-                <Sparkles size={18} color={COLORS.secondary} />
+            <View style={styles.ideaMedia}>
+              <Image
+                source={{ uri: idea.imageUri }}
+                style={styles.ideaImage}
+                contentFit="cover"
+                transition={220}
+                cachePolicy="memory-disk"
+                testID={`cook-idea-image-${idea.id}`}
+              />
+              <View style={styles.ideaImageOverlay} />
+
+              <View style={styles.ideaHeaderOnImage}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ideaTitle}>{idea.title}</Text>
+                  <Text style={styles.ideaMeta}>{idea.time} • {idea.difficulty}</Text>
+                </View>
+                <View style={styles.ideaIcon}>
+                  <Sparkles size={18} color={COLORS.secondary} />
+                </View>
               </View>
             </View>
 
@@ -410,12 +431,31 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(56,217,137,0.18)',
   },
-  ideaHeader: {
+  ideaMedia: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.14)',
+  },
+  ideaImage: {
+    width: '100%',
+    height: 150,
+  },
+  ideaImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(7,17,11,0.25)',
+  },
+  ideaHeaderOnImage: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 10,
   },
   ideaTitle: {
     fontSize: 16,
