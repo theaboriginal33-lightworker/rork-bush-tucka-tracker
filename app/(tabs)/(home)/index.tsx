@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Alert } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -11,13 +11,16 @@ import {
   HelpCircle,
   Image as ImageIcon,
   Leaf,
+  MessageCircle,
   RefreshCcw,
   Scan,
+  Send,
   ShieldAlert,
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRorkAgent } from '@rork-ai/toolkit-sdk';
 
 type SafetyEdibility = {
   status: 'safe' | 'unsafe' | 'uncertain';
@@ -83,12 +86,155 @@ export default function HomeScreen() {
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [chatInput, setChatInput] = useState<string>('');
 
   const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
+  const chatContextKeyRef = useRef<string | null>(null);
 
   const canScan = useMemo(() => {
     return Boolean(imageBase64) && Boolean(apiKey);
   }, [apiKey, imageBase64]);
+
+  const tools = useMemo(() => ({}), []);
+  const {
+    messages: chatMessages,
+    sendMessage,
+    status: chatStatus,
+    error: chatError,
+    setMessages: setChatMessages,
+    clearError: clearChatError,
+  } = useRorkAgent({ tools });
+
+  const scanContext = useMemo(() => {
+    if (!scanResult) return null;
+
+    const lines = [
+      `Common name: ${scanResult.commonName}`,
+      scanResult.scientificName ? `Scientific name: ${scanResult.scientificName}` : null,
+      `Confidence: ${Math.round(scanResult.confidence * 100)}%`,
+      `Bush tucker likely: ${scanResult.bushTuckerLikely ? 'yes' : 'no'}`,
+      `Safety status: ${scanResult.safety.status}`,
+      scanResult.safety.summary ? `Safety summary: ${scanResult.safety.summary}` : null,
+      scanResult.safety.keyRisks.length > 0 ? `Key risks: ${scanResult.safety.keyRisks.join('; ')}` : null,
+      scanResult.preparation.steps.length > 0 ? `Preparation steps: ${scanResult.preparation.steps.join('; ')}` : null,
+      scanResult.preparation.ease ? `Preparation ease: ${scanResult.preparation.ease}` : null,
+      scanResult.seasonality.bestMonths.length > 0 ? `Best months: ${scanResult.seasonality.bestMonths.join(', ')}` : null,
+      scanResult.seasonality.notes ? `Seasonality notes: ${scanResult.seasonality.notes}` : null,
+      scanResult.culturalKnowledge.notes ? `Cultural notes: ${scanResult.culturalKnowledge.notes}` : null,
+      scanResult.culturalKnowledge.respect.length > 0 ? `Respect notes: ${scanResult.culturalKnowledge.respect.join('; ')}` : null,
+      scanResult.warnings.length > 0 ? `Warnings: ${scanResult.warnings.join('; ')}` : null,
+      scanResult.suggestedUses.length > 0 ? `Suggested uses: ${scanResult.suggestedUses.join('; ')}` : null,
+    ].filter(Boolean);
+
+    return lines.join('\n');
+  }, [scanResult]);
+
+  const scanContextKey = useMemo(() => {
+    if (!scanResult) return null;
+    return [scanResult.commonName, scanResult.scientificName ?? '', Math.round(scanResult.confidence * 100)].join('|');
+  }, [scanResult]);
+
+  const systemPrompt = useMemo(() => {
+    if (!scanResult || !scanContext) return null;
+    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant.\n\nScan info:\n${scanContext}`;
+  }, [scanContext, scanResult]);
+
+  const assistantGreeting = useMemo(() => {
+    if (!scanResult) return '';
+    const safetyNote =
+      scanResult.safety.status === 'safe'
+        ? 'Ask about preparation, seasonality, or uses. Always verify locally before eating.'
+        : 'This scan is not fully confirmed. Ask about risks and verification steps before doing anything.';
+    return `I can answer questions about ${scanResult.commonName}. ${safetyNote}`;
+  }, [scanResult]);
+
+  useEffect(() => {
+    if (!scanResult || !systemPrompt || !scanContextKey) {
+      if (chatContextKeyRef.current) {
+        chatContextKeyRef.current = null;
+        setChatMessages([]);
+        setChatInput('');
+      }
+      return;
+    }
+
+    if (chatContextKeyRef.current === scanContextKey) {
+      return;
+    }
+
+    chatContextKeyRef.current = scanContextKey;
+    setChatMessages([
+      {
+        id: `system-${scanContextKey}`,
+        role: 'system',
+        content: systemPrompt,
+      },
+      {
+        id: `assistant-${scanContextKey}`,
+        role: 'assistant',
+        content: assistantGreeting,
+      },
+    ]);
+    setChatInput('');
+  }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
+
+  const chatDisplayMessages = useMemo(() => {
+    return chatMessages
+      .filter((message) => message.role !== 'system')
+      .map((message) => {
+        const textFromParts = Array.isArray(message.parts)
+          ? message.parts
+              .filter((part) => part.type === 'text' && typeof part.text === 'string')
+              .map((part) => part.text)
+              .join('')
+          : '';
+        const text = textFromParts || (typeof message.content === 'string' ? message.content : '');
+        return text
+          ? {
+              id: message.id,
+              role: message.role,
+              text,
+            }
+          : null;
+      })
+      .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string } => Boolean(message));
+  }, [chatMessages]);
+
+  const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
+  const chatDisabled = !scanResult || chatBusy;
+  const sendDisabled = chatDisabled || chatInput.trim().length === 0;
+
+  const suggestedQuestions = useMemo(() => {
+    if (!scanResult) return [];
+    return [
+      `Is ${scanResult.commonName} safe to eat?`,
+      'How should I prepare it?',
+      'When is it in season?',
+      'Any warnings or lookalikes?',
+    ];
+  }, [scanResult]);
+
+  const onSendChat = useCallback(() => {
+    if (sendDisabled) return;
+    const trimmed = chatInput.trim();
+    if (!trimmed) return;
+    if (chatError) {
+      clearChatError();
+    }
+    sendMessage(trimmed);
+    setChatInput('');
+  }, [chatError, chatInput, clearChatError, sendDisabled, sendMessage]);
+
+  const onSendSuggestion = useCallback(
+    (prompt: string) => {
+      if (chatDisabled) return;
+      if (chatError) {
+        clearChatError();
+      }
+      sendMessage(prompt);
+    },
+    [chatDisabled, chatError, clearChatError, sendMessage],
+  );
 
   const getGeminiText = useCallback((json: GeminiApiResponse): string => {
     const parts = json?.candidates?.[0]?.content?.parts ?? [];
@@ -833,6 +979,92 @@ Return JSON with keys:
             </View>
           )}
 
+          {/* AI Companion */}
+          <View style={styles.chatCard} testID="ai-chat-card">
+            <View style={styles.chatHeader}>
+              <MessageCircle size={18} color={COLORS.primary} />
+              <Text style={styles.chatTitle}>Bush Tucker Companion</Text>
+            </View>
+            {!scanResult ? (
+              <Text style={styles.chatEmptyText}>
+                Scan a plant to start a chat based on its Gemini results.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.chatSubtitle}>
+                  Ask questions about the scanned plant. Answers are grounded in the scan details.
+                </Text>
+
+                {chatError ? (
+                  <View style={styles.chatErrorRow}>
+                    <AlertTriangle size={16} color="#B91C1C" />
+                    <Text style={styles.chatErrorText}>{chatError.message}</Text>
+                    <TouchableOpacity style={styles.chatErrorDismiss} onPress={clearChatError}>
+                      <Text style={styles.chatErrorDismissText}>Dismiss</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                {chatDisplayMessages.length > 0 ? (
+                  <View style={styles.chatMessages}>
+                    {chatDisplayMessages.map((message) => (
+                      <View
+                        key={message.id}
+                        style={[
+                          styles.chatBubble,
+                          message.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
+                        ]}
+                      >
+                        <Text style={styles.chatBubbleText}>{message.text}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {chatBusy ? (
+                  <View style={[styles.chatBubble, styles.chatBubbleAssistant]}>
+                    <Text style={styles.chatBubbleText}>Thinking...</Text>
+                  </View>
+                ) : null}
+
+                {chatDisplayMessages.length <= 1 ? (
+                  <View style={styles.chatSuggestionsRow}>
+                    {suggestedQuestions.map((prompt) => (
+                      <TouchableOpacity
+                        key={prompt}
+                        style={styles.chatSuggestion}
+                        onPress={() => onSendSuggestion(prompt)}
+                        disabled={chatDisabled}
+                      >
+                        <Text style={styles.chatSuggestionText}>{prompt}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+
+                <View style={styles.chatInputRow}>
+                  <TextInput
+                    style={styles.chatInput}
+                    placeholder="Ask about safety, preparation, seasonality..."
+                    placeholderTextColor="rgba(242,245,242,0.45)"
+                    value={chatInput}
+                    onChangeText={setChatInput}
+                    editable={!chatDisabled}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={[styles.chatSendButton, sendDisabled ? styles.chatSendButtonDisabled : null]}
+                    onPress={onSendChat}
+                    disabled={sendDisabled}
+                    testID="ai-chat-send"
+                  >
+                    <Send size={16} color={DARK.bg} />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+
           {/* Quick Categories / Guides */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -1387,6 +1619,141 @@ const styles = StyleSheet.create({
     color: DARK.subtext,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  chatCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: DARK.border,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  chatTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: DARK.text,
+    letterSpacing: 0.3,
+  },
+  chatSubtitle: {
+    fontSize: 12,
+    color: DARK.subtext,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  chatEmptyText: {
+    fontSize: 12,
+    color: DARK.subtext,
+    fontWeight: '700',
+  },
+  chatErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(185, 28, 28, 0.12)',
+    marginBottom: 10,
+  },
+  chatErrorText: {
+    flex: 1,
+    color: '#7F1D1D',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  chatErrorDismiss: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(185, 28, 28, 0.12)',
+  },
+  chatErrorDismissText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7F1D1D',
+  },
+  chatMessages: {
+    gap: 10,
+    marginBottom: 10,
+  },
+  chatBubble: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    maxWidth: '92%',
+  },
+  chatBubbleAssistant: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  chatBubbleUser: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(45,211,124,0.18)',
+    borderColor: 'rgba(45,211,124,0.28)',
+  },
+  chatBubbleText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: DARK.text,
+  },
+  chatSuggestionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  chatSuggestion: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  chatSuggestionText: {
+    fontSize: 11,
+    color: DARK.subtext,
+    fontWeight: '700',
+  },
+  chatInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  chatInput: {
+    flex: 1,
+    color: DARK.text,
+    fontSize: 13,
+    fontWeight: '600',
+    minHeight: 36,
+  },
+  chatSendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: DARK.accent,
+  },
+  chatSendButtonDisabled: {
+    opacity: 0.5,
   },
   collectionList: {
     gap: 16,
