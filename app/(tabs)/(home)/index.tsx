@@ -97,13 +97,21 @@ export default function HomeScreen() {
 
   const tools = useMemo(() => ({}), []);
   const {
-    messages: chatMessages,
+    messages: chatMessagesRaw,
     sendMessage,
     status: chatStatus,
     error: chatError,
     setMessages: setChatMessages,
     clearError: clearChatError,
   } = useRorkAgent({ tools });
+
+  const chatMessages = useMemo((): unknown[] => {
+    if (!Array.isArray(chatMessagesRaw)) {
+      console.log('[Chat] messages is not an array yet', { type: typeof chatMessagesRaw });
+      return [];
+    }
+    return chatMessagesRaw as unknown[];
+  }, [chatMessagesRaw]);
 
   const scanContext = useMemo(() => {
     if (!scanResult) return null;
@@ -167,37 +175,54 @@ export default function HomeScreen() {
       {
         id: `system-${scanContextKey}`,
         role: 'system',
-        content: systemPrompt,
+        parts: [{ type: 'text', text: systemPrompt }],
       },
       {
         id: `assistant-${scanContextKey}`,
         role: 'assistant',
-        content: assistantGreeting,
+        parts: [{ type: 'text', text: assistantGreeting }],
       },
-    ]);
+    ] as unknown as Parameters<typeof setChatMessages>[0]);
     setChatInput('');
   }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
 
   const chatDisplayMessages = useMemo(() => {
-    return chatMessages
-      .filter((message) => message.role !== 'system')
-      .map((message) => {
-        const textFromParts = Array.isArray(message.parts)
-          ? message.parts
-              .filter((part) => part.type === 'text' && typeof part.text === 'string')
-              .map((part) => part.text)
-              .join('')
-          : '';
-        const text = textFromParts || (typeof message.content === 'string' ? message.content : '');
-        return text
-          ? {
-              id: message.id,
-              role: message.role,
-              text,
-            }
-          : null;
-      })
-      .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string } => Boolean(message));
+    try {
+      const safeMessages: unknown[] = Array.isArray(chatMessages) ? chatMessages : [];
+      return safeMessages
+        .filter((m) => (m as any)?.role !== 'system')
+        .map((m) => {
+          const message = m as any;
+          const partsArray: any[] = Array.isArray(message?.parts) ? message.parts : [];
+          const textFromParts = partsArray
+            .filter((part: any) => part?.type === 'text' && typeof part?.text === 'string')
+            .map((part: any) => String(part.text ?? ''))
+            .join('');
+
+          const text =
+            textFromParts ||
+            (typeof message?.content === 'string'
+              ? message.content
+              : typeof message?.text === 'string'
+                ? message.text
+                : '');
+
+          if (!text) return null;
+
+          const role = message?.role === 'user' ? ('user' as const) : ('assistant' as const);
+
+          return {
+            id: typeof message?.id === 'string' ? message.id : `msg-${Math.random().toString(16).slice(2)}`,
+            role,
+            text,
+          };
+        })
+        .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string } => Boolean(message));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.log('[Chat] chatDisplayMessages compute failed', { msg });
+      return [] as { id: string; role: 'user' | 'assistant'; text: string }[];
+    }
   }, [chatMessages]);
 
   const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
@@ -1007,7 +1032,7 @@ Return JSON with keys:
 
                 {chatDisplayMessages.length > 0 ? (
                   <View style={styles.chatMessages}>
-                    {chatDisplayMessages.map((message) => (
+                    {(Array.isArray(chatDisplayMessages) ? chatDisplayMessages : []).map((message) => (
                       <View
                         key={message.id}
                         style={[
@@ -1029,7 +1054,7 @@ Return JSON with keys:
 
                 {chatDisplayMessages.length <= 1 ? (
                   <View style={styles.chatSuggestionsRow}>
-                    {suggestedQuestions.map((prompt) => (
+                    {(Array.isArray(suggestedQuestions) ? suggestedQuestions : []).map((prompt) => (
                       <TouchableOpacity
                         key={prompt}
                         style={styles.chatSuggestion}
