@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import { downloadAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Linking from 'expo-linking';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -177,12 +176,38 @@ export default function ScanDetailsScreen() {
 
       const fileName = `scan-${entry.id}.jpg`;
       const cacheDirUri = FileSystem.Paths.cache?.uri ?? '';
+      if (cacheDirUri.length === 0) {
+        throw new Error('No cache directory available');
+      }
       const dest = `${cacheDirUri}${fileName}`;
 
-      console.log('[ScanDetails] sharePhoto: downloadAsync', { from: imageUri, to: dest, platform: Platform.OS });
-      const download = await downloadAsync(imageUri, dest, { cache: false });
+      if (imageUri.startsWith('file://')) {
+        console.log('[ScanDetails] sharePhoto: shareAsync(local file)', { uri: imageUri, platform: Platform.OS });
+        await Sharing.shareAsync(imageUri, {
+          dialogTitle: `Share ${entry.title}`,
+          mimeType: 'image/jpeg',
+          UTI: 'public.jpeg',
+        });
+        return;
+      }
 
-      console.log('[ScanDetails] sharePhoto: shareAsync', { uri: download.uri });
+      if (imageUri.startsWith('content://')) {
+        console.log('[ScanDetails] sharePhoto: copyAsync(content uri)', { from: imageUri, to: dest, platform: Platform.OS });
+        await FileSystem.copyAsync({ from: imageUri, to: dest });
+
+        console.log('[ScanDetails] sharePhoto: shareAsync(copied content uri)', { uri: dest });
+        await Sharing.shareAsync(dest, {
+          dialogTitle: `Share ${entry.title}`,
+          mimeType: 'image/jpeg',
+          UTI: 'public.jpeg',
+        });
+        return;
+      }
+
+      console.log('[ScanDetails] sharePhoto: downloadAsync(remote)', { from: imageUri, to: dest, platform: Platform.OS });
+      const download = await FileSystem.downloadAsync(imageUri, dest);
+
+      console.log('[ScanDetails] sharePhoto: shareAsync(downloaded)', { uri: download.uri });
       await Sharing.shareAsync(download.uri, {
         dialogTitle: `Share ${entry.title}`,
         mimeType: 'image/jpeg',
@@ -191,7 +216,7 @@ export default function ScanDetailsScreen() {
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       console.log('[ScanDetails] sharePhoto failed', { errMsg });
-      Alert.alert('Could not share photo', 'Please try again.');
+      Alert.alert('Could not share photo', errMsg || 'Please try again.');
     }
   }, [buildShareText, entry]);
 
