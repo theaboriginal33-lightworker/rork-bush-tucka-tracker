@@ -1,86 +1,189 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Image } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Clock, ChefHat, Search } from 'lucide-react-native';
+import { Search, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useCookbook, type CookRecipeEntry } from '@/app/providers/CookbookProvider';
+
+type Chip = {
+  id: string;
+  label: string;
+};
+
+const CHIPS: Chip[] = [
+  { id: 'all', label: 'All' },
+  { id: 'safe', label: 'Safe' },
+  { id: 'uncertain', label: 'Uncertain' },
+  { id: 'unsafe', label: 'Unsafe' },
+];
 
 export default function CookScreen() {
+  const { entries, isLoading, errorMessage, removeEntry } = useCookbook();
+
+  const [query, setQuery] = useState<string>('');
+  const [chipId, setChipId] = useState<Chip['id']>('all');
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return entries
+      .filter((e) => {
+        if (chipId === 'all') return true;
+        return e.safetyStatus === chipId;
+      })
+      .filter((e) => {
+        if (q.length === 0) return true;
+        return (
+          e.title.toLowerCase().includes(q) ||
+          e.commonName.toLowerCase().includes(q) ||
+          (e.scientificName ?? '').toLowerCase().includes(q)
+        );
+      });
+  }, [chipId, entries, query]);
+
+  const headerSubtitle = useMemo(() => {
+    if (isLoading) return 'Loading…';
+    if (errorMessage) return errorMessage;
+    if (entries.length === 0) return 'Add a scan to Cook from Scan Details.';
+    return `${entries.length} saved ${entries.length === 1 ? 'ingredient' : 'ingredients'}`;
+  }, [entries.length, errorMessage, isLoading]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: CookRecipeEntry }) => {
+      const safetyDot =
+        item.safetyStatus === 'safe'
+          ? COLORS.success
+          : item.safetyStatus === 'unsafe'
+            ? COLORS.error
+            : COLORS.warning;
+
+      return (
+        <TouchableOpacity
+          style={styles.itemCard}
+          onPress={() => {
+            router.push(`/cook/${encodeURIComponent(item.id)}`);
+          }}
+          testID={`cook-item-${item.id}`}
+        >
+          <View style={styles.itemImageWrap}>
+            <Image
+              source={{
+                uri:
+                  item.imageUri ??
+                  'https://images.unsplash.com/photo-1541544181051-e46601a43f2b?q=80&w=1600&auto=format&fit=crop',
+              }}
+              style={styles.itemImage}
+            />
+            <View style={styles.itemTopRow}>
+              <View style={styles.safetyPill}>
+                <View style={[styles.safetyDot, { backgroundColor: safetyDot }]} />
+                <Text style={styles.safetyPillText}>{item.safetyStatus.toUpperCase()}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => {
+                  Alert.alert('Remove from Cook?', 'This will remove it from your Cook list.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Remove',
+                      style: 'destructive',
+                      onPress: () => {
+                        removeEntry(item.id).catch((e) => {
+                          const message = e instanceof Error ? e.message : String(e);
+                          console.log('[Cook] removeEntry failed', { message });
+                        });
+                      },
+                    },
+                  ]);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                testID={`cook-item-remove-${item.id}`}
+              >
+                <X size={16} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.itemBody}>
+            <Text style={styles.itemTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.itemSubtitle} numberOfLines={1}>
+              {item.scientificName ? `${item.commonName} • ${item.scientificName}` : item.commonName}
+            </Text>
+
+            <View style={styles.itemMetaRow}>
+              <View style={styles.confidencePill}>
+                <Text style={styles.confidenceText}>{Math.round(item.confidence * 100)}% confidence</Text>
+              </View>
+              {item.suggestedUses.length > 0 ? (
+                <Text style={styles.usesText} numberOfLines={1}>
+                  {item.suggestedUses[0]}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [removeEntry],
+  );
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Recipes</Text>
-          <TouchableOpacity style={styles.searchButton} testID="cook-search">
-            <Search size={22} color={COLORS.text} />
-          </TouchableOpacity>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>Cook</Text>
+            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+          </View>
+
+          <View style={styles.searchPill} testID="cook-search">
+            <Search size={18} color={COLORS.textSecondary} />
+            <View style={styles.searchDivider} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search your saved ingredients…"
+              placeholderTextColor={COLORS.textSecondary}
+              style={styles.searchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="cook-search-input"
+            />
+          </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Featured Recipe - Large Card */}
-          <TouchableOpacity style={styles.featuredContainer} testID="cook-featured">
-            <ImageBackground
-              source={{ uri: 'https://images.unsplash.com/photo-1547592180-85f173990554?q=80&w=2670&auto=format&fit=crop' }}
-              style={styles.featuredImage}
-              imageStyle={{ borderRadius: 32 }}
-            >
-              <LinearGradient
-                colors={['rgba(7,17,11,0)', 'rgba(7,17,11,0.92)']}
-                style={styles.featuredGradient}
-              >
-                <View style={styles.featuredContent}>
-                  <View style={styles.featuredTag}>
-                    <Text style={styles.featuredTagText}>Trending</Text>
-                  </View>
-                  <Text style={styles.featuredTitle}>Lemon Myrtle Barramundi</Text>
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaItem}>
-                      <Clock size={16} color="#FFF" />
-                      <Text style={styles.metaText}>45 min</Text>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <ChefHat size={16} color="#FFF" />
-                      <Text style={styles.metaText}>Medium</Text>
-                    </View>
-                  </View>
-                </View>
-              </LinearGradient>
-            </ImageBackground>
-          </TouchableOpacity>
-
-          {/* Categories */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesScroll}>
-            {['All', 'Mains', 'Desserts', 'Sauces', 'Drinks'].map((cat, index) => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} testID="cook-chips">
+          {CHIPS.map((c) => {
+            const active = c.id === chipId;
+            return (
               <TouchableOpacity
-                key={index}
-                style={[styles.categoryChip, index === 0 && styles.categoryChipActive]}
-                testID={`cook-category-${cat.toLowerCase()}`}
+                key={c.id}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setChipId(c.id)}
+                testID={`cook-chip-${c.id}`}
               >
-                <Text style={[styles.categoryText, index === 0 && styles.categoryTextActive]}>{cat}</Text>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{c.label}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Popular Recipes Grid */}
-          <Text style={styles.sectionTitle}>Popular Now</Text>
-          <View style={styles.recipesGrid}>
-            {[1, 2, 3, 4].map((item) => (
-              <TouchableOpacity key={item} style={styles.recipeCard}>
-                <View style={styles.recipeImageWrapper}>
-                  <Image 
-                    source={{ uri: `https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=2670&auto=format&fit=crop&random=${item}` }} 
-                    style={styles.recipeImage}
-                  />
-                  <View style={styles.ratingBadge}>
-                    <Text style={styles.ratingText}>4.8 ★</Text>
-                  </View>
-                </View>
-                <Text style={styles.recipeTitle}>Bush Tomato Chutney</Text>
-                <Text style={styles.recipeAuthor}>By Aunty Mary</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+            );
+          })}
         </ScrollView>
+
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={[styles.listContent, filtered.length === 0 && styles.listContentEmpty]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState} testID="cook-empty">
+              <View style={styles.emptyIcon} />
+              <Text style={styles.emptyTitle}>Nothing saved yet</Text>
+              <Text style={styles.emptyText}>Open a scan in Collection → Scan Details → tap the pot icon to add it to Cook.</Text>
+            </View>
+          }
+        />
       </SafeAreaView>
     </View>
   );
@@ -95,168 +198,212 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  headerLeft: {
+    gap: 4,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '900',
     color: COLORS.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
-  searchButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.card,
+  headerSubtitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  searchPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.22)',
+  },
+  searchDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+    paddingVertical: 0,
+  },
+  chipsRow: {
+    paddingHorizontal: 24,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+  },
+  chipActive: {
+    backgroundColor: 'rgba(56,217,137,0.14)',
+    borderColor: 'rgba(56,217,137,0.46)',
+  },
+  chipText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  chipTextActive: {
+    color: COLORS.secondary,
+  },
+
+  listContent: {
+    padding: 24,
+    paddingTop: 8,
+    paddingBottom: 120,
+    gap: 16,
+  },
+  listContentEmpty: {
+    flexGrow: 1,
+  },
+  itemCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 22,
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    elevation: 7,
   },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  featuredContainer: {
-    paddingHorizontal: 24,
-    marginBottom: 32,
-    height: 320,
-  },
-  featuredImage: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  featuredGradient: {
-    borderRadius: 32,
-    padding: 24,
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  featuredContent: {
-    gap: 8,
-  },
-  featuredTag: {
-    backgroundColor: 'rgba(56,217,137,0.18)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 100,
-    alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.35)',
-  },
-  featuredTagText: {
-    color: COLORS.text,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  featuredTitle: {
-    color: '#FFF',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaText: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  categoriesScroll: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  categoryChip: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 100,
-    backgroundColor: COLORS.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-  categoryChipActive: {
-    backgroundColor: 'rgba(56,217,137,0.16)',
-    borderColor: 'rgba(56,217,137,0.5)',
-  },
-  categoryText: {
-    fontWeight: '700',
-    color: COLORS.text,
-    fontSize: 14,
-  },
-  categoryTextActive: {
-    color: COLORS.secondary,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.text,
-    paddingHorizontal: 24,
-    marginBottom: 16,
-  },
-  recipesGrid: {
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  recipeCard: {
-    width: '47%',
-    marginBottom: 24,
-  },
-  recipeImageWrapper: {
-    height: 180,
-    borderRadius: 24,
-    overflow: 'hidden',
-    marginBottom: 12,
+  itemImageWrap: {
+    height: 160,
     position: 'relative',
   },
-  recipeImage: {
+  itemImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  ratingBadge: {
+  itemTopRow: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(7,17,11,0.82)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    top: 12,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  safetyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(7,17,11,0.72)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.35)',
+    borderColor: 'rgba(56,217,137,0.22)',
   },
-  ratingText: {
-    fontSize: 12,
-    fontWeight: '800',
+  safetyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 8,
+  },
+  safetyPillText: {
     color: COLORS.text,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
-  recipeTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+  deleteButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(7,17,11,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,92,92,0.35)',
+  },
+  itemBody: {
+    padding: 16,
+    gap: 6,
+  },
+  itemTitle: {
+    fontSize: 18,
+    fontWeight: '900',
     color: COLORS.text,
-    marginBottom: 4,
+    letterSpacing: -0.4,
   },
-  recipeAuthor: {
+  itemSubtitle: {
     fontSize: 13,
+    fontWeight: '700',
     color: COLORS.textSecondary,
-    fontWeight: '600',
+  },
+  itemMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 6,
+  },
+  confidencePill: {
+    backgroundColor: 'rgba(56,217,137,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.22)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  confidenceText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: COLORS.secondary,
+    letterSpacing: 0.2,
+  },
+  usesText: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 30,
+  },
+  emptyIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: 'rgba(56,217,137,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.28)',
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
   },
 });

@@ -7,8 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
-import { ChevronLeft, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, CookingPot, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { useCookbook } from '@/app/providers/CookbookProvider';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -54,7 +55,9 @@ export default function ScanDetailsScreen() {
   const entryId = typeof id === 'string' ? id : '';
 
   const { getEntryById, updateEntry, removeEntry } = useScanJournal();
+  const { addFromScanEntry, getEntryByScanId } = useCookbook();
   const entry = getEntryById(entryId);
+  const cookAlreadySaved = entry ? Boolean(getEntryByScanId(entry.id)) : false;
 
   const [titleDraft, setTitleDraft] = useState<string>(entry?.title ?? '');
   const [notesDraft, setNotesDraft] = useState<string>(entry?.notes ?? '');
@@ -230,6 +233,32 @@ export default function ScanDetailsScreen() {
     ]);
   }, [entry, sharePhoto, shareSummary]);
 
+  const onAddToCook = useCallback(async () => {
+    if (!entry) return;
+    if (cookAlreadySaved) {
+      Alert.alert('Already in Cook', 'This scan is already in your Cook list.');
+      return;
+    }
+
+    try {
+      const saved = await addFromScanEntry(entry);
+      console.log('[ScanDetails] addToCook success', { cookId: saved.id, scanEntryId: entry.id });
+      Alert.alert('Added to Cook', 'You can now find recipes for this in the Cook tab.', [
+        { text: 'OK' },
+        {
+          text: 'Open Cook',
+          onPress: () => {
+            router.push('/cook');
+          },
+        },
+      ]);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[ScanDetails] addToCook failed', { message });
+      Alert.alert('Could not add', 'Please try again.');
+    }
+  }, [addFromScanEntry, cookAlreadySaved, entry]);
+
   const onSave = useCallback(async () => {
     if (!entry) return;
 
@@ -362,6 +391,14 @@ export default function ScanDetailsScreen() {
             {entry.title}
           </Text>
           <View style={styles.topActions}>
+            <TouchableOpacity
+              style={[styles.iconButton, cookAlreadySaved && styles.iconButtonDisabled]}
+              onPress={onAddToCook}
+              testID="scan-details-add-to-cook"
+              disabled={cookAlreadySaved}
+            >
+              <CookingPot size={18} color={cookAlreadySaved ? COLORS.textSecondary : COLORS.text} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={onShare} testID="scan-details-share">
               <Share2 size={18} color={COLORS.text} />
             </TouchableOpacity>
@@ -654,6 +691,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(56,217,137,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconButtonDisabled: {
+    opacity: 0.55,
+    borderColor: 'rgba(155,179,164,0.18)',
   },
   trashButton: {
     width: 44,
