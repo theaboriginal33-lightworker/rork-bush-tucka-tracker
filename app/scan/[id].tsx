@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { downloadAsync } from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as Linking from 'expo-linking';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -109,8 +113,8 @@ export default function ScanDetailsScreen() {
     }
   }, [entry, titleDraft, updateEntry]);
 
-  const onShare = useCallback(async () => {
-    if (!entry) return;
+  const buildShareText = useCallback(() => {
+    if (!entry) return '';
 
     const lines: string[] = [];
     lines.push(entry.title);
@@ -120,17 +124,86 @@ export default function ScanDetailsScreen() {
     if (entry.locationName) lines.push(`Location: ${entry.locationName}`);
     if (entry.notes) lines.push(`Notes: ${entry.notes}`);
 
-    const message = lines.filter((l) => l.trim().length > 0).join('\n');
+    return lines.filter((l) => l.trim().length > 0).join('\n');
+  }, [entry]);
+
+  const shareSummary = useCallback(async () => {
+    if (!entry) return;
+
+    const message = buildShareText();
 
     try {
-      console.log('[ScanDetails] share', { entryId: entry.id });
+      console.log('[ScanDetails] shareSummary', { entryId: entry.id });
       await Share.share({ message, title: entry.title });
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      console.log('[ScanDetails] share failed', { errMsg });
+      console.log('[ScanDetails] shareSummary failed', { errMsg });
       Alert.alert('Share not available', message);
     }
-  }, [entry]);
+  }, [buildShareText, entry]);
+
+  const sharePhoto = useCallback(async () => {
+    if (!entry) return;
+
+    const imageUri = entry.imageUri;
+    if (!imageUri) {
+      Alert.alert('No photo saved', 'This scan does not have an attached photo to share.');
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      const message = buildShareText();
+      try {
+        console.log('[ScanDetails] sharePhoto(web): opening image', { imageUri });
+        Linking.openURL(imageUri);
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        console.log('[ScanDetails] sharePhoto(web) failed', { errMsg });
+      }
+      try {
+        await Share.share({ message, title: entry.title });
+      } catch {
+        Alert.alert('Photo link', imageUri);
+      }
+      return;
+    }
+
+    try {
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert('Sharing not available', 'Your device does not support sharing files.');
+        return;
+      }
+
+      const fileName = `scan-${entry.id}.jpg`;
+      const cacheDirUri = FileSystem.Paths.cache?.uri ?? '';
+      const dest = `${cacheDirUri}${fileName}`;
+
+      console.log('[ScanDetails] sharePhoto: downloadAsync', { from: imageUri, to: dest, platform: Platform.OS });
+      const download = await downloadAsync(imageUri, dest, { cache: false });
+
+      console.log('[ScanDetails] sharePhoto: shareAsync', { uri: download.uri });
+      await Sharing.shareAsync(download.uri, {
+        dialogTitle: `Share ${entry.title}`,
+        mimeType: 'image/jpeg',
+        UTI: 'public.jpeg',
+      });
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.log('[ScanDetails] sharePhoto failed', { errMsg });
+      Alert.alert('Could not share photo', 'Please try again.');
+    }
+  }, [buildShareText, entry]);
+
+  const onShare = useCallback(() => {
+    if (!entry) return;
+
+    Alert.alert('Share', 'What would you like to share?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Scan summary', onPress: () => shareSummary() },
+      { text: 'Photo', onPress: () => sharePhoto() },
+    ]);
+  }, [entry, sharePhoto, shareSummary]);
 
   const onSave = useCallback(async () => {
     if (!entry) return;
