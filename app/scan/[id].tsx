@@ -11,6 +11,22 @@ import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
 
+const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
+
+function refineCulturalNotes(raw: string): string {
+  const note = String(raw ?? '').trim();
+  if (note.length === 0) return '';
+
+  const normalized = note.replace(/\s+/g, ' ').trim();
+  const oldPhrase = /has been used by Indigenous Australians for food and medicine\.?/i;
+  if (oldPhrase.test(normalized)) {
+    return 'Some Lilly Pilly species have been traditionally used as food. Knowledge and use vary by region and community.';
+  }
+
+  return note;
+}
+
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section} testID={`scan-details-section-${title.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -662,7 +678,9 @@ export default function ScanDetailsScreen() {
           </Section>
 
           <Section title="Cultural knowledge">
-            <Text style={styles.bodyText}>{entry.scan.culturalKnowledge.notes || 'No cultural notes provided.'}</Text>
+            <Text style={styles.bodyText} testID="scan-details-cultural-notes">
+              {refineCulturalNotes(entry.scan.culturalKnowledge.notes) || 'No cultural notes provided.'}
+            </Text>
             {entry.scan.culturalKnowledge.respect.length > 0 ? (
               <View style={[styles.bullets, { marginTop: 10 }]}>
                 {entry.scan.culturalKnowledge.respect.map((r, idx) => (
@@ -673,6 +691,9 @@ export default function ScanDetailsScreen() {
                 ))}
               </View>
             ) : null}
+            <Text style={styles.culturalFooter} testID="cultural-footer">
+              {CULTURAL_FOOTER}
+            </Text>
           </Section>
 
           <Section title="Chat history">
@@ -950,6 +971,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  culturalFooter: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '800',
+    color: 'rgba(234,246,238,0.55)',
   },
   gateCard: {
     marginTop: 10,

@@ -50,6 +50,21 @@ type CulturalKnowledge = {
   respect: string[];
 };
 
+const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
+
+function refineCulturalNotes(raw: string): string {
+  const note = String(raw ?? '').trim();
+  if (note.length === 0) return '';
+
+  const normalized = note.replace(/\s+/g, ' ').trim();
+  const oldPhrase = /has been used by Indigenous Australians for food and medicine\.?/i;
+  if (oldPhrase.test(normalized)) {
+    return 'Some Lilly Pilly species have been traditionally used as food. Knowledge and use vary by region and community.';
+  }
+
+  return note;
+}
+
 type GeminiScanResult = {
   commonName: string;
   scientificName?: string;
@@ -449,7 +464,7 @@ export default function HomeScreen() {
           notes: String(parsed.seasonality?.notes ?? ''),
         },
         culturalKnowledge: {
-          notes: String(parsed.culturalKnowledge?.notes ?? ''),
+          notes: refineCulturalNotes(String(parsed.culturalKnowledge?.notes ?? '')),
           respect: safeArray(parsed.culturalKnowledge?.respect, 6),
         },
 
@@ -501,6 +516,7 @@ Rules:
 - Respond ONLY as strict JSON (no markdown, no backticks).
 - If you are not highly confident, set bushTuckerLikely=false and safety.status='uncertain'.
 - When uncertain, DO NOT encourage eating. Emphasize verification with a local Indigenous guide / botanist.
+- When sharing cultural knowledge, avoid pan-Indigenous generalisations. Use precise language like “Some species have been traditionally used…” and add “Knowledge and use vary by region and community.”
 - Consider toxic lookalikes and common hazards (sap/latex, spines, fungi, berries, allergic reactions).
 - If the photos show multiple species or are too blurry/dark, reduce confidence and set safety.status='uncertain'.
 - Keep language concise, friendly, and Australia-specific.
@@ -1217,16 +1233,19 @@ Return JSON with keys:
                   ) : null}
 
                   {(scanResult.culturalKnowledge.notes || scanResult.culturalKnowledge.respect.length > 0) ? (
-                    <View style={styles.bullets}>
+                    <View style={styles.bullets} testID="scan-cultural-knowledge">
                       <Text style={styles.bulletsTitle}>Cultural Knowledge</Text>
                       {scanResult.culturalKnowledge.notes ? (
-                        <Text style={styles.bulletText}>• {scanResult.culturalKnowledge.notes}</Text>
+                        <Text style={styles.bulletText}>• {refineCulturalNotes(scanResult.culturalKnowledge.notes)}</Text>
                       ) : null}
                       {scanResult.culturalKnowledge.respect.map((r, idx) => (
                         <Text key={`respect-${idx}`} style={styles.bulletText}>
                           • {r}
                         </Text>
                       ))}
+                      <Text style={styles.culturalFooter} testID="cultural-footer">
+                        {CULTURAL_FOOTER}
+                      </Text>
                     </View>
                   ) : null}
 
@@ -1901,6 +1920,13 @@ const styles = StyleSheet.create({
     color: DARK.subtext,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  culturalFooter: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(242,245,242,0.55)',
+    fontWeight: '800',
   },
   chatCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
