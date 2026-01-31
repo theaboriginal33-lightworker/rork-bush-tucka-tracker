@@ -1,7 +1,8 @@
 import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import React, { useMemo } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, type PressableProps } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { BookOpen, Home, NotebookPen, Soup } from 'lucide-react-native';
 
 type TabGlyphProps = {
@@ -9,16 +10,24 @@ type TabGlyphProps = {
   size: number;
   focused: boolean;
   icon: React.ComponentType<{ size?: number; color?: string }>;
-  testID: string;
 };
 
-function TabGlyph({ label, size, focused, icon: Icon, testID }: TabGlyphProps) {
+type TabGlyphButtonProps = TabGlyphProps & {
+  testID: string;
+  onPress?: PressableProps['onPress'];
+};
+
+function TabGlyph({ label, size, focused, icon: Icon }: TabGlyphProps) {
   const strokeColor = focused ? COLORS.tabBarActive : COLORS.tabBarInactive;
-  const opacity = focused ? 1 : 0.7;
-  const iconSize = useMemo(() => Math.round(size * 1.05), [size]);
+  const opacity = focused ? 1 : 0.75;
+
+  const iconSize = useMemo(() => {
+    const safeSize = Number.isFinite(size) && size > 0 ? size : 24;
+    return Math.round(safeSize * 1.05);
+  }, [size]);
 
   return (
-    <View style={styles.glyphWrap} testID={testID}>
+    <View style={styles.glyphWrap}>
       <View style={[styles.glyphIconWrap, focused ? styles.glyphIconWrapFocused : null]}>
         <Icon size={iconSize} color={strokeColor} />
       </View>
@@ -28,6 +37,30 @@ function TabGlyph({ label, size, focused, icon: Icon, testID }: TabGlyphProps) {
     </View>
   );
 }
+
+const TabGlyphButton = React.memo(function TabGlyphButton({
+  label,
+  size,
+  focused,
+  icon,
+  testID,
+  onPress,
+}: TabGlyphButtonProps) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      onPress={(e) => {
+        console.log('[TabBar] press', { label });
+        void Haptics.selectionAsync();
+        onPress?.(e);
+      }}
+      style={({ pressed }) => [styles.glyphButton, pressed ? styles.glyphButtonPressed : null]}>
+      <TabGlyph label={label} size={size} focused={focused} icon={icon} />
+    </Pressable>
+  );
+});
 
 export default function TabLayout() {
   return (
@@ -53,14 +86,24 @@ export default function TabLayout() {
           }),
         },
         tabBarShowLabel: false,
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        },
         tabBarHideOnKeyboard: true,
       }}>
       <Tabs.Screen
         name="(home)"
         options={{
           title: 'Home',
-          tabBarIcon: ({ size, focused }) => (
-            <TabGlyph label="Home" size={size} focused={focused} icon={Home} testID="tab-home" />
+          tabBarButton: (props) => (
+            <TabGlyphButton
+              label="Home"
+              size={24}
+              focused={!!props.accessibilityState?.selected}
+              icon={Home}
+              testID="tab-home"
+              onPress={props.onPress}
+            />
           ),
         }}
       />
@@ -68,8 +111,15 @@ export default function TabLayout() {
         name="learn"
         options={{
           title: 'Learn',
-          tabBarIcon: ({ size, focused }) => (
-            <TabGlyph label="Learn" size={size} focused={focused} icon={BookOpen} testID="tab-learn" />
+          tabBarButton: (props) => (
+            <TabGlyphButton
+              label="Learn"
+              size={24}
+              focused={!!props.accessibilityState?.selected}
+              icon={BookOpen}
+              testID="tab-learn"
+              onPress={props.onPress}
+            />
           ),
         }}
       />
@@ -77,8 +127,15 @@ export default function TabLayout() {
         name="cook"
         options={{
           title: 'Cook',
-          tabBarIcon: ({ size, focused }) => (
-            <TabGlyph label="Cook" size={size} focused={focused} icon={Soup} testID="tab-cook" />
+          tabBarButton: (props) => (
+            <TabGlyphButton
+              label="Cook"
+              size={24}
+              focused={!!props.accessibilityState?.selected}
+              icon={Soup}
+              testID="tab-cook"
+              onPress={props.onPress}
+            />
           ),
         }}
       />
@@ -86,8 +143,15 @@ export default function TabLayout() {
         name="journal"
         options={{
           title: 'Journal',
-          tabBarIcon: ({ size, focused }) => (
-            <TabGlyph label="Journal" size={size} focused={focused} icon={NotebookPen} testID="tab-journal" />
+          tabBarButton: (props) => (
+            <TabGlyphButton
+              label="Journal"
+              size={24}
+              focused={!!props.accessibilityState?.selected}
+              icon={NotebookPen}
+              testID="tab-journal"
+              onPress={props.onPress}
+            />
           ),
         }}
       />
@@ -96,12 +160,20 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  glyphButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glyphButtonPressed: {
+    opacity: 0.7,
+  },
   glyphWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 6,
     paddingBottom: 2,
-    width: 78,
+    width: 86,
   },
   glyphIconWrap: {
     width: 38,
