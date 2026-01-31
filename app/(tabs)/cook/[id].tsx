@@ -195,7 +195,7 @@ export default function CookDetailsScreen() {
                 {entry.scientificName ? <Text style={styles.heroSubtitle}>{entry.scientificName}</Text> : null}
               </View>
               <View style={styles.heroIcon}>
-                <CookingPot size={22} color={COLORS.primary} />
+                <CookingPot size={22} color={COLORS.action} />
               </View>
             </View>
           </View>
@@ -225,7 +225,7 @@ export default function CookDetailsScreen() {
                   <Text style={styles.ideaMeta}>{idea.time} • {idea.difficulty}</Text>
                 </View>
                 <View style={styles.ideaIcon}>
-                  <Sparkles size={18} color={COLORS.secondary} />
+                  <Sparkles size={18} color={COLORS.status} />
                 </View>
               </View>
             </View>
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: 'rgba(11,25,17,0.72)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.25)',
+    borderColor: COLORS.statusBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.18)',
+    borderColor: 'rgba(155,179,164,0.22)',
     backgroundColor: COLORS.card,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 18 },
@@ -369,9 +369,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   pill: {
-    backgroundColor: 'rgba(56,217,137,0.10)',
+    backgroundColor: COLORS.statusSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.22)',
+    borderColor: COLORS.statusBorder,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   pillText: {
     fontSize: 11,
     fontWeight: '900',
-    color: COLORS.secondary,
+    color: COLORS.text,
     letterSpacing: 0.2,
   },
   heroTitleRow: {
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: 'rgba(7,17,11,0.9)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.20)',
+    borderColor: 'rgba(155,179,164,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: COLORS.secondary,
+    color: COLORS.textSecondary,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: COLORS.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.18)',
+    borderColor: 'rgba(155,179,164,0.22)',
   },
   ideaMedia: {
     borderRadius: 18,
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: COLORS.card,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.14)',
+    borderColor: 'rgba(155,179,164,0.18)',
   },
   ideaImage: {
     width: '100%',
@@ -485,9 +485,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 16,
-    backgroundColor: 'rgba(56,217,137,0.12)',
+    backgroundColor: COLORS.statusSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.28)',
+    borderColor: COLORS.statusBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -511,10 +511,10 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(56,217,137,0.14)',
+    backgroundColor: COLORS.statusSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.28)',
-    color: COLORS.secondary,
+    borderColor: COLORS.statusBorder,
+    color: COLORS.status,
     textAlign: 'center',
     textAlignVertical: 'center',
     fontSize: 12,
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: 'rgba(11,25,17,0.72)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.25)',
+    borderColor: 'rgba(155,179,164,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -575,9 +575,9 @@ const styles = StyleSheet.create({
   primaryButton: {
     height: 46,
     borderRadius: 16,
-    backgroundColor: 'rgba(56,217,137,0.16)',
+    backgroundColor: COLORS.statusSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.5)',
+    borderColor: COLORS.statusBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },

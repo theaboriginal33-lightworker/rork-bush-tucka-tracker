@@ -88,7 +88,7 @@ export default function JournalScreen() {
 
             {item.locationName ? (
               <View style={styles.locationRow}>
-                <MapPin size={14} color={COLORS.primary} />
+                <MapPin size={14} color={COLORS.textSecondary} />
                 <Text style={styles.locationText} numberOfLines={1}>
                   {item.locationName}
                 </Text>
@@ -150,7 +150,7 @@ export default function JournalScreen() {
           ListEmptyComponent={
             <View style={styles.emptyState} testID="journal-empty">
               <View style={styles.emptyIcon}>
-                <Brush size={22} color={COLORS.secondary} />
+                <Brush size={22} color={COLORS.status} />
               </View>
               <Text style={styles.emptyTitle}>No scans yet</Text>
               <Text style={styles.emptyText}>{emptyCopy}</Text>
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 100,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.35)',
+    borderColor: 'rgba(155,179,164,0.22)',
   },
   dateText: {
     fontSize: 12,
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.25)',
+    borderColor: 'rgba(155,179,164,0.22)',
   },
   emptyState: {
     flex: 1,
@@ -317,9 +317,9 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: 'rgba(56,217,137,0.12)',
+    backgroundColor: COLORS.statusSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.28)',
+    borderColor: COLORS.statusBorder,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: 12,
-    color: COLORS.secondary,
+    color: COLORS.text,
     fontWeight: '700',
   },
 });

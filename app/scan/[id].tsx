@@ -39,24 +39,23 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Pill({ text, tone }: { text: string; tone: 'good' | 'warn' | 'bad' | 'neutral' }) {
   const bg =
     tone === 'good'
-      ? 'rgba(56,217,137,0.14)'
+      ? COLORS.statusSoft
       : tone === 'warn'
         ? 'rgba(246,196,69,0.14)'
         : tone === 'bad'
           ? 'rgba(255,92,92,0.14)'
-          : 'rgba(138,253,87,0.10)';
+          : 'rgba(155,179,164,0.10)';
 
   const border =
     tone === 'good'
-      ? 'rgba(56,217,137,0.35)'
+      ? COLORS.statusBorder
       : tone === 'warn'
         ? 'rgba(246,196,69,0.35)'
         : tone === 'bad'
           ? 'rgba(255,92,92,0.35)'
-          : 'rgba(155,179,164,0.25)';
+          : 'rgba(155,179,164,0.22)';
 
-  const color =
-    tone === 'good' ? COLORS.primary : tone === 'warn' ? COLORS.warning : tone === 'bad' ? COLORS.error : COLORS.textSecondary;
+  const color = tone === 'good' ? COLORS.status : tone === 'warn' ? COLORS.warning : tone === 'bad' ? COLORS.error : COLORS.textSecondary;
 
   return (
     <View style={[styles.pill, { backgroundColor: bg, borderColor: border }]}>
@@ -944,7 +943,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: COLORS.secondary,
+    color: COLORS.textSecondary,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -1044,11 +1043,11 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 10,
-    backgroundColor: 'rgba(56,217,137,0.16)',
+    backgroundColor: COLORS.statusSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(56,217,137,0.30)',
+    borderColor: COLORS.statusBorder,
     textAlign: 'center',
-    color: COLORS.primary,
+    color: COLORS.status,
     fontSize: 12,
     fontWeight: '900',
     overflow: 'hidden',
@@ -1078,8 +1077,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   chatBubbleUser: {
-    backgroundColor: 'rgba(56,217,137,0.10)',
-    borderColor: 'rgba(56,217,137,0.25)',
+    backgroundColor: COLORS.statusSoft,
+    borderColor: COLORS.statusBorder,
   },
   chatBubbleAssistant: {
     backgroundColor: 'rgba(155,179,164,0.08)',
@@ -1113,14 +1112,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
     height: 48,
     borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.action,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonCompact: {
     height: 44,
     borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.action,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
