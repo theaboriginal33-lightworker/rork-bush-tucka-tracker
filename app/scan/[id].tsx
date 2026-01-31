@@ -638,8 +638,8 @@ export default function ScanDetailsScreen() {
             </Section>
           ) : null}
 
-          {confidenceGate.level === 'confident' && entry.scan.suggestedUses.length > 0 ? (
-            <Section title="Suggested uses">
+          <Section title="Suggested uses">
+            {confidenceGate.level === 'confident' && entry.scan.suggestedUses.length > 0 ? (
               <View style={styles.bullets}>
                 {entry.scan.suggestedUses.map((u, idx) => (
                   <View key={`${u}-${idx}`} style={styles.bulletRow}>
@@ -648,12 +648,19 @@ export default function ScanDetailsScreen() {
                   </View>
                 ))}
               </View>
-            </Section>
-          ) : confidenceGate.level !== 'confident' ? (
-            <Section title="Suggested uses">
-              <Text style={styles.bodyText}>Available when confidence is 80%+.</Text>
-            </Section>
-          ) : null}
+            ) : confidenceGate.level === 'confident' ? (
+              <Text style={styles.bodyText}>No suggested uses provided.</Text>
+            ) : (
+              <View style={styles.lockedCard} testID="scan-details-suggested-uses-locked">
+                <View style={styles.lockedHeader}>
+                  <CookingPot size={16} color={COLORS.textSecondary} />
+                  <Text style={styles.lockedTitle}>Learning mode only</Text>
+                </View>
+                <Text style={styles.lockedText}>Cooking suggestions unlock with higher confidence.</Text>
+                <Text style={styles.gateMeta}>{`Confidence: ${Math.round((entry.scan.confidence ?? 0) * 100)}%`}</Text>
+              </View>
+            )}
+          </Section>
 
           <Section title="Cultural knowledge">
             <Text style={styles.bodyText}>{entry.scan.culturalKnowledge.notes || 'No cultural notes provided.'}</Text>
@@ -975,6 +982,34 @@ const styles = StyleSheet.create({
   gateMeta: {
     marginTop: 8,
     fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  lockedCard: {
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(155,179,164,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(155,179,164,0.22)',
+    opacity: 0.92,
+  },
+  lockedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  lockedTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.textSecondary,
+    letterSpacing: -0.2,
+  },
+  lockedText: {
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '700',
     color: COLORS.textSecondary,
   },
