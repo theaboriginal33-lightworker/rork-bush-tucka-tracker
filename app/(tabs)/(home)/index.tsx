@@ -3,6 +3,7 @@ import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, Image, Scro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system';
 import {
   AlertTriangle,
   ArrowRight,
@@ -703,10 +704,42 @@ Return JSON with keys:
               imageUri: primaryImage?.uri ?? null,
             });
 
+            let persistedImageUri: string | undefined = primaryImage?.uri ?? undefined;
+            const base64 = scanImages[0]?.base64;
+            const mimeType = scanImages[0]?.mimeType;
+            const docDirUri = FileSystem.Paths.document?.uri ?? null;
+
+            if (docDirUri && typeof base64 === 'string' && base64.length > 0) {
+              try {
+                const scanDir = new FileSystem.Directory(FileSystem.Paths.document, 'scan-journal');
+                scanDir.create({ intermediates: true, idempotent: true });
+
+                const ext = mimeType?.includes('png') ? 'png' : 'jpg';
+                const file = new FileSystem.File(scanDir, `${encodeURIComponent(entryId)}.${ext}`);
+                file.create({ intermediates: true, overwrite: true });
+
+                console.log('[Scan] persisting scan photo to documentDirectory', { fileUri: file.uri, mimeType });
+                file.write(base64, { encoding: 'base64' });
+
+                if (file.exists) {
+                  persistedImageUri = file.uri;
+                }
+              } catch (persistErr) {
+                const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
+                console.log('[Scan] persist scan photo failed, falling back to original uri', { message, originalUri: primaryImage?.uri });
+              }
+            } else {
+              console.log('[Scan] skipping photo persist (no documentDirectory or base64)', {
+                hasDocDir: Boolean(docDirUri),
+                hasBase64: typeof base64 === 'string' && base64.length > 0,
+                platform: Platform.OS,
+              });
+            }
+
             await addEntry({
               id: entryId,
               title: parsed.commonName,
-              imageUri: primaryImage?.uri ?? undefined,
+              imageUri: persistedImageUri,
               chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
             });
