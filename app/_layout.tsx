@@ -8,7 +8,10 @@ import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync().catch((e) => {
+  const message = e instanceof Error ? e.message : String(e);
+  console.log('[SplashScreen] preventAutoHideAsync failed', { message });
+});
 
 const queryClient = new QueryClient();
 
@@ -23,14 +26,22 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   useEffect(() => {
-    SplashScreen.hideAsync();
+    console.log('[RootLayout] mounted');
+    void SplashScreen.hideAsync()
+      .then(() => {
+        console.log('[SplashScreen] hideAsync ok');
+      })
+      .catch((e) => {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[SplashScreen] hideAsync failed', { message });
+      });
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <ScanJournalProvider>
         <CookbookProvider>
-          <GestureHandlerRootView>
+          <GestureHandlerRootView style={{ flex: 1 }}>
             <RootLayoutNav />
           </GestureHandlerRootView>
         </CookbookProvider>
