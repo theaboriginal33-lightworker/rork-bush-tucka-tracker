@@ -152,11 +152,27 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       return;
     }
 
-    if (!loadedOnceRef.current && Array.isArray(data)) {
-      loadedOnceRef.current = true;
-      setEntries(data);
-      setErrorMessage(null);
+    if (!Array.isArray(data)) return;
+
+    if (loadedOnceRef.current) {
+      return;
     }
+
+    loadedOnceRef.current = true;
+    setEntries((prev) => {
+      if (prev.length === 0) {
+        return data;
+      }
+
+      const byId = new Map<string, ScanJournalEntry>();
+      for (const e of data) byId.set(e.id, e);
+      for (const e of prev) byId.set(e.id, e);
+
+      const merged = Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt);
+      console.log('[ScanJournal] merged initial load with optimistic entries', { fromStorage: data.length, existing: prev.length, merged: merged.length });
+      return merged;
+    });
+    setErrorMessage(null);
   }, [data, error, isLoading]);
 
   const { mutate: persistMutate } = useMutation({
@@ -181,6 +197,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
   const addEntry = useCallback(
     async (entryInput: Omit<ScanJournalEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => {
+      loadedOnceRef.current = true;
       const id = String(entryInput.id ?? `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`);
       const createdAt = Number.isFinite(entryInput.createdAt) ? (entryInput.createdAt as number) : Date.now();
 
@@ -218,6 +235,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
   const updateEntry = useCallback(
     async (id: string, patch: Partial<Omit<ScanJournalEntry, 'id' | 'createdAt' | 'scan'>>) => {
+      loadedOnceRef.current = true;
       console.log('[ScanJournal] updateEntry', { id, keys: Object.keys(patch) });
       setErrorMessage(null);
 
@@ -254,6 +272,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
   const removeEntry = useCallback(
     async (id: string) => {
+      loadedOnceRef.current = true;
       setErrorMessage(null);
       setEntries((prev) => {
         const next = prev.filter((e) => e.id !== id);
@@ -266,6 +285,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
   );
 
   const clearAll = useCallback(async () => {
+    loadedOnceRef.current = true;
     setErrorMessage(null);
     setEntries(() => {
       const next: ScanJournalEntry[] = [];
