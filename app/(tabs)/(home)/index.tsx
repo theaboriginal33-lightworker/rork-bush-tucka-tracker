@@ -178,6 +178,14 @@ export default function HomeScreen() {
       .trim();
   }, []);
 
+  const tokenizeSupportText = useCallback(
+    (value?: string): string[] => {
+      const normalized = normalizeSupportText(value);
+      return normalized.length > 0 ? normalized.split(' ') : [];
+    },
+    [normalizeSupportText],
+  );
+
   const localSupportTool = useMemo(
     () =>
       createRorkTool({
@@ -190,8 +198,8 @@ export default function HomeScreen() {
         }),
         execute: async (input) => {
           const directory = await getSupportDirectory();
-          const query = normalizeSupportText(input.query);
-          const region = normalizeSupportText(input.region);
+          const queryTokens = tokenizeSupportText(input.query);
+          const regionTokens = tokenizeSupportText(input.region);
           const limit = Number.isFinite(input.limit) ? Math.min(Math.max(Number(input.limit), 1), 6) : 4;
 
           const matches = directory.filter((entry: SupportOrganization) => {
@@ -209,8 +217,8 @@ export default function HomeScreen() {
               .map((value) => normalizeSupportText(value))
               .join(' ');
 
-            if (query && !haystack.includes(query)) return false;
-            if (region && !haystack.includes(region)) return false;
+            if (queryTokens.length > 0 && !queryTokens.every((token) => haystack.includes(token))) return false;
+            if (regionTokens.length > 0 && !regionTokens.every((token) => haystack.includes(token))) return false;
             return true;
           });
 
@@ -236,7 +244,7 @@ export default function HomeScreen() {
           return JSON.stringify({ results });
         },
       }),
-    [normalizeSupportText],
+    [normalizeSupportText, tokenizeSupportText],
   );
 
   const tools = useMemo(

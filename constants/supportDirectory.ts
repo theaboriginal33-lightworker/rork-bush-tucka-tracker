@@ -13,6 +13,18 @@ export type SupportOrganization = {
 
 const LOCAL_SUPPORT_DIRECTORY: SupportOrganization[] = [
   // Add local organizations here for offline lookups.
+  {
+    id: 'worimi-lalc',
+    name: 'Worimi Local Aboriginal Land Council',
+    region: 'NSW - Port Stephens / Newcastle',
+    categories: ['Local Aboriginal Land Council'],
+    phone: '(02) 4033 8800',
+    address: '2163 Nelson Bay Road, Williamtown NSW 2318',
+    website: 'https://worimi.org.au',
+    email: 'reception@worimi.org.au',
+    notes: 'Contact reception for cultural verification and local guidance.',
+    tags: ['Worimi', 'Port Stephens', 'Newcastle', 'verification', 'cultural knowledge'],
+  },
   // Example:
   // {
   //   id: 'example-land-council',
