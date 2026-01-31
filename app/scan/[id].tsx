@@ -73,12 +73,54 @@ export default function ScanDetailsScreen() {
     setLngDraft(entry.location ? String(entry.location.longitude) : '');
   }, [entry]);
 
+  type ConfidenceGate = {
+    level: 'confident' | 'likely' | 'observe';
+    title: string;
+    blurb: string;
+    tone: 'good' | 'warn' | 'bad';
+  };
+
+  const confidenceGate = useMemo((): ConfidenceGate => {
+    const c = entry?.scan?.confidence;
+    const confidence = Number.isFinite(c) ? (c as number) : 0;
+
+    if (confidence >= 0.8) {
+      return {
+        level: 'confident',
+        title: 'Confident ID',
+        blurb: 'High confidence identification. Still verify locally before consuming.',
+        tone: 'good',
+      };
+    }
+
+    if (confidence >= 0.6) {
+      return {
+        level: 'likely',
+        title: 'Likely match – verify locally',
+        blurb: 'Likely identification. Confirm with local knowledge before consuming.',
+        tone: 'warn',
+      };
+    }
+
+    return {
+      level: 'observe',
+      title: 'Observe only',
+      blurb: 'Low confidence. Observe only — do not rely on this ID for safety or preparation.',
+      tone: 'bad',
+    };
+  }, [entry?.scan?.confidence]);
+
+  const displaySafetyStatus = useMemo((): 'safe' | 'unsafe' | 'uncertain' => {
+    if (confidenceGate.level === 'confident') return entry?.scan?.safety?.status ?? 'uncertain';
+    return 'uncertain';
+  }, [confidenceGate.level, entry?.scan?.safety?.status]);
+
   const safetyTone = useMemo((): 'good' | 'warn' | 'bad' => {
-    const status = entry?.scan?.safety?.status;
+    const status = displaySafetyStatus;
     if (status === 'safe') return 'good';
     if (status === 'unsafe') return 'bad';
     return 'warn';
-  }, [entry?.scan?.safety?.status]);
+  }, [displaySafetyStatus]);
 
   const createdLabel = useMemo(() => {
     if (!entry?.createdAt) return '';
@@ -488,11 +530,8 @@ export default function ScanDetailsScreen() {
             />
             <View style={styles.heroOverlay}>
               <View style={styles.badgeRow}>
-                <Pill
-                  text={`Safety: ${entry.scan.safety.status.toUpperCase()}`}
-                  tone={safetyTone}
-                />
-                <Pill text={`${Math.round(entry.scan.confidence * 100)}% confidence`} tone="neutral" />
+                <Pill text={`Safety: ${displaySafetyStatus.toUpperCase()}`} tone={safetyTone} />
+                <Pill text={confidenceGate.title} tone={confidenceGate.tone} />
               </View>
               <View style={styles.heroTitleRow}>
                 <View style={styles.heroTitleStack}>
@@ -527,31 +566,48 @@ export default function ScanDetailsScreen() {
           </Section>
 
           <Section title="Safety">
-            <Text style={styles.bodyText}>{entry.scan.safety.summary || 'No safety summary available.'}</Text>
-            {entry.scan.safety.keyRisks.length > 0 ? (
-              <View style={styles.bullets}>
-                {entry.scan.safety.keyRisks.map((risk, idx) => (
-                  <View key={`${risk}-${idx}`} style={styles.bulletRow}>
-                    <ShieldAlert size={16} color={COLORS.warning} />
-                    <Text style={styles.bulletText}>{risk}</Text>
+            {confidenceGate.level === 'confident' ? (
+              <>
+                <Text style={styles.bodyText}>{entry.scan.safety.summary || 'No safety summary available.'}</Text>
+                {entry.scan.safety.keyRisks.length > 0 ? (
+                  <View style={styles.bullets}>
+                    {entry.scan.safety.keyRisks.map((risk, idx) => (
+                      <View key={`${risk}-${idx}`} style={styles.bulletRow}>
+                        <ShieldAlert size={16} color={COLORS.warning} />
+                        <Text style={styles.bulletText}>{risk}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
+                ) : null}
+              </>
+            ) : (
+              <View style={styles.gateCard} testID="scan-details-confidence-gate">
+                <View style={styles.gateHeader}>
+                  <ShieldAlert size={16} color={COLORS.error} />
+                  <Text style={styles.gateTitle}>{confidenceGate.title}</Text>
+                </View>
+                <Text style={styles.gateText}>{confidenceGate.blurb}</Text>
+                <Text style={styles.gateMeta}>{`Confidence: ${Math.round((entry.scan.confidence ?? 0) * 100)}%`}</Text>
               </View>
-            ) : null}
+            )}
           </Section>
 
           <Section title="Prep steps">
-            {entry.scan.preparation.steps.length > 0 ? (
-              <View style={styles.bullets}>
-                {entry.scan.preparation.steps.map((step, idx) => (
-                  <View key={`${step}-${idx}`} style={styles.bulletRow}>
-                    <Text style={styles.stepIndex}>{idx + 1}</Text>
-                    <Text style={styles.bulletText}>{step}</Text>
-                  </View>
-                ))}
-              </View>
+            {confidenceGate.level === 'confident' ? (
+              entry.scan.preparation.steps.length > 0 ? (
+                <View style={styles.bullets}>
+                  {entry.scan.preparation.steps.map((step, idx) => (
+                    <View key={`${step}-${idx}`} style={styles.bulletRow}>
+                      <Text style={styles.stepIndex}>{idx + 1}</Text>
+                      <Text style={styles.bulletText}>{step}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.bodyText}>No preparation steps provided.</Text>
+              )
             ) : (
-              <Text style={styles.bodyText}>No preparation steps provided.</Text>
+              <Text style={styles.bodyText}>Available when confidence is 80%+.</Text>
             )}
           </Section>
 
@@ -582,7 +638,7 @@ export default function ScanDetailsScreen() {
             </Section>
           ) : null}
 
-          {entry.scan.suggestedUses.length > 0 ? (
+          {confidenceGate.level === 'confident' && entry.scan.suggestedUses.length > 0 ? (
             <Section title="Suggested uses">
               <View style={styles.bullets}>
                 {entry.scan.suggestedUses.map((u, idx) => (
@@ -592,6 +648,10 @@ export default function ScanDetailsScreen() {
                   </View>
                 ))}
               </View>
+            </Section>
+          ) : confidenceGate.level !== 'confident' ? (
+            <Section title="Suggested uses">
+              <Text style={styles.bodyText}>Available when confidence is 80%+.</Text>
             </Section>
           ) : null}
 
@@ -884,6 +944,39 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  gateCard: {
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,92,92,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,92,92,0.35)',
+  },
+  gateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  gateTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  gateText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  gateMeta: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
   stepIndex: {
     width: 22,

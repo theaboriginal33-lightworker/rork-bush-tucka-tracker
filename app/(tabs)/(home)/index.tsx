@@ -100,6 +100,50 @@ export default function HomeScreen() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState<string>('');
 
+  type ConfidenceGate = {
+    level: 'confident' | 'likely' | 'observe';
+    title: string;
+    blurb: string;
+    tone: 'good' | 'neutral' | 'bad';
+  };
+
+  const confidenceGate = useMemo((): ConfidenceGate | null => {
+    const cRaw = scanResult?.confidence;
+    const c = typeof cRaw === 'number' && Number.isFinite(cRaw) ? cRaw : null;
+    if (c === null) return null;
+
+    if (c >= 0.8) {
+      return {
+        level: 'confident',
+        title: 'Confident ID',
+        blurb: 'High confidence identification. Still verify locally before consuming.',
+        tone: 'good',
+      };
+    }
+
+    if (c >= 0.6) {
+      return {
+        level: 'likely',
+        title: 'Likely match – verify locally',
+        blurb: 'Likely identification. Confirm with local knowledge before consuming.',
+        tone: 'neutral',
+      };
+    }
+
+    return {
+      level: 'observe',
+      title: 'Observe only',
+      blurb: 'Low confidence. Observe only — do not rely on this ID for safety or preparation.',
+      tone: 'bad',
+    };
+  }, [scanResult?.confidence]);
+
+  const displaySafetyStatus = useMemo((): GeminiScanResult['safety']['status'] | null => {
+    if (!scanResult) return null;
+    if (confidenceGate?.level === 'confident') return scanResult.safety.status;
+    return 'uncertain';
+  }, [confidenceGate?.level, scanResult]);
+
   const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
   const chatContextKeyRef = useRef<string | null>(null);
 
@@ -156,17 +200,35 @@ export default function HomeScreen() {
 
   const systemPrompt = useMemo(() => {
     if (!scanResult || !scanContext) return null;
-    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant.\n\nScan info:\n${scanContext}`;
-  }, [scanContext, scanResult]);
+
+    const confidencePct = Math.round(scanResult.confidence * 100);
+    const gateInstruction =
+      confidenceGate?.level === 'confident'
+        ? 'Confidence gate: 80%+. You may provide safety + preparation + suggested uses, but still remind to verify locally.'
+        : confidenceGate?.level === 'likely'
+          ? 'Confidence gate: 60–79%. Treat identification as provisional. Do NOT give cooking/preparation steps or consumption advice. Focus on verification steps, lookalikes, and safe observation.'
+          : 'Confidence gate: <60%. Treat identification as very uncertain. Do NOT give cooking/preparation steps or consumption advice. Focus on observation tips and how to rescan/verify.';
+
+    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant.\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
+  }, [confidenceGate?.level, scanContext, scanResult]);
 
   const assistantGreeting = useMemo(() => {
     if (!scanResult) return '';
+
+    const gateLine =
+      confidenceGate?.level === 'confident'
+        ? 'Confident ID (80%+).'
+        : confidenceGate?.level === 'likely'
+          ? 'Likely match (60–79%). Confirm with local knowledge before consuming.'
+          : 'Observe only (<60%). Do not rely on this ID for safety or preparation.';
+
     const safetyNote =
       scanResult.safety.status === 'safe'
         ? 'Ask about preparation, seasonality, or uses. Always verify locally before eating.'
         : 'This scan is not fully confirmed. Ask about risks and verification steps before doing anything.';
-    return `I can answer questions about ${scanResult.commonName}. ${safetyNote}`;
-  }, [scanResult]);
+
+    return `I can answer questions about ${scanResult.commonName}. ${gateLine} ${safetyNote}`;
+  }, [confidenceGate?.level, scanResult]);
 
   useEffect(() => {
     if (!scanResult || !systemPrompt || !scanContextKey) {
@@ -983,9 +1045,9 @@ Return JSON with keys:
                     <View
                       style={[
                         styles.pill,
-                        scanResult.safety.status === 'safe'
+                        displaySafetyStatus === 'safe'
                           ? styles.pillGood
-                          : scanResult.safety.status === 'unsafe'
+                          : displaySafetyStatus === 'unsafe'
                             ? styles.pillBad
                             : styles.pillNeutral,
                       ]}
@@ -993,23 +1055,55 @@ Return JSON with keys:
                       <Text
                         style={[
                           styles.pillText,
-                          scanResult.safety.status === 'safe'
+                          displaySafetyStatus === 'safe'
                             ? styles.pillTextGood
-                            : scanResult.safety.status === 'unsafe'
+                            : displaySafetyStatus === 'unsafe'
                               ? styles.pillTextBad
                               : styles.pillTextNeutral,
                         ]}
                       >
-                        {scanResult.safety.status === 'safe'
-                          ? 'Safe Edible (Check Locally)'
-                          : scanResult.safety.status === 'unsafe'
-                            ? 'Unsafe / Avoid'
-                            : 'Uncertain / Verify'}
+                        {confidenceGate?.level === 'confident'
+                          ? displaySafetyStatus === 'safe'
+                            ? 'Safe Edible (Check Locally)'
+                            : displaySafetyStatus === 'unsafe'
+                              ? 'Unsafe / Avoid'
+                              : 'Uncertain / Verify'
+                          : confidenceGate?.level === 'likely'
+                            ? 'Safety: Verify before consuming'
+                            : 'Safety: Observe only'}
                       </Text>
                     </View>
-                    <View style={styles.pill}>
-                      <Text style={styles.pillText}>Confidence: {Math.round(scanResult.confidence * 100)}%</Text>
+
+                    <View
+                      style={[
+                        styles.pill,
+                        confidenceGate?.tone === 'good' ? styles.pillGood : confidenceGate?.tone === 'bad' ? styles.pillBad : styles.pillNeutral,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          confidenceGate?.tone === 'good'
+                            ? styles.pillTextGood
+                            : confidenceGate?.tone === 'bad'
+                              ? styles.pillTextBad
+                              : styles.pillTextNeutral,
+                        ]}
+                      >
+                        {confidenceGate?.title ?? `Confidence: ${Math.round(scanResult.confidence * 100)}%`}
+                      </Text>
                     </View>
+                  </View>
+
+                  {confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.resultWarningRow} testID="scan-confidence-gate">
+                      <ShieldAlert size={16} color="#B91C1C" />
+                      <Text style={styles.resultWarningText}>{confidenceGate.blurb}</Text>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.pill} testID="scan-confidence-percent">
+                    <Text style={[styles.pillText, styles.pillTextNeutral]}>Confidence: {Math.round(scanResult.confidence * 100)}%</Text>
                   </View>
 
                   {scanResult.bushTuckerLikely ? null : (
@@ -1021,16 +1115,25 @@ Return JSON with keys:
                     </View>
                   )}
 
-                  {scanResult.safety.summary ? <Text style={styles.resultNotes}>{scanResult.safety.summary}</Text> : null}
+                  {confidenceGate?.level === 'confident' && scanResult.safety.summary ? (
+                    <Text style={styles.resultNotes} testID="scan-safety-summary">
+                      {scanResult.safety.summary}
+                    </Text>
+                  ) : null}
 
-                  {scanResult.safety.keyRisks.length > 0 ? (
-                    <View style={styles.bullets}>
+                  {confidenceGate?.level === 'confident' && scanResult.safety.keyRisks.length > 0 ? (
+                    <View style={styles.bullets} testID="scan-safety-risks">
                       <Text style={styles.bulletsTitle}>Is this safe edible bush tucka?</Text>
                       {scanResult.safety.keyRisks.map((w, idx) => (
                         <Text key={`risk-${idx}`} style={styles.bulletText}>
                           • {w}
                         </Text>
                       ))}
+                    </View>
+                  ) : confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.bullets} testID="scan-safety-locked">
+                      <Text style={styles.bulletsTitle}>Safety</Text>
+                      <Text style={styles.bulletText}>• {confidenceGate.blurb}</Text>
                     </View>
                   ) : null}
 
@@ -1057,14 +1160,19 @@ Return JSON with keys:
                     </View>
                   </View>
 
-                  {scanResult.preparation.steps.length > 0 ? (
-                    <View style={styles.bullets}>
+                  {confidenceGate?.level === 'confident' && scanResult.preparation.steps.length > 0 ? (
+                    <View style={styles.bullets} testID="scan-prep-steps">
                       <Text style={styles.bulletsTitle}>Preparation</Text>
                       {scanResult.preparation.steps.map((s, idx) => (
                         <Text key={`prep-${idx}`} style={styles.bulletText}>
                           • {s}
                         </Text>
                       ))}
+                    </View>
+                  ) : confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.bullets} testID="scan-prep-locked">
+                      <Text style={styles.bulletsTitle}>Preparation</Text>
+                      <Text style={styles.bulletText}>• Available when confidence is 80%+.</Text>
                     </View>
                   ) : null}
 
@@ -1100,14 +1208,19 @@ Return JSON with keys:
                     </View>
                   ) : null}
 
-                  {scanResult.suggestedUses.length > 0 ? (
-                    <View style={styles.bullets}>
+                  {confidenceGate?.level === 'confident' && scanResult.suggestedUses.length > 0 ? (
+                    <View style={styles.bullets} testID="scan-suggested-uses">
                       <Text style={styles.bulletsTitle}>Suggested Uses</Text>
                       {scanResult.suggestedUses.map((u, idx) => (
                         <Text key={`u-${idx}`} style={styles.bulletText}>
                           • {u}
                         </Text>
                       ))}
+                    </View>
+                  ) : confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.bullets} testID="scan-suggested-uses-locked">
+                      <Text style={styles.bulletsTitle}>Suggested Uses</Text>
+                      <Text style={styles.bulletText}>• Available when confidence is 80%+.</Text>
                     </View>
                   ) : null}
                 </View>
