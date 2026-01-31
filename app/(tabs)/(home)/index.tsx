@@ -3,6 +3,7 @@ import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, Image, Scro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system';
 import {
   AlertTriangle,
   ArrowRight,
@@ -21,6 +22,12 @@ import {
 import { COLORS } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRorkAgent } from '@rork-ai/toolkit-sdk';
+import {
+  createScanEntryId,
+  useScanJournal,
+  type GeminiScanResult as JournalGeminiScanResult,
+  type ScanJournalChatMessage,
+} from '@/app/providers/ScanJournalProvider';
 
 type SafetyEdibility = {
   status: 'safe' | 'unsafe' | 'uncertain';
@@ -42,6 +49,21 @@ type CulturalKnowledge = {
   notes: string;
   respect: string[];
 };
+
+const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
+
+function refineCulturalNotes(raw: string): string {
+  const note = String(raw ?? '').trim();
+  if (note.length === 0) return '';
+
+  const normalized = note.replace(/\s+/g, ' ').trim();
+  const oldPhrase = /has been used by Indigenous Australians for food and medicine\.?/i;
+  if (oldPhrase.test(normalized)) {
+    return 'Some Lilly Pilly species have been traditionally used as food. Knowledge and use vary by region and community.';
+  }
+
+  return note;
+}
 
 type GeminiScanResult = {
   commonName: string;
@@ -80,30 +102,88 @@ type GeminiListModelsResponse = {
 };
 
 export default function HomeScreen() {
-  const [image, setImage] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [imageMimeType, setImageMimeType] = useState<string>('image/jpeg');
+  const { addEntry, updateEntry } = useScanJournal();
+  const currentEntryIdRef = useRef<string | null>(null);
+
+  type ScanImage = { uri: string; base64: string; mimeType: string };
+  const [scanImages, setScanImages] = useState<ScanImage[]>([]);
+  const primaryImage = scanImages.length > 0 ? scanImages[0] : null;
+
+  const [mode, setMode] = useState<'identify' | 'identify360'>('identify');
+
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState<string>('');
 
+  type ConfidenceGate = {
+    level: 'confident' | 'likely' | 'observe';
+    title: string;
+    blurb: string;
+    tone: 'good' | 'neutral' | 'bad';
+  };
+
+  const confidenceGate = useMemo((): ConfidenceGate | null => {
+    const cRaw = scanResult?.confidence;
+    const c = typeof cRaw === 'number' && Number.isFinite(cRaw) ? cRaw : null;
+    if (c === null) return null;
+
+    if (c >= 0.8) {
+      return {
+        level: 'confident',
+        title: 'Confident ID',
+        blurb: 'High confidence identification. Still verify locally before consuming.',
+        tone: 'good',
+      };
+    }
+
+    if (c >= 0.6) {
+      return {
+        level: 'likely',
+        title: 'Likely match – verify locally',
+        blurb: 'Likely identification. Confirm with local knowledge before consuming.',
+        tone: 'neutral',
+      };
+    }
+
+    return {
+      level: 'observe',
+      title: 'Observe only',
+      blurb: 'Low confidence. Observe only — do not rely on this ID for safety or preparation.',
+      tone: 'bad',
+    };
+  }, [scanResult?.confidence]);
+
+  const displaySafetyStatus = useMemo((): GeminiScanResult['safety']['status'] | null => {
+    if (!scanResult) return null;
+    if (confidenceGate?.level === 'confident') return scanResult.safety.status;
+    return 'uncertain';
+  }, [confidenceGate?.level, scanResult]);
+
   const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
   const chatContextKeyRef = useRef<string | null>(null);
 
   const canScan = useMemo(() => {
-    return Boolean(imageBase64) && Boolean(apiKey);
-  }, [apiKey, imageBase64]);
+    return scanImages.length > 0 && Boolean(apiKey);
+  }, [apiKey, scanImages.length]);
 
   const tools = useMemo(() => ({}), []);
   const {
-    messages: chatMessages,
+    messages: chatMessagesRaw,
     sendMessage,
     status: chatStatus,
     error: chatError,
     setMessages: setChatMessages,
     clearError: clearChatError,
   } = useRorkAgent({ tools });
+
+  const chatMessages = useMemo((): unknown[] => {
+    if (!Array.isArray(chatMessagesRaw)) {
+      console.log('[Chat] messages is not an array yet', { type: typeof chatMessagesRaw });
+      return [];
+    }
+    return chatMessagesRaw as unknown[];
+  }, [chatMessagesRaw]);
 
   const scanContext = useMemo(() => {
     if (!scanResult) return null;
@@ -136,17 +216,35 @@ export default function HomeScreen() {
 
   const systemPrompt = useMemo(() => {
     if (!scanResult || !scanContext) return null;
-    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nScan info:\n${scanContext}`;
-  }, [scanContext, scanResult]);
+
+    const confidencePct = Math.round(scanResult.confidence * 100);
+    const gateInstruction =
+      confidenceGate?.level === 'confident'
+        ? 'Confidence gate: 80%+. You may provide safety + preparation + suggested uses, but still remind to verify locally.'
+        : confidenceGate?.level === 'likely'
+          ? 'Confidence gate: 60–79%. Treat identification as provisional. Do NOT give cooking/preparation steps or consumption advice. Focus on verification steps, lookalikes, and safe observation.'
+          : 'Confidence gate: <60%. Treat identification as very uncertain. Do NOT give cooking/preparation steps or consumption advice. Focus on observation tips and how to rescan/verify.';
+
+    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
+  }, [confidenceGate?.level, scanContext, scanResult]);
 
   const assistantGreeting = useMemo(() => {
     if (!scanResult) return '';
+
+    const gateLine =
+      confidenceGate?.level === 'confident'
+        ? 'Confident ID (80%+).'
+        : confidenceGate?.level === 'likely'
+          ? 'Likely match (60–79%). Confirm with local knowledge before consuming.'
+          : 'Observe only (<60%). Do not rely on this ID for safety or preparation.';
+
     const safetyNote =
       scanResult.safety.status === 'safe'
         ? 'Ask about preparation, seasonality, or uses. Always verify locally before eating.'
         : 'This scan is not fully confirmed. Ask about risks and verification steps before doing anything.';
-    return `I can answer questions about ${scanResult.commonName}. ${safetyNote}`;
-  }, [scanResult]);
+
+    return `I can answer questions about ${scanResult.commonName}. ${gateLine} ${safetyNote}`;
+  }, [confidenceGate?.level, scanResult]);
 
   useEffect(() => {
     if (!scanResult || !systemPrompt || !scanContextKey) {
@@ -167,14 +265,14 @@ export default function HomeScreen() {
       {
         id: `system-${scanContextKey}`,
         role: 'system',
-        content: systemPrompt,
+        parts: [{ type: 'text', text: systemPrompt }],
       },
       {
         id: `assistant-${scanContextKey}`,
         role: 'assistant',
-        content: assistantGreeting,
+        parts: [{ type: 'text', text: assistantGreeting }],
       },
-    ]);
+    ] as unknown as Parameters<typeof setChatMessages>[0]);
     setChatInput('');
   }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
 
@@ -204,35 +302,68 @@ export default function HomeScreen() {
       return cleaned;
     };
 
-    return chatMessages
-      .filter((message) => message.role !== 'system')
-      .map((message) => {
-        const textFromParts = Array.isArray(message.parts)
-          ? message.parts
-              .filter((part) => part.type === 'text' && typeof part.text === 'string')
-              .map((part) => part.text)
-              .join('')
-          : '';
-        const text = textFromParts || (typeof message.content === 'string' ? message.content : '');
-        if (!text) {
-          return null;
-        }
-        const cleanedText = message.role === 'assistant' ? sanitizeChatText(text) : text;
-        const finalText =
-          cleanedText.trim() ||
-          (message.role === 'assistant' ? 'I could not find an answer from the scan details.' : text);
-        return finalText
-          ? {
-              id: message.id,
-              role: message.role,
-              text: finalText,
-            }
-          : null;
-      })
-      .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string } => Boolean(message));
+    try {
+      const safeMessages: unknown[] = Array.isArray(chatMessages) ? chatMessages : [];
+      return safeMessages
+        .filter((m) => (m as any)?.role !== 'system')
+        .map((m) => {
+          const message = m as any;
+          const partsArray: any[] = Array.isArray(message?.parts) ? message.parts : [];
+          const textFromParts = partsArray
+            .filter((part: any) => part?.type === 'text' && typeof part?.text === 'string')
+            .map((part: any) => String(part.text ?? ''))
+            .join('');
+
+          const text =
+            textFromParts ||
+            (typeof message?.content === 'string'
+              ? message.content
+              : typeof message?.text === 'string'
+                ? message.text
+                : '');
+
+          if (!text) return null;
+
+          const role = message?.role === 'user' ? ('user' as const) : ('assistant' as const);
+          const cleanedText = role === 'assistant' ? sanitizeChatText(text) : text;
+          const finalText =
+            cleanedText.trim() ||
+            (role === 'assistant' ? 'I could not find an answer from the scan details.' : text);
+
+          return {
+            id: typeof message?.id === 'string' ? message.id : `msg-${Math.random().toString(16).slice(2)}`,
+            role,
+            text: finalText,
+          };
+        })
+        .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string } => Boolean(message));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.log('[Chat] chatDisplayMessages compute failed', { msg });
+      return [] as { id: string; role: 'user' | 'assistant'; text: string }[];
+    }
   }, [chatMessages]);
 
   const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
+
+  const journalChatHistory = useMemo((): ScanJournalChatMessage[] => {
+    return chatDisplayMessages.map((m) => ({
+      id: String(m.id),
+      role: m.role,
+      text: m.text,
+      createdAt: Date.now(),
+    }));
+  }, [chatDisplayMessages]);
+
+  useEffect(() => {
+    const entryId = currentEntryIdRef.current;
+    if (!entryId) return;
+    if (journalChatHistory.length === 0) return;
+    updateEntry(entryId, { chatHistory: journalChatHistory }).catch((e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[Scan] updateEntry chatHistory failed', { message });
+    });
+  }, [journalChatHistory, updateEntry]);
   const chatDisabled = !scanResult || chatBusy;
   const sendDisabled = chatDisabled || chatInput.trim().length === 0;
 
@@ -362,7 +493,7 @@ export default function HomeScreen() {
           notes: String(parsed.seasonality?.notes ?? ''),
         },
         culturalKnowledge: {
-          notes: String(parsed.culturalKnowledge?.notes ?? ''),
+          notes: refineCulturalNotes(String(parsed.culturalKnowledge?.notes ?? '')),
           respect: safeArray(parsed.culturalKnowledge?.respect, 6),
         },
 
@@ -373,8 +504,15 @@ export default function HomeScreen() {
     [extractJsonFromText],
   );
 
-  const analyzeWithGemini = useCallback(async (): Promise<void> => {
-    console.log('[Scan] analyzeWithGemini start', { hasImage: Boolean(image), hasBase64: Boolean(imageBase64) });
+  const analyzeWithGemini = useCallback(
+    async (imagesOverride?: ScanImage[]): Promise<void> => {
+      const imagesToUse = Array.isArray(imagesOverride) ? imagesOverride : scanImages;
+
+      console.log('[Scan] analyzeWithGemini start', {
+        imageCount: imagesToUse.length,
+        mode,
+        hasOverride: Boolean(imagesOverride),
+      });
 
     setScanError(null);
     setScanResult(null);
@@ -386,20 +524,30 @@ export default function HomeScreen() {
 
     console.log('[Scan] using gemini api key', { length: apiKey.length });
 
-    if (!imageBase64) {
+    if (imagesToUse.length === 0) {
       setScanError('No image data found. Please upload or take a photo again.');
+      return;
+    }
+
+    const expectedCount = mode === 'identify360' ? 3 : 1;
+    if (mode === 'identify360' && imagesToUse.length < expectedCount) {
+      setScanError('360 Identify needs 3 angles. Please take a front, side, and close-up shot.');
       return;
     }
 
     setAnalyzing(true);
 
-    const prompt = `You are an expert Australian bush tucker identification assistant. Use the photo to identify the MOST LIKELY plant/food item and provide practical, safety-first guidance.
+    const prompt = `You are an expert Australian bush tucker identification assistant. Use the photo(s) to identify the MOST LIKELY plant/food item and provide practical, safety-first guidance.
+
+If there are multiple photos, treat them as different angles of THE SAME specimen.
 
 Rules:
 - Respond ONLY as strict JSON (no markdown, no backticks).
 - If you are not highly confident, set bushTuckerLikely=false and safety.status='uncertain'.
 - When uncertain, DO NOT encourage eating. Emphasize verification with a local Indigenous guide / botanist.
+- When sharing cultural knowledge, avoid pan-Indigenous generalisations. Use precise language like “Some species have been traditionally used…” and add “Knowledge and use vary by region and community.”
 - Consider toxic lookalikes and common hazards (sap/latex, spines, fungi, berries, allergic reactions).
+- If the photos show multiple species or are too blurry/dark, reduce confidence and set safety.status='uncertain'.
 - Keep language concise, friendly, and Australia-specific.
 
 Return JSON with keys:
@@ -414,24 +562,24 @@ Return JSON with keys:
 - warnings: string[]
 - suggestedUses: string[]`;
 
+    const imageParts = imagesToUse.map((img, idx) => ({
+      inlineData: {
+        mimeType: img.mimeType || 'image/jpeg',
+        data: img.base64,
+      },
+      _debugIndex: idx + 1,
+    }));
+
     const body = {
       contents: [
         {
           role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: imageMimeType || 'image/jpeg',
-                data: imageBase64,
-              },
-            },
-          ],
+          parts: [{ text: prompt }, ...imageParts.map(({ inlineData }) => ({ inlineData }))],
         },
       ],
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 512,
+        temperature: 0.15,
+        maxOutputTokens: 700,
       },
     };
 
@@ -592,6 +740,60 @@ Return JSON with keys:
 
           setScanResult(parsed);
 
+          try {
+            const entryId = createScanEntryId({
+              commonName: parsed.commonName,
+              scientificName: parsed.scientificName,
+              confidence: parsed.confidence,
+              imageBase64: scanImages[0]?.base64 ?? null,
+              imageUri: primaryImage?.uri ?? null,
+            });
+
+            let persistedImageUri: string | undefined = primaryImage?.uri ?? undefined;
+            const base64 = scanImages[0]?.base64;
+            const mimeType = scanImages[0]?.mimeType;
+            const docDirUri = FileSystem.Paths.document?.uri ?? null;
+
+            if (docDirUri && typeof base64 === 'string' && base64.length > 0) {
+              try {
+                const scanDir = new FileSystem.Directory(FileSystem.Paths.document, 'scan-journal');
+                scanDir.create({ intermediates: true, idempotent: true });
+
+                const ext = mimeType?.includes('png') ? 'png' : 'jpg';
+                const file = new FileSystem.File(scanDir, `${encodeURIComponent(entryId)}.${ext}`);
+                file.create({ intermediates: true, overwrite: true });
+
+                console.log('[Scan] persisting scan photo to documentDirectory', { fileUri: file.uri, mimeType });
+                file.write(base64, { encoding: 'base64' });
+
+                if (file.exists) {
+                  persistedImageUri = file.uri;
+                }
+              } catch (persistErr) {
+                const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
+                console.log('[Scan] persist scan photo failed, falling back to original uri', { message, originalUri: primaryImage?.uri });
+              }
+            } else {
+              console.log('[Scan] skipping photo persist (no documentDirectory or base64)', {
+                hasDocDir: Boolean(docDirUri),
+                hasBase64: typeof base64 === 'string' && base64.length > 0,
+                platform: Platform.OS,
+              });
+            }
+
+            await addEntry({
+              id: entryId,
+              title: parsed.commonName,
+              imageUri: persistedImageUri,
+              chatHistory: journalChatHistory,
+              scan: parsed as unknown as JournalGeminiScanResult,
+            });
+            currentEntryIdRef.current = entryId;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[Scan] saving scan to journal failed', { message });
+          }
+
           if (parsed.safety.status !== 'safe' && parsed.warnings.length === 0) {
             setScanError('Could not confidently confirm this is safe to eat. Please verify with a trusted local guide.');
           }
@@ -617,76 +819,118 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [apiKey, image, imageBase64, imageMimeType, getGeminiText, parseGeminiResult]);
+  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
+
+  const collectImages = useCallback(
+    async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
+      const count = mode === 'identify360' ? 3 : 1;
+      const label = source === 'camera' ? 'Take photo' : 'Select photo';
+
+      if (source === 'library') {
+        if (Platform.OS !== 'web') {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Sorry, we need photo library permissions to make this work!');
+            return null;
+          }
+        }
+      } else {
+        if (Platform.OS !== 'web') {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Sorry, we need camera permissions to make this work!');
+            return null;
+          }
+        }
+      }
+
+      const next: ScanImage[] = [];
+
+      for (let i = 0; i < count; i += 1) {
+        if (count > 1) {
+          const stepLabel = i === 0 ? 'front view' : i === 1 ? 'side view' : 'close-up (leaf/fruit)';
+          Alert.alert(
+            `360 Identify · ${i + 1} / ${count}`,
+            `Capture a ${stepLabel}. Keep the plant sharp and fill the frame.`,
+            [{ text: 'OK' }],
+          );
+        }
+
+        const result =
+          source === 'camera'
+            ? await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.92,
+                base64: true,
+              })
+            : await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.92,
+                base64: true,
+                selectionLimit: 1,
+              });
+
+        if (result.canceled) {
+          console.log('[Scan] collectImages cancelled', { source, index: i });
+          return null;
+        }
+
+        const asset = result.assets?.[0];
+        const base64 = asset?.base64;
+        const uri = asset?.uri;
+        if (!uri || !base64) {
+          console.log('[Scan] collectImages missing base64/uri', { hasUri: Boolean(uri), hasBase64: Boolean(base64) });
+          return null;
+        }
+
+        next.push({
+          uri,
+          base64,
+          mimeType: asset?.mimeType ?? 'image/jpeg',
+        });
+      }
+
+      console.log('[Scan] collectImages success', { label, count: next.length });
+      return next;
+    },
+    [mode],
+  );
 
   const pickImage = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
-        return;
-      }
+    const imgs = await collectImages('library');
+    if (!imgs) {
+      setScanError(mode === 'identify360' ? '360 Identify cancelled. Try again and capture all 3 angles.' : null);
+      return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.9,
-      base64: true,
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      setImage(asset.uri);
-      setImageBase64(asset.base64 ?? null);
-      setImageMimeType(asset.mimeType ?? 'image/jpeg');
-      setScanResult(null);
-      setScanError(null);
-      if (asset.base64) {
-        await analyzeWithGemini();
-      }
-    }
-  }, [analyzeWithGemini]);
+    setScanImages(imgs);
+    setScanResult(null);
+    setScanError(null);
+    await analyzeWithGemini(imgs);
+  }, [analyzeWithGemini, collectImages, mode]);
 
   const takePhoto = useCallback(async () => {
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Sorry, we need camera permissions to make this work!');
-        return;
-      }
+    const imgs = await collectImages('camera');
+    if (!imgs) {
+      setScanError(mode === 'identify360' ? '360 Identify cancelled. Try again and capture all 3 angles.' : null);
+      return;
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.9,
-      base64: true,
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      setImage(asset.uri);
-      setImageBase64(asset.base64 ?? null);
-      setImageMimeType(asset.mimeType ?? 'image/jpeg');
-      setScanResult(null);
-      setScanError(null);
-      if (asset.base64) {
-        await analyzeWithGemini();
-      }
-    }
-  }, [analyzeWithGemini]);
+    setScanImages(imgs);
+    setScanResult(null);
+    setScanError(null);
+    await analyzeWithGemini(imgs);
+  }, [analyzeWithGemini, collectImages, mode]);
 
   const onPressRescan = useCallback(() => {
     if (!canScan) {
       Alert.alert('Cannot scan', 'Please upload or take a new photo first.');
       return;
     }
-    analyzeWithGemini();
-  }, [analyzeWithGemini, canScan]);
+    analyzeWithGemini(scanImages);
+  }, [analyzeWithGemini, canScan, scanImages]);
 
-  const [mode, setMode] = useState<'identify' | 'identify360'>('identify');
   const shutterScale = useRef<Animated.Value>(new Animated.Value(1)).current;
 
   const pressShutter = useCallback(
@@ -772,8 +1016,8 @@ Return JSON with keys:
               </View>
 
               <View style={styles.focusArea}>
-                {image ? (
-                  <Image source={{ uri: image }} style={styles.focusImage} />
+                {primaryImage?.uri ? (
+                  <Image source={{ uri: primaryImage.uri }} style={styles.focusImage} />
                 ) : (
                   <View style={styles.focusPlaceholder}>
                     <Scan size={70} color="rgba(255,255,255,0.18)" />
@@ -879,9 +1123,9 @@ Return JSON with keys:
                     <View
                       style={[
                         styles.pill,
-                        scanResult.safety.status === 'safe'
+                        displaySafetyStatus === 'safe'
                           ? styles.pillGood
-                          : scanResult.safety.status === 'unsafe'
+                          : displaySafetyStatus === 'unsafe'
                             ? styles.pillBad
                             : styles.pillNeutral,
                       ]}
@@ -889,23 +1133,55 @@ Return JSON with keys:
                       <Text
                         style={[
                           styles.pillText,
-                          scanResult.safety.status === 'safe'
+                          displaySafetyStatus === 'safe'
                             ? styles.pillTextGood
-                            : scanResult.safety.status === 'unsafe'
+                            : displaySafetyStatus === 'unsafe'
                               ? styles.pillTextBad
                               : styles.pillTextNeutral,
                         ]}
                       >
-                        {scanResult.safety.status === 'safe'
-                          ? 'Safe Edible (Check Locally)'
-                          : scanResult.safety.status === 'unsafe'
-                            ? 'Unsafe / Avoid'
-                            : 'Uncertain / Verify'}
+                        {confidenceGate?.level === 'confident'
+                          ? displaySafetyStatus === 'safe'
+                            ? 'Safe Edible (Check Locally)'
+                            : displaySafetyStatus === 'unsafe'
+                              ? 'Unsafe / Avoid'
+                              : 'Uncertain / Verify'
+                          : confidenceGate?.level === 'likely'
+                            ? 'Safety: Verify before consuming'
+                            : 'Safety: Observe only'}
                       </Text>
                     </View>
-                    <View style={styles.pill}>
-                      <Text style={styles.pillText}>Confidence: {Math.round(scanResult.confidence * 100)}%</Text>
+
+                    <View
+                      style={[
+                        styles.pill,
+                        confidenceGate?.tone === 'good' ? styles.pillGood : confidenceGate?.tone === 'bad' ? styles.pillBad : styles.pillNeutral,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          confidenceGate?.tone === 'good'
+                            ? styles.pillTextGood
+                            : confidenceGate?.tone === 'bad'
+                              ? styles.pillTextBad
+                              : styles.pillTextNeutral,
+                        ]}
+                      >
+                        {confidenceGate?.title ?? `Confidence: ${Math.round(scanResult.confidence * 100)}%`}
+                      </Text>
                     </View>
+                  </View>
+
+                  {confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.resultWarningRow} testID="scan-confidence-gate">
+                      <ShieldAlert size={16} color="#B91C1C" />
+                      <Text style={styles.resultWarningText}>{confidenceGate.blurb}</Text>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.pill} testID="scan-confidence-percent">
+                    <Text style={[styles.pillText, styles.pillTextNeutral]}>Confidence: {Math.round(scanResult.confidence * 100)}%</Text>
                   </View>
 
                   {scanResult.bushTuckerLikely ? null : (
@@ -917,16 +1193,25 @@ Return JSON with keys:
                     </View>
                   )}
 
-                  {scanResult.safety.summary ? <Text style={styles.resultNotes}>{scanResult.safety.summary}</Text> : null}
+                  {confidenceGate?.level === 'confident' && scanResult.safety.summary ? (
+                    <Text style={styles.resultNotes} testID="scan-safety-summary">
+                      {scanResult.safety.summary}
+                    </Text>
+                  ) : null}
 
-                  {scanResult.safety.keyRisks.length > 0 ? (
-                    <View style={styles.bullets}>
+                  {confidenceGate?.level === 'confident' && scanResult.safety.keyRisks.length > 0 ? (
+                    <View style={styles.bullets} testID="scan-safety-risks">
                       <Text style={styles.bulletsTitle}>Is this safe edible bush tucka?</Text>
                       {scanResult.safety.keyRisks.map((w, idx) => (
                         <Text key={`risk-${idx}`} style={styles.bulletText}>
                           • {w}
                         </Text>
                       ))}
+                    </View>
+                  ) : confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.bullets} testID="scan-safety-locked">
+                      <Text style={styles.bulletsTitle}>Safety</Text>
+                      <Text style={styles.bulletText}>• {confidenceGate.blurb}</Text>
                     </View>
                   ) : null}
 
@@ -953,14 +1238,19 @@ Return JSON with keys:
                     </View>
                   </View>
 
-                  {scanResult.preparation.steps.length > 0 ? (
-                    <View style={styles.bullets}>
+                  {confidenceGate?.level === 'confident' && scanResult.preparation.steps.length > 0 ? (
+                    <View style={styles.bullets} testID="scan-prep-steps">
                       <Text style={styles.bulletsTitle}>Preparation</Text>
                       {scanResult.preparation.steps.map((s, idx) => (
                         <Text key={`prep-${idx}`} style={styles.bulletText}>
                           • {s}
                         </Text>
                       ))}
+                    </View>
+                  ) : confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.bullets} testID="scan-prep-locked">
+                      <Text style={styles.bulletsTitle}>Preparation</Text>
+                      <Text style={styles.bulletText}>• Available when confidence is 80%+.</Text>
                     </View>
                   ) : null}
 
@@ -972,16 +1262,19 @@ Return JSON with keys:
                   ) : null}
 
                   {(scanResult.culturalKnowledge.notes || scanResult.culturalKnowledge.respect.length > 0) ? (
-                    <View style={styles.bullets}>
+                    <View style={styles.bullets} testID="scan-cultural-knowledge">
                       <Text style={styles.bulletsTitle}>Cultural Knowledge</Text>
                       {scanResult.culturalKnowledge.notes ? (
-                        <Text style={styles.bulletText}>• {scanResult.culturalKnowledge.notes}</Text>
+                        <Text style={styles.bulletText}>• {refineCulturalNotes(scanResult.culturalKnowledge.notes)}</Text>
                       ) : null}
                       {scanResult.culturalKnowledge.respect.map((r, idx) => (
                         <Text key={`respect-${idx}`} style={styles.bulletText}>
                           • {r}
                         </Text>
                       ))}
+                      <Text style={styles.culturalFooter} testID="cultural-footer">
+                        {CULTURAL_FOOTER}
+                      </Text>
                     </View>
                   ) : null}
 
@@ -996,14 +1289,19 @@ Return JSON with keys:
                     </View>
                   ) : null}
 
-                  {scanResult.suggestedUses.length > 0 ? (
-                    <View style={styles.bullets}>
+                  {confidenceGate?.level === 'confident' && scanResult.suggestedUses.length > 0 ? (
+                    <View style={styles.bullets} testID="scan-suggested-uses">
                       <Text style={styles.bulletsTitle}>Suggested Uses</Text>
                       {scanResult.suggestedUses.map((u, idx) => (
                         <Text key={`u-${idx}`} style={styles.bulletText}>
                           • {u}
                         </Text>
                       ))}
+                    </View>
+                  ) : confidenceGate?.level && confidenceGate.level !== 'confident' ? (
+                    <View style={styles.bullets} testID="scan-suggested-uses-locked">
+                      <Text style={styles.bulletsTitle}>Suggested Uses</Text>
+                      <Text style={styles.bulletText}>• Available when confidence is 80%+.</Text>
                     </View>
                   ) : null}
                 </View>
@@ -1039,7 +1337,7 @@ Return JSON with keys:
 
                 {chatDisplayMessages.length > 0 ? (
                   <View style={styles.chatMessages}>
-                    {chatDisplayMessages.map((message) => (
+                    {(Array.isArray(chatDisplayMessages) ? chatDisplayMessages : []).map((message) => (
                       <View
                         key={message.id}
                         style={[
@@ -1061,7 +1359,7 @@ Return JSON with keys:
 
                 {chatDisplayMessages.length <= 1 ? (
                   <View style={styles.chatSuggestionsRow}>
-                    {suggestedQuestions.map((prompt) => (
+                    {(Array.isArray(suggestedQuestions) ? suggestedQuestions : []).map((prompt) => (
                       <TouchableOpacity
                         key={prompt}
                         style={styles.chatSuggestion}
@@ -1651,6 +1949,13 @@ const styles = StyleSheet.create({
     color: DARK.subtext,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  culturalFooter: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(242,245,242,0.55)',
+    fontWeight: '800',
   },
   chatCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
