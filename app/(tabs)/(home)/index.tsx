@@ -21,7 +21,9 @@ import {
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRorkAgent } from '@rork-ai/toolkit-sdk';
+import { createRorkTool, useRorkAgent } from '@rork-ai/toolkit-sdk';
+import * as z from 'zod/v4';
+import { getSupportDirectory, type SupportOrganization } from '@/constants/supportDirectory';
 import {
   createScanEntryId,
   useScanJournal,
@@ -167,7 +169,82 @@ export default function HomeScreen() {
     return scanImages.length > 0 && Boolean(apiKey);
   }, [apiKey, scanImages.length]);
 
-  const tools = useMemo(() => ({}), []);
+  const normalizeSupportText = useCallback((value?: string): string => {
+    if (!value) return '';
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const localSupportTool = useMemo(
+    () =>
+      createRorkTool({
+        description:
+          'Find local Aboriginal organisations, Land Councils, or community support contacts with phone/address details. Use when the user asks for local verification, guides, councils, or help contacts.',
+        zodSchema: z.object({
+          query: z.string().optional(),
+          region: z.string().optional(),
+          limit: z.number().int().min(1).max(6).optional(),
+        }),
+        execute: async (input) => {
+          const directory = await getSupportDirectory();
+          const query = normalizeSupportText(input.query);
+          const region = normalizeSupportText(input.region);
+          const limit = Number.isFinite(input.limit) ? Math.min(Math.max(Number(input.limit), 1), 6) : 4;
+
+          const matches = directory.filter((entry: SupportOrganization) => {
+            const haystack = [
+              entry.name,
+              entry.region,
+              entry.address ?? '',
+              entry.notes ?? '',
+              entry.phone ?? '',
+              entry.email ?? '',
+              entry.website ?? '',
+              ...(entry.categories ?? []),
+              ...(entry.tags ?? []),
+            ]
+              .map((value) => normalizeSupportText(value))
+              .join(' ');
+
+            if (query && !haystack.includes(query)) return false;
+            if (region && !haystack.includes(region)) return false;
+            return true;
+          });
+
+          const results = matches.slice(0, limit).map((entry) => ({
+            name: entry.name,
+            region: entry.region,
+            categories: entry.categories,
+            phone: entry.phone ?? null,
+            address: entry.address ?? null,
+            website: entry.website ?? null,
+            email: entry.email ?? null,
+            notes: entry.notes ?? null,
+          }));
+
+          if (results.length === 0) {
+            return JSON.stringify({
+              results: [],
+              message:
+                'No local support contacts are configured yet. Ask the user for their region/state or add contacts in the support directory.',
+            });
+          }
+
+          return JSON.stringify({ results });
+        },
+      }),
+    [normalizeSupportText],
+  );
+
+  const tools = useMemo(
+    () => ({
+      local_support: localSupportTool,
+    }),
+    [localSupportTool],
+  );
   const {
     messages: chatMessagesRaw,
     sendMessage,
@@ -225,7 +302,7 @@ export default function HomeScreen() {
           ? 'Confidence gate: 60–79%. Treat identification as provisional. Do NOT give cooking/preparation steps or consumption advice. Focus on verification steps, lookalikes, and safe observation.'
           : 'Confidence gate: <60%. Treat identification as very uncertain. Do NOT give cooking/preparation steps or consumption advice. Focus on observation tips and how to rescan/verify.';
 
-    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
+    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nIf the user asks for local organisations, contact details, or verification help, call the local_support tool. Only share phone/address/website details that come from the tool results. If the tool returns no results, say you do not have local contacts yet and ask for their town/state or to add contacts.\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
   }, [confidenceGate?.level, scanContext, scanResult]);
 
   const assistantGreeting = useMemo(() => {
@@ -243,7 +320,7 @@ export default function HomeScreen() {
         ? 'Ask about preparation, seasonality, or uses. Always verify locally before eating.'
         : 'This scan is not fully confirmed. Ask about risks and verification steps before doing anything.';
 
-    return `I can answer questions about ${scanResult.commonName}. ${gateLine} ${safetyNote}`;
+    return `I can answer questions about ${scanResult.commonName}. ${gateLine} ${safetyNote} Need local help? Ask for nearby organisations and include your town or region.`;
   }, [confidenceGate?.level, scanResult]);
 
   useEffect(() => {
@@ -374,6 +451,7 @@ export default function HomeScreen() {
       'How should I prepare it?',
       'When is it in season?',
       'Any warnings or lookalikes?',
+      'Who can verify this locally?',
     ];
   }, [scanResult]);
 
