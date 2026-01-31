@@ -181,9 +181,103 @@ export default function HomeScreen() {
   const tokenizeSupportText = useCallback(
     (value?: string): string[] => {
       const normalized = normalizeSupportText(value);
-      return normalized.length > 0 ? normalized.split(' ') : [];
+      return normalized.length > 0 ? normalized.split(' ').filter((token) => token.length > 1) : [];
     },
     [normalizeSupportText],
+  );
+
+  const supportTriggerTokens = useMemo(
+    () =>
+      new Set([
+        'contact',
+        'details',
+        'phone',
+        'address',
+        'email',
+        'website',
+        'council',
+        'land',
+        'lalc',
+        'organisation',
+        'organization',
+        'verify',
+        'verification',
+        'guide',
+        'elder',
+        'community',
+        'help',
+        'local',
+      ]),
+    [],
+  );
+
+  const supportStopTokens = useMemo(
+    () =>
+      new Set([
+        'contact',
+        'contacts',
+        'details',
+        'detail',
+        'phone',
+        'number',
+        'address',
+        'email',
+        'website',
+        'council',
+        'land',
+        'lalc',
+        'organisation',
+        'organization',
+        'local',
+        'verify',
+        'verification',
+        'guide',
+        'elder',
+        'community',
+        'help',
+        'who',
+        'can',
+        'please',
+        'need',
+        'looking',
+        'find',
+        'near',
+        'nearby',
+        'around',
+        'me',
+        'my',
+        'the',
+        'for',
+        'to',
+        'of',
+        'and',
+        'this',
+        'that',
+      ]),
+    [],
+  );
+
+  const getSearchTokens = useCallback(
+    (tokens: string[]): string[] => {
+      return tokens.filter((token) => !supportStopTokens.has(token));
+    },
+    [supportStopTokens],
+  );
+
+  const hasSupportIntent = useCallback(
+    (tokens: string[], directory: SupportOrganization[]): boolean => {
+      if (tokens.some((token) => supportTriggerTokens.has(token))) return true;
+
+      const nameTokens = new Set<string>();
+      directory.forEach((entry) => {
+        tokenizeSupportText(entry.name)
+          .filter((token) => token.length >= 3)
+          .forEach((token) => nameTokens.add(token));
+      });
+
+      return tokens.some((token) => nameTokens.has(token));
+    },
+    [supportTriggerTokens, tokenizeSupportText],
   );
 
   const localSupportTool = useMemo(
@@ -200,7 +294,15 @@ export default function HomeScreen() {
           const directory = await getSupportDirectory();
           const queryTokens = tokenizeSupportText(input.query);
           const regionTokens = tokenizeSupportText(input.region);
+          const searchTokens = getSearchTokens([...queryTokens, ...regionTokens]);
           const limit = Number.isFinite(input.limit) ? Math.min(Math.max(Number(input.limit), 1), 6) : 4;
+
+          if (searchTokens.length === 0) {
+            return JSON.stringify({
+              results: [],
+              message: 'Please share your town/state or the organisation name so I can find the right local contacts.',
+            });
+          }
 
           const matches = directory.filter((entry: SupportOrganization) => {
             const haystack = [
@@ -217,8 +319,7 @@ export default function HomeScreen() {
               .map((value) => normalizeSupportText(value))
               .join(' ');
 
-            if (queryTokens.length > 0 && !queryTokens.every((token) => haystack.includes(token))) return false;
-            if (regionTokens.length > 0 && !regionTokens.every((token) => haystack.includes(token))) return false;
+            if (!searchTokens.every((token) => haystack.includes(token))) return false;
             return true;
           });
 
@@ -244,7 +345,7 @@ export default function HomeScreen() {
           return JSON.stringify({ results });
         },
       }),
-    [normalizeSupportText, tokenizeSupportText],
+    [getSearchTokens, normalizeSupportText, tokenizeSupportText],
   );
 
   const tools = useMemo(
@@ -463,26 +564,125 @@ export default function HomeScreen() {
     ];
   }, [scanResult]);
 
-  const onSendChat = useCallback(() => {
+  const formatSupportEntry = useCallback((entry: SupportOrganization): string => {
+    const lines = [
+      entry.name,
+      entry.region ? `Region: ${entry.region}` : null,
+      entry.phone ? `Phone: ${entry.phone}` : null,
+      entry.address ? `Address: ${entry.address}` : null,
+      entry.email ? `Email: ${entry.email}` : null,
+      entry.website ? `Website: ${entry.website}` : null,
+    ].filter(Boolean);
+    return lines.join('\n');
+  }, []);
+
+  const findSupportEntries = useCallback(
+    (directory: SupportOrganization[], searchTokens: string[]): SupportOrganization[] => {
+      if (searchTokens.length === 0) return [];
+      return directory.filter((entry) => {
+        const haystack = [
+          entry.name,
+          entry.region,
+          entry.address ?? '',
+          entry.notes ?? '',
+          entry.phone ?? '',
+          entry.email ?? '',
+          entry.website ?? '',
+          ...(entry.categories ?? []),
+          ...(entry.tags ?? []),
+        ]
+          .map((value) => normalizeSupportText(value))
+          .join(' ');
+
+        return searchTokens.every((token) => haystack.includes(token));
+      });
+    },
+    [normalizeSupportText],
+  );
+
+  const appendLocalMessages = useCallback(
+    (userText: string, assistantText: string) => {
+      setChatMessages((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const stamp = Date.now();
+        const userMessage = {
+          id: `user-${stamp}-${Math.random().toString(16).slice(2)}`,
+          role: 'user',
+          parts: [{ type: 'text', text: userText }],
+        };
+        const assistantMessage = {
+          id: `assistant-${stamp}-${Math.random().toString(16).slice(2)}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: assistantText }],
+        };
+        return [...base, userMessage, assistantMessage] as unknown as Parameters<typeof setChatMessages>[0];
+      });
+    },
+    [setChatMessages],
+  );
+
+  const handleSupportRequest = useCallback(
+    async (text: string): Promise<boolean> => {
+      const directory = await getSupportDirectory();
+      const tokens = tokenizeSupportText(text);
+      if (!hasSupportIntent(tokens, directory)) {
+        return false;
+      }
+
+      const searchTokens = getSearchTokens(tokens);
+      if (searchTokens.length === 0) {
+        appendLocalMessages(
+          text,
+          'Please share your town/state or the organisation name so I can provide the right local contact details.',
+        );
+        return true;
+      }
+
+      const matches = findSupportEntries(directory, searchTokens);
+      if (matches.length === 0) {
+        appendLocalMessages(
+          text,
+          'I do not have a matching local contact yet. Tell me your town/state or the organisation name so I can look it up.',
+        );
+        return true;
+      }
+
+      const response = matches.map((entry) => formatSupportEntry(entry)).join('\n\n');
+      const followUp =
+        matches.length === 1 ? 'If you need a different area, tell me your town/state.' : 'Tell me your town/state if you need a different area.';
+      appendLocalMessages(text, `${response}\n\n${followUp}`);
+      return true;
+    },
+    [appendLocalMessages, findSupportEntries, formatSupportEntry, getSearchTokens, hasSupportIntent, tokenizeSupportText],
+  );
+
+  const onSendChat = useCallback(async () => {
     if (sendDisabled) return;
     const trimmed = chatInput.trim();
     if (!trimmed) return;
     if (chatError) {
       clearChatError();
     }
-    sendMessage(trimmed);
+
+    const handled = await handleSupportRequest(trimmed);
+    if (!handled) {
+      sendMessage(trimmed);
+    }
     setChatInput('');
-  }, [chatError, chatInput, clearChatError, sendDisabled, sendMessage]);
+  }, [chatError, chatInput, clearChatError, handleSupportRequest, sendDisabled, sendMessage]);
 
   const onSendSuggestion = useCallback(
-    (prompt: string) => {
+    async (prompt: string) => {
       if (chatDisabled) return;
       if (chatError) {
         clearChatError();
       }
-      sendMessage(prompt);
+      const handled = await handleSupportRequest(prompt);
+      if (!handled) {
+        sendMessage(prompt);
+      }
     },
-    [chatDisabled, chatError, clearChatError, sendMessage],
+    [chatDisabled, chatError, clearChatError, handleSupportRequest, sendMessage],
   );
 
   const getGeminiText = useCallback((json: GeminiApiResponse): string => {
