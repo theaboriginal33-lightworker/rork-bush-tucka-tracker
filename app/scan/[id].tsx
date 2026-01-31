@@ -268,10 +268,31 @@ export default function ScanDetailsScreen() {
     const location =
       lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng) ? { latitude: lat, longitude: lng } : undefined;
 
+    const trimmedName = locationNameDraft.trim();
+
+    let nextLocationName: string | undefined = trimmedName.length > 0 ? trimmedName : undefined;
+
+    if (!nextLocationName && location && Platform.OS !== 'web') {
+      try {
+        const addresses = await Location.reverseGeocodeAsync({ latitude: location.latitude, longitude: location.longitude });
+        const a = Array.isArray(addresses) ? addresses[0] : undefined;
+        const parts = [a?.name, a?.street, a?.city ?? a?.district, a?.region].filter((p) => typeof p === 'string' && p.trim().length > 0) as string[];
+        const label = parts.join(', ').trim();
+        if (label.length > 0) {
+          nextLocationName = label;
+          setLocationNameDraft(label);
+          console.log('[ScanDetails] reverseGeocode (manual coords) success', { label });
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[ScanDetails] reverseGeocode (manual coords) failed', { message });
+      }
+    }
+
     try {
       await updateEntry(entry.id, {
         notes: notesDraft,
-        locationName: locationNameDraft.trim().length > 0 ? locationNameDraft.trim() : undefined,
+        locationName: nextLocationName,
         location,
       });
       Alert.alert('Saved', 'Your notes were saved to this scan.');
@@ -290,6 +311,31 @@ export default function ScanDetailsScreen() {
       return;
     }
 
+    const buildLocationLabel = (address: Location.LocationGeocodedAddress | null | undefined) => {
+      const parts: string[] = [];
+
+      const name = typeof address?.name === 'string' ? address.name : '';
+      const street = typeof address?.street === 'string' ? address.street : '';
+      const city = typeof address?.city === 'string' ? address.city : '';
+      const district = typeof address?.district === 'string' ? address.district : '';
+      const region = typeof address?.region === 'string' ? address.region : '';
+      const country = typeof address?.country === 'string' ? address.country : '';
+
+      const firstLine = name || street;
+      const locality = city || district;
+
+      if (firstLine) parts.push(firstLine);
+      if (locality) parts.push(locality);
+      if (region) parts.push(region);
+
+      const label = parts.filter((p) => p.trim().length > 0).join(', ').trim();
+      if (label.length > 0) return label;
+
+      if (country) return country;
+
+      return '';
+    };
+
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
@@ -298,14 +344,32 @@ export default function ScanDetailsScreen() {
       }
 
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setLatDraft(String(pos.coords.latitude));
-      setLngDraft(String(pos.coords.longitude));
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+
+      setLatDraft(String(lat));
+      setLngDraft(String(lng));
+
+      let nextLocationName: string | undefined = undefined;
+      try {
+        const addresses = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        const label = buildLocationLabel(Array.isArray(addresses) ? addresses[0] : undefined);
+        if (label.length > 0) {
+          nextLocationName = label;
+          setLocationNameDraft(label);
+        }
+        console.log('[ScanDetails] reverseGeocode success', { label });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[ScanDetails] reverseGeocode failed', { message });
+      }
 
       updateEntry(entry.id, {
         location: {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
+          latitude: lat,
+          longitude: lng,
         },
+        locationName: nextLocationName,
       }).catch((e) => {
         const message = e instanceof Error ? e.message : String(e);
         console.log('[ScanDetails] updateEntry(location) failed', { message });
