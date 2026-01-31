@@ -587,7 +587,7 @@ export default function ScanDetailsScreen() {
                   <Text style={styles.gateTitle}>{confidenceGate.title}</Text>
                 </View>
                 <Text style={styles.gateText}>{confidenceGate.blurb}</Text>
-                <Text style={styles.gateMeta}>{`Confidence: ${Math.round((entry.scan.confidence ?? 0) * 100)}%`}</Text>
+                <Text style={styles.gateMeta}>Use the summary above as your source of truth.</Text>
               </View>
             )}
           </Section>
@@ -657,7 +657,6 @@ export default function ScanDetailsScreen() {
                   <Text style={styles.lockedTitle}>Learning mode only</Text>
                 </View>
                 <Text style={styles.lockedText}>Cooking suggestions unlock with higher confidence.</Text>
-                <Text style={styles.gateMeta}>{`Confidence: ${Math.round((entry.scan.confidence ?? 0) * 100)}%`}</Text>
               </View>
             )}
           </Section>
