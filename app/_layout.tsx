@@ -1,6 +1,5 @@
 // template
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -28,9 +27,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    ...Ionicons.font,
-  });
+  const [fontsLoaded, fontError] = useFonts({});
 
   useEffect(() => {
     console.log('[RootLayout] mounted', { fontsLoaded, hasFontError: !!fontError });

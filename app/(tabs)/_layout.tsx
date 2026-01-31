@@ -2,22 +2,22 @@ import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import React, { useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { BookOpen, ChefHat, Home, NotebookPen } from 'lucide-react-native';
 
 type TabGlyphProps = {
   label: string;
-  size: number;
+  size?: number;
   focused: boolean;
-  iconName: React.ComponentProps<typeof Ionicons>['name'];
+  Icon: React.ComponentType<{ color?: string; size?: number }>;
   testID?: string;
 };
 
-function TabGlyph({ label, size, focused, iconName, testID }: TabGlyphProps) {
+function TabGlyph({ label, size, focused, Icon, testID }: TabGlyphProps) {
   const strokeColor = focused ? COLORS.tabBarActive : COLORS.tabBarInactive;
   const opacity = focused ? 1 : 0.8;
 
   const iconSize = useMemo(() => {
-    const safeSize = Number.isFinite(size) && size > 0 ? size : 24;
+    const safeSize = Number.isFinite(size) && (size ?? 0) > 0 ? (size as number) : 24;
     return Math.round(safeSize);
   }, [size]);
 
@@ -30,7 +30,9 @@ function TabGlyph({ label, size, focused, iconName, testID }: TabGlyphProps) {
       <View
         style={[styles.glyphIconWrap, focused ? styles.glyphIconWrapFocused : null]}
         pointerEvents="none">
-        <Ionicons name={iconName} size={iconSize} color={strokeColor} />
+        <View style={styles.iconCenter}>
+          <Icon color={strokeColor} size={iconSize} />
+        </View>
       </View>
       <Text style={[styles.glyphLabel, { color: strokeColor, opacity }]} numberOfLines={1}>
         {label}
@@ -75,7 +77,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Home" size={size} focused={focused} iconName="home-outline" testID="tab-home" />
+            <TabGlyph label="Home" size={size} focused={focused} Icon={Home} testID="tab-home" />
           ),
         }}
       />
@@ -84,7 +86,7 @@ export default function TabLayout() {
         options={{
           title: 'Learn',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Learn" size={size} focused={focused} iconName="book-outline" testID="tab-learn" />
+            <TabGlyph label="Learn" size={size} focused={focused} Icon={BookOpen} testID="tab-learn" />
           ),
         }}
       />
@@ -93,7 +95,7 @@ export default function TabLayout() {
         options={{
           title: 'Cook',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Cook" size={size} focused={focused} iconName="restaurant-outline" testID="tab-cook" />
+            <TabGlyph label="Cook" size={size} focused={focused} Icon={ChefHat} testID="tab-cook" />
           ),
         }}
       />
@@ -102,7 +104,7 @@ export default function TabLayout() {
         options={{
           title: 'Journal',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Journal" size={size} focused={focused} iconName="leaf-outline" testID="tab-journal" />
+            <TabGlyph label="Journal" size={size} focused={focused} Icon={NotebookPen} testID="tab-journal" />
           ),
         }}
       />
@@ -131,6 +133,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(56, 217, 137, 0.10)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(56, 217, 137, 0.35)',
+  },
+  iconCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   glyphLabel: {
     marginTop: 3,
