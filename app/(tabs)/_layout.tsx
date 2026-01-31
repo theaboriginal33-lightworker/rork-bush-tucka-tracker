@@ -2,29 +2,35 @@ import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import React, { useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { BookOpen, Home, NotebookPen, Soup } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 type TabGlyphProps = {
   label: string;
   size: number;
   focused: boolean;
-  icon: React.ComponentType<{ size?: number; color?: string }>;
+  iconName: React.ComponentProps<typeof Ionicons>['name'];
   testID?: string;
 };
 
-function TabGlyph({ label, size, focused, icon: Icon, testID }: TabGlyphProps) {
+function TabGlyph({ label, size, focused, iconName, testID }: TabGlyphProps) {
   const strokeColor = focused ? COLORS.tabBarActive : COLORS.tabBarInactive;
-  const opacity = focused ? 1 : 0.75;
+  const opacity = focused ? 1 : 0.8;
 
   const iconSize = useMemo(() => {
     const safeSize = Number.isFinite(size) && size > 0 ? size : 24;
-    return Math.round(safeSize * 1.05);
+    return Math.round(safeSize);
   }, [size]);
+
+  React.useEffect(() => {
+    console.log('[TabGlyph] render', { label, focused, size, iconSize });
+  }, [focused, iconSize, label, size]);
 
   return (
     <View style={styles.glyphWrap} testID={testID}>
-      <View style={[styles.glyphIconWrap, focused ? styles.glyphIconWrapFocused : null]}>
-        <Icon size={iconSize} color={strokeColor} />
+      <View
+        style={[styles.glyphIconWrap, focused ? styles.glyphIconWrapFocused : null]}
+        pointerEvents="none">
+        <Ionicons name={iconName} size={iconSize} color={strokeColor} />
       </View>
       <Text style={[styles.glyphLabel, { color: strokeColor, opacity }]} numberOfLines={1}>
         {label}
@@ -59,7 +65,8 @@ export default function TabLayout() {
         },
         tabBarShowLabel: false,
         tabBarItemStyle: {
-          paddingVertical: 4,
+          paddingTop: 6,
+          paddingBottom: 2,
         },
         tabBarHideOnKeyboard: true,
       }}>
@@ -68,7 +75,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Home" size={size} focused={focused} icon={Home} testID="tab-home" />
+            <TabGlyph label="Home" size={size} focused={focused} iconName="home-outline" testID="tab-home" />
           ),
         }}
       />
@@ -77,7 +84,7 @@ export default function TabLayout() {
         options={{
           title: 'Learn',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Learn" size={size} focused={focused} icon={BookOpen} testID="tab-learn" />
+            <TabGlyph label="Learn" size={size} focused={focused} iconName="book-outline" testID="tab-learn" />
           ),
         }}
       />
@@ -86,7 +93,7 @@ export default function TabLayout() {
         options={{
           title: 'Cook',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Cook" size={size} focused={focused} icon={Soup} testID="tab-cook" />
+            <TabGlyph label="Cook" size={size} focused={focused} iconName="restaurant-outline" testID="tab-cook" />
           ),
         }}
       />
@@ -95,7 +102,7 @@ export default function TabLayout() {
         options={{
           title: 'Journal',
           tabBarIcon: ({ focused, size }) => (
-            <TabGlyph label="Journal" size={size} focused={focused} icon={NotebookPen} testID="tab-journal" />
+            <TabGlyph label="Journal" size={size} focused={focused} iconName="leaf-outline" testID="tab-journal" />
           ),
         }}
       />
@@ -108,13 +115,14 @@ const styles = StyleSheet.create({
   glyphWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 6,
+    paddingTop: 2,
     paddingBottom: 2,
-    width: 86,
+    paddingHorizontal: 4,
+    minWidth: 56,
   },
   glyphIconWrap: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -125,7 +133,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(56, 217, 137, 0.35)',
   },
   glyphLabel: {
-    marginTop: 2,
+    marginTop: 3,
     fontWeight: '700',
     fontSize: 11,
     letterSpacing: 0.2,
