@@ -397,11 +397,15 @@ export default function HomeScreen() {
     [extractJsonFromText],
   );
 
-  const analyzeWithGemini = useCallback(async (): Promise<void> => {
-    console.log('[Scan] analyzeWithGemini start', {
-      imageCount: scanImages.length,
-      mode,
-    });
+  const analyzeWithGemini = useCallback(
+    async (imagesOverride?: ScanImage[]): Promise<void> => {
+      const imagesToUse = Array.isArray(imagesOverride) ? imagesOverride : scanImages;
+
+      console.log('[Scan] analyzeWithGemini start', {
+        imageCount: imagesToUse.length,
+        mode,
+        hasOverride: Boolean(imagesOverride),
+      });
 
     setScanError(null);
     setScanResult(null);
@@ -413,13 +417,13 @@ export default function HomeScreen() {
 
     console.log('[Scan] using gemini api key', { length: apiKey.length });
 
-    if (scanImages.length === 0) {
+    if (imagesToUse.length === 0) {
       setScanError('No image data found. Please upload or take a photo again.');
       return;
     }
 
     const expectedCount = mode === 'identify360' ? 3 : 1;
-    if (mode === 'identify360' && scanImages.length < expectedCount) {
+    if (mode === 'identify360' && imagesToUse.length < expectedCount) {
       setScanError('360 Identify needs 3 angles. Please take a front, side, and close-up shot.');
       return;
     }
@@ -450,7 +454,7 @@ Return JSON with keys:
 - warnings: string[]
 - suggestedUses: string[]`;
 
-    const imageParts = scanImages.map((img, idx) => ({
+    const imageParts = imagesToUse.map((img, idx) => ({
       inlineData: {
         mimeType: img.mimeType || 'image/jpeg',
         data: img.base64,
@@ -764,7 +768,7 @@ Return JSON with keys:
     setScanImages(imgs);
     setScanResult(null);
     setScanError(null);
-    await analyzeWithGemini();
+    await analyzeWithGemini(imgs);
   }, [analyzeWithGemini, collectImages, mode]);
 
   const takePhoto = useCallback(async () => {
@@ -776,7 +780,7 @@ Return JSON with keys:
     setScanImages(imgs);
     setScanResult(null);
     setScanError(null);
-    await analyzeWithGemini();
+    await analyzeWithGemini(imgs);
   }, [analyzeWithGemini, collectImages, mode]);
 
   const onPressRescan = useCallback(() => {
@@ -784,8 +788,8 @@ Return JSON with keys:
       Alert.alert('Cannot scan', 'Please upload or take a new photo first.');
       return;
     }
-    analyzeWithGemini();
-  }, [analyzeWithGemini, canScan]);
+    analyzeWithGemini(scanImages);
+  }, [analyzeWithGemini, canScan, scanImages]);
 
   const shutterScale = useRef<Animated.Value>(new Animated.Value(1)).current;
 
