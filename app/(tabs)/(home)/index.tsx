@@ -136,7 +136,7 @@ export default function HomeScreen() {
 
   const systemPrompt = useMemo(() => {
     if (!scanResult || !scanContext) return null;
-    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant.\n\nScan info:\n${scanContext}`;
+    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nScan info:\n${scanContext}`;
   }, [scanContext, scanResult]);
 
   const assistantGreeting = useMemo(() => {
@@ -179,6 +179,31 @@ export default function HomeScreen() {
   }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
 
   const chatDisplayMessages = useMemo(() => {
+    const sanitizeChatText = (value: string): string => {
+      let cleaned = value;
+      cleaned = cleaned.replace(/<execute_[\s\S]*?<\/execute_[^>]*>/gi, '');
+      cleaned = cleaned.replace(/<\/?execute_[^>]*>/gi, '');
+      cleaned = cleaned.replace(/```[\s\S]*?```/g, '');
+      cleaned = cleaned
+        .split('\n')
+        .filter((line) => !/execute_ipython|execute_python|search_web\(/i.test(line))
+        .map((line) => {
+          let trimmedLine = line.trim();
+          if (trimmedLine.startsWith('#')) {
+            trimmedLine = trimmedLine.replace(/^#{1,6}\s*/, '');
+          }
+          if (/^[-*]\s+/.test(trimmedLine)) {
+            trimmedLine = trimmedLine.replace(/^[-*]\s+/, '• ');
+          }
+          trimmedLine = trimmedLine.replace(/\*\*(.*?)\*\*/g, '$1');
+          trimmedLine = trimmedLine.replace(/\*(.*?)\*/g, '$1');
+          return trimmedLine;
+        })
+        .join('\n');
+      cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+      return cleaned;
+    };
+
     return chatMessages
       .filter((message) => message.role !== 'system')
       .map((message) => {
@@ -189,11 +214,18 @@ export default function HomeScreen() {
               .join('')
           : '';
         const text = textFromParts || (typeof message.content === 'string' ? message.content : '');
-        return text
+        if (!text) {
+          return null;
+        }
+        const cleanedText = message.role === 'assistant' ? sanitizeChatText(text) : text;
+        const finalText =
+          cleanedText.trim() ||
+          (message.role === 'assistant' ? 'I could not find an answer from the scan details.' : text);
+        return finalText
           ? {
               id: message.id,
               role: message.role,
-              text,
+              text: finalText,
             }
           : null;
       })
