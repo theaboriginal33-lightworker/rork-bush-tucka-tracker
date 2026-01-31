@@ -1,44 +1,31 @@
 import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
-import { Image } from 'expo-image';
-import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import { BookOpen, NotebookPen, Scan, Soup } from 'lucide-react-native';
+import React, { useMemo } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { BookOpen, Home, NotebookPen, Soup } from 'lucide-react-native';
 
-type TabIconProps = {
-  uri: string;
+type TabGlyphProps = {
+  label: string;
   size: number;
   focused: boolean;
-  fallback: React.ComponentType<{ size?: number; color?: string }>;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  testID: string;
 };
 
-function TabIcon({ uri, size, focused, fallback: FallbackIcon }: TabIconProps) {
-  const [failed, setFailed] = useState<boolean>(false);
-
-  const onError = useCallback(() => {
-    console.log('[TabIcon] image failed to load', { uri });
-    setFailed(true);
-  }, [uri]);
-
-  const iconSize = useMemo(() => size + 6, [size]);
-  const opacity = focused ? 1 : 0.55;
-
-  if (failed) {
-    return (
-      <View style={styles.fallbackIconWrap} testID="tab-icon-fallback">
-        <FallbackIcon size={size + 2} color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive} />
-      </View>
-    );
-  }
+function TabGlyph({ label, size, focused, icon: Icon, testID }: TabGlyphProps) {
+  const strokeColor = focused ? COLORS.tabBarActive : COLORS.tabBarInactive;
+  const opacity = focused ? 1 : 0.7;
+  const iconSize = useMemo(() => Math.round(size * 1.05), [size]);
 
   return (
-    <Image
-      source={{ uri }}
-      style={[styles.icon, { width: iconSize, height: iconSize, opacity }]}
-      contentFit="contain"
-      onError={onError}
-      testID="tab-icon-image"
-    />
+    <View style={styles.glyphWrap} testID={testID}>
+      <View style={[styles.glyphIconWrap, focused ? styles.glyphIconWrapFocused : null]}>
+        <Icon size={iconSize} color={strokeColor} />
+      </View>
+      <Text style={[styles.glyphLabel, { color: strokeColor, opacity }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -65,26 +52,15 @@ export default function TabLayout() {
             },
           }),
         },
-        tabBarShowLabel: true,
+        tabBarShowLabel: false,
         tabBarHideOnKeyboard: true,
-        tabBarLabelStyle: {
-          fontWeight: '700',
-          fontSize: 10,
-          marginBottom: 4,
-          letterSpacing: 0.2,
-        },
       }}>
       <Tabs.Screen
         name="(home)"
         options={{
-          title: 'Scan',
+          title: 'Home',
           tabBarIcon: ({ size, focused }) => (
-            <TabIcon
-              uri="https://r2-pub.rork.com/generated-images/7f530dd0-60dd-4a50-b702-9690b973a15c.png"
-              size={size}
-              focused={focused}
-              fallback={Scan}
-            />
+            <TabGlyph label="Home" size={size} focused={focused} icon={Home} testID="tab-home" />
           ),
         }}
       />
@@ -93,12 +69,7 @@ export default function TabLayout() {
         options={{
           title: 'Learn',
           tabBarIcon: ({ size, focused }) => (
-            <TabIcon
-              uri="https://r2-pub.rork.com/generated-images/f88ee39a-ac6d-47ce-b519-180b4c41710f.png"
-              size={size}
-              focused={focused}
-              fallback={BookOpen}
-            />
+            <TabGlyph label="Learn" size={size} focused={focused} icon={BookOpen} testID="tab-learn" />
           ),
         }}
       />
@@ -107,12 +78,7 @@ export default function TabLayout() {
         options={{
           title: 'Cook',
           tabBarIcon: ({ size, focused }) => (
-            <TabIcon
-              uri="https://r2-pub.rork.com/generated-images/16b4b4cc-fc89-4794-86b2-3efae9d89d58.png"
-              size={size}
-              focused={focused}
-              fallback={Soup}
-            />
+            <TabGlyph label="Cook" size={size} focused={focused} icon={Soup} testID="tab-cook" />
           ),
         }}
       />
@@ -121,12 +87,7 @@ export default function TabLayout() {
         options={{
           title: 'Journal',
           tabBarIcon: ({ size, focused }) => (
-            <TabIcon
-              uri="https://r2-pub.rork.com/generated-images/225c99f9-6b3d-43e4-8dfa-dce7ae89bbf0.png"
-              size={size}
-              focused={focused}
-              fallback={NotebookPen}
-            />
+            <TabGlyph label="Journal" size={size} focused={focused} icon={NotebookPen} testID="tab-journal" />
           ),
         }}
       />
@@ -135,12 +96,29 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  icon: {
-    marginTop: 4,
-  },
-  fallbackIconWrap: {
-    marginTop: 4,
+  glyphWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: 6,
+    paddingBottom: 2,
+    width: 78,
+  },
+  glyphIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glyphIconWrapFocused: {
+    backgroundColor: 'rgba(56, 217, 137, 0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56, 217, 137, 0.35)',
+  },
+  glyphLabel: {
+    marginTop: 2,
+    fontWeight: '700',
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
 });
