@@ -96,26 +96,54 @@ export default function ScanDetailsScreen() {
     }
   }, [entry?.createdAt]);
 
-  const scanDeepLink = useMemo(() => {
-    if (!entry) return '';
+  const scanLinks = useMemo(() => {
+    if (!entry) {
+      return {
+        deepLink: '',
+        webLink: '',
+        qrTarget: '',
+      };
+    }
+
     try {
-      const url = Linking.createURL(`/scan/${entry.id}`);
-      console.log('[ScanDetails] scanDeepLink', { entryId: entry.id, url });
-      return url;
+      const path = `scan/${entry.id}`;
+
+      const deepLink = Linking.createURL(path, { isTripleSlashed: false });
+      const webLink = Linking.createURL(path, { scheme: 'https', isTripleSlashed: false });
+
+      const qrTarget = webLink || deepLink;
+
+      console.log('[ScanDetails] scanLinks', {
+        entryId: entry.id,
+        path,
+        deepLink,
+        webLink,
+        qrTarget,
+      });
+
+      return {
+        deepLink,
+        webLink,
+        qrTarget,
+      };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.log('[ScanDetails] scanDeepLink failed', { message });
-      return '';
+      console.log('[ScanDetails] scanLinks failed', { message });
+      return {
+        deepLink: '',
+        webLink: '',
+        qrTarget: '',
+      };
     }
   }, [entry]);
 
   const scanQrImageUrl = useMemo(() => {
-    if (!scanDeepLink) return '';
-    const encoded = encodeURIComponent(scanDeepLink);
+    if (!scanLinks.qrTarget) return '';
+    const encoded = encodeURIComponent(scanLinks.qrTarget);
     const url = `https://api.qrserver.com/v1/create-qr-code/?size=720x720&data=${encoded}&ecc=M`;
-    console.log('[ScanDetails] scanQrImageUrl', { url });
+    console.log('[ScanDetails] scanQrImageUrl', { url, qrTarget: scanLinks.qrTarget });
     return url;
-  }, [scanDeepLink]);
+  }, [scanLinks.qrTarget]);
 
   const onSaveTitle = useCallback(async () => {
     if (!entry) return;
@@ -539,13 +567,25 @@ export default function ScanDetailsScreen() {
                 <TouchableOpacity
                   style={styles.qrLinkButton}
                   onPress={() => {
-                    if (!scanDeepLink) return;
-                    console.log('[ScanDetails] openDeepLink pressed', { scanDeepLink });
-                    Linking.openURL(scanDeepLink).catch((e) => {
-                      const message = e instanceof Error ? e.message : String(e);
-                      console.log('[ScanDetails] openDeepLink failed', { message });
-                      Alert.alert('Could not open link', 'Please try again.');
+                    const url = scanLinks.qrTarget;
+                    if (!url) return;
+
+                    console.log('[ScanDetails] openLink pressed', {
+                      url,
+                      deepLink: scanLinks.deepLink,
+                      webLink: scanLinks.webLink,
                     });
+
+                    Linking.openURL(url)
+                      .catch((e) => {
+                        const message = e instanceof Error ? e.message : String(e);
+                        console.log('[ScanDetails] openLink failed', { message, url });
+                        try {
+                          router.push(`/scan/${entry?.id ?? ''}`);
+                        } catch {
+                          Alert.alert('Could not open', 'Please try again.');
+                        }
+                      });
                   }}
                   testID="scan-details-open-link"
                 >
@@ -555,9 +595,9 @@ export default function ScanDetailsScreen() {
               <View style={styles.qrWrap}>
                 <Image source={{ uri: scanQrImageUrl }} style={styles.qrImage} contentFit="contain" testID="scan-details-qr-image" />
               </View>
-              {scanDeepLink ? (
+              {scanLinks.qrTarget ? (
                 <Text style={styles.qrHint} numberOfLines={2}>
-                  {scanDeepLink}
+                  {scanLinks.qrTarget}
                 </Text>
               ) : null}
             </View>
