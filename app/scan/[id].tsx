@@ -96,6 +96,27 @@ export default function ScanDetailsScreen() {
     }
   }, [entry?.createdAt]);
 
+  const scanDeepLink = useMemo(() => {
+    if (!entry) return '';
+    try {
+      const url = Linking.createURL(`/scan/${entry.id}`);
+      console.log('[ScanDetails] scanDeepLink', { entryId: entry.id, url });
+      return url;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[ScanDetails] scanDeepLink failed', { message });
+      return '';
+    }
+  }, [entry]);
+
+  const scanQrImageUrl = useMemo(() => {
+    if (!scanDeepLink) return '';
+    const encoded = encodeURIComponent(scanDeepLink);
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=720x720&data=${encoded}&ecc=M`;
+    console.log('[ScanDetails] scanQrImageUrl', { url });
+    return url;
+  }, [scanDeepLink]);
+
   const onSaveTitle = useCallback(async () => {
     if (!entry) return;
 
@@ -511,6 +532,37 @@ export default function ScanDetailsScreen() {
             </View>
           </View>
 
+          {scanQrImageUrl ? (
+            <View style={styles.qrCard} testID="scan-details-qr">
+              <View style={styles.qrHeaderRow}>
+                <Text style={styles.qrTitle}>Scan this QR to open this scan</Text>
+                <TouchableOpacity
+                  style={styles.qrLinkButton}
+                  onPress={() => {
+                    if (!scanDeepLink) return;
+                    console.log('[ScanDetails] openDeepLink pressed', { scanDeepLink });
+                    Linking.openURL(scanDeepLink).catch((e) => {
+                      const message = e instanceof Error ? e.message : String(e);
+                      console.log('[ScanDetails] openDeepLink failed', { message });
+                      Alert.alert('Could not open link', 'Please try again.');
+                    });
+                  }}
+                  testID="scan-details-open-link"
+                >
+                  <Text style={styles.qrLinkButtonText}>Open</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.qrWrap}>
+                <Image source={{ uri: scanQrImageUrl }} style={styles.qrImage} contentFit="contain" testID="scan-details-qr-image" />
+              </View>
+              {scanDeepLink ? (
+                <Text style={styles.qrHint} numberOfLines={2}>
+                  {scanDeepLink}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
           <Section title="Edit title">
             <TextInput
               value={titleDraft}
@@ -862,6 +914,63 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionBody: {},
+  qrCard: {
+    marginTop: 14,
+    borderRadius: 24,
+    padding: 14,
+    backgroundColor: 'rgba(11,25,17,0.92)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.18)',
+    overflow: 'hidden',
+  },
+  qrHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  qrTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: 0.2,
+  },
+  qrLinkButton: {
+    height: 34,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(56,217,137,0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.35)',
+  },
+  qrLinkButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
+  qrWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+  },
+  qrImage: {
+    width: 220,
+    height: 220,
+  },
+  qrHint: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
   bodyText: {
     fontSize: 14,
     lineHeight: 20,
