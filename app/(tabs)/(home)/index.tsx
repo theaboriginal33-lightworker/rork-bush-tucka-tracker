@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Alert, TextInput } from 'react-native';
+import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -110,9 +111,10 @@ export default function HomeScreen() {
   const { addFromScanEntry, getEntryByScanId } = useCookbook();
   const currentEntryIdRef = useRef<string | null>(null);
 
-  type ScanImage = { uri: string; base64: string; mimeType: string };
+  type ScanImage = { uri: string; base64?: string; mimeType?: string; previewUri?: string };
   const [scanImages, setScanImages] = useState<ScanImage[]>([]);
   const primaryImage = scanImages.length > 0 ? scanImages[0] : null;
+  const primaryImageDisplayUri = primaryImage?.previewUri ?? primaryImage?.uri ?? null;
 
   const [mode, setMode] = useState<'identify' | 'identify360'>('identify');
 
@@ -1114,24 +1116,52 @@ Return JSON with keys:
 
                 const dest = `${scanDirUri}${encodeURIComponent(entryId)}.${ext}`;
                 const from = primaryImage?.uri ?? '';
+                const fromScheme = from.split(':')[0];
 
-                try {
-                  console.log('[Scan] persisting scan photo to documentDirectory (copyAsync attempt)', {
-                    from,
-                    dest,
-                    mimeType,
-                    platform: Platform.OS,
-                  });
+                const canCopyDirectly = fromScheme === 'file' || fromScheme === 'content';
 
-                  await FileSystem.copyAsync({ from, to: dest });
-                  persistedImageUri = dest;
-                  console.log('[Scan] persisted scan photo via copyAsync', { dest });
-                } catch (copyErr) {
-                  const message = copyErr instanceof Error ? copyErr.message : String(copyErr);
-                  console.log('[Scan] copyAsync failed; trying base64 write', { message, from, dest });
+                if (canCopyDirectly) {
+                  try {
+                    console.log('[Scan] persisting scan photo to documentDirectory (copyAsync attempt)', {
+                      from,
+                      dest,
+                      mimeType,
+                      platform: Platform.OS,
+                    });
 
+                    await FileSystem.copyAsync({ from, to: dest });
+                    persistedImageUri = dest;
+                    console.log('[Scan] persisted scan photo via copyAsync', { dest });
+                  } catch (copyErr) {
+                    const message = copyErr instanceof Error ? copyErr.message : String(copyErr);
+                    console.log('[Scan] copyAsync failed; trying base64 write', { message, from, dest });
+
+                    if (typeof base64 === 'string' && base64.length > 0) {
+                      try {
+                        await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
+                        persistedImageUri = dest;
+                        console.log('[Scan] persisted scan photo via base64 write', { dest, length: base64.length });
+                      } catch (writeErr) {
+                        const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+                        persistedImageUri = primaryImage?.uri ?? undefined;
+                        console.log('[Scan] base64 write failed; falling back to original uri', {
+                          writeMsg,
+                          originalUri: primaryImage?.uri,
+                          originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                        });
+                      }
+                    } else {
+                      persistedImageUri = primaryImage?.uri ?? undefined;
+                      console.log('[Scan] no base64 available; falling back to original uri', {
+                        originalUri: primaryImage?.uri,
+                        originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                      });
+                    }
+                  }
+                } else {
                   if (typeof base64 === 'string' && base64.length > 0) {
                     try {
+                      console.log('[Scan] persisting scan photo via base64 write (non-file uri scheme)', { fromScheme, dest, mimeType });
                       await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
                       persistedImageUri = dest;
                       console.log('[Scan] persisted scan photo via base64 write', { dest, length: base64.length });
@@ -1146,7 +1176,7 @@ Return JSON with keys:
                     }
                   } else {
                     persistedImageUri = primaryImage?.uri ?? undefined;
-                    console.log('[Scan] no base64 available; falling back to original uri', {
+                    console.log('[Scan] cannot persist non-file uri (no base64 available); falling back to original uri', {
                       originalUri: primaryImage?.uri,
                       originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
                     });
@@ -1303,15 +1333,20 @@ Return JSON with keys:
         const asset = result.assets?.[0];
         const base64 = asset?.base64;
         const uri = asset?.uri;
-        if (!uri || !base64) {
-          console.log('[Scan] collectImages missing base64/uri', { hasUri: Boolean(uri), hasBase64: Boolean(base64) });
+        if (!uri) {
+          console.log('[Scan] collectImages missing uri', { hasUri: Boolean(uri), hasBase64: Boolean(base64) });
           return null;
         }
 
+        const mt = typeof asset?.mimeType === 'string' && asset.mimeType.length > 0 ? asset.mimeType : undefined;
+        const base64Clean = typeof base64 === 'string' && base64.length > 0 ? base64 : undefined;
+        const previewUri = base64Clean ? `data:${mt ?? 'image/jpeg'};base64,${base64Clean}` : undefined;
+
         next.push({
           uri,
-          base64,
-          mimeType: asset?.mimeType ?? 'image/jpeg',
+          base64: base64Clean,
+          mimeType: mt,
+          previewUri,
         });
       }
 
@@ -1398,10 +1433,13 @@ Return JSON with keys:
               <Text style={styles.greeting}>Good Morning,</Text>
               <Text style={styles.title}>Bush Tucka</Text>
             </View>
-            <TouchableOpacity style={styles.profileButton}>
-              <Image 
-                source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop' }} 
-                style={styles.profileImage} 
+            <TouchableOpacity style={styles.profileButton} testID="home-profile-button">
+              <Image
+                source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop' }}
+                style={styles.profileImage}
+                contentFit="cover"
+                transition={120}
+                testID="home-profile-image"
               />
             </TouchableOpacity>
           </View>
@@ -1439,7 +1477,20 @@ Return JSON with keys:
 
               <View style={styles.focusArea}>
                 {primaryImage?.uri ? (
-                  <Image source={{ uri: primaryImage.uri }} style={styles.focusImage} />
+                  <Image
+                    source={{ uri: primaryImageDisplayUri ?? primaryImage.uri }}
+                    style={styles.focusImage}
+                    contentFit="cover"
+                    transition={120}
+                    cachePolicy="memory-disk"
+                    testID="scan-primary-image"
+                    onError={(e) => {
+                      console.log('[Home] primary image load error', {
+                        uri: primaryImageDisplayUri ?? primaryImage.uri,
+                        error: (e as unknown as { error?: string })?.error,
+                      });
+                    }}
+                  />
                 ) : (
                   <View style={styles.focusPlaceholder}>
                     <Scan size={70} color="rgba(255,255,255,0.18)" />
