@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
@@ -30,6 +31,7 @@ import {
   type GeminiScanResult as JournalGeminiScanResult,
   type ScanJournalChatMessage,
 } from '@/app/providers/ScanJournalProvider';
+import { useCookbook } from '@/app/providers/CookbookProvider';
 
 type SafetyEdibility = {
   status: 'safe' | 'unsafe' | 'uncertain';
@@ -105,6 +107,7 @@ type GeminiListModelsResponse = {
 
 export default function HomeScreen() {
   const { addEntry, updateEntry } = useScanJournal();
+  const { addFromScanEntry, getEntryByScanId } = useCookbook();
   const currentEntryIdRef = useRef<string | null>(null);
 
   type ScanImage = { uri: string; base64: string; mimeType: string };
@@ -1080,18 +1083,15 @@ Return JSON with keys:
             if (docDirUri && typeof base64 === 'string' && base64.length > 0) {
               try {
                 const scanDir = new FileSystem.Directory(FileSystem.Paths.document, 'scan-journal');
-                scanDir.create({ intermediates: true, idempotent: true });
+                await scanDir.create({ intermediates: true, idempotent: true });
 
                 const ext = mimeType?.includes('png') ? 'png' : 'jpg';
                 const file = new FileSystem.File(scanDir, `${encodeURIComponent(entryId)}.${ext}`);
-                file.create({ intermediates: true, overwrite: true });
+                await file.create({ intermediates: true, overwrite: true });
 
                 console.log('[Scan] persisting scan photo to documentDirectory', { fileUri: file.uri, mimeType });
-                file.write(base64, { encoding: 'base64' });
-
-                if (file.exists) {
-                  persistedImageUri = file.uri;
-                }
+                await file.write(base64, { encoding: 'base64' });
+                persistedImageUri = file.uri;
               } catch (persistErr) {
                 const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
                 console.log('[Scan] persist scan photo failed, falling back to original uri', { message, originalUri: primaryImage?.uri });
@@ -1104,14 +1104,45 @@ Return JSON with keys:
               });
             }
 
-            await addEntry({
+            const savedEntry = await addEntry({
               id: entryId,
               title: parsed.commonName,
               imageUri: persistedImageUri,
               chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
             });
-            currentEntryIdRef.current = entryId;
+            currentEntryIdRef.current = savedEntry.id;
+
+            const confidence = Number.isFinite(savedEntry.scan?.confidence) ? (savedEntry.scan.confidence as number) : 0;
+            const shouldAutoAddToCook =
+              confidence >= 0.8 &&
+              savedEntry.scan?.bushTuckerLikely === true &&
+              savedEntry.scan?.safety?.status === 'safe';
+
+            if (shouldAutoAddToCook) {
+              const existing = getEntryByScanId(savedEntry.id);
+              if (!existing) {
+                console.log('[Scan] auto-add to Cook (confidence gate passed)', { scanEntryId: savedEntry.id, confidence });
+                try {
+                  await addFromScanEntry(savedEntry);
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.log('[Scan] auto-add to Cook failed', { message, scanEntryId: savedEntry.id });
+                }
+              } else {
+                console.log('[Scan] skip auto-add to Cook (already exists)', { scanEntryId: savedEntry.id, cookId: existing.id });
+              }
+            } else {
+              console.log('[Scan] skip auto-add to Cook (confidence gate not met)', {
+                scanEntryId: savedEntry.id,
+                confidence,
+                bushTuckerLikely: savedEntry.scan?.bushTuckerLikely,
+                safetyStatus: savedEntry.scan?.safety?.status,
+              });
+            }
+
+            console.log('[Scan] navigating to saved scan details', { scanEntryId: savedEntry.id });
+            router.push(`/scan/${encodeURIComponent(savedEntry.id)}`);
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             console.log('[Scan] saving scan to journal failed', { message });
@@ -1142,7 +1173,7 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
+  }, [addEntry, addFromScanEntry, apiKey, getEntryByScanId, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
 
   const collectImages = useCallback(
     async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
