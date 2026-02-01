@@ -1381,6 +1381,9 @@ Return JSON with keys:
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             console.log('[Scan] saving scan to journal failed', { message });
+            setScanPhase('error');
+            setScanError('Could not save this scan to your Collection. Please try again.');
+            Alert.alert('Save failed', 'Could not save this scan to your Collection. Please try again.');
           }
 
           if (parsed.safety.status !== 'safe' && parsed.warnings.length === 0) {

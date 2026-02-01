@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { Alert, View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,6 +38,10 @@ function safeImageUri(uri: string | undefined): string | null {
 export default function JournalScreen() {
   const { entries, isLoading, errorMessage, clearAll, removeEntry, refresh } = useScanJournal();
 
+  useEffect(() => {
+    console.log('[Journal] render', { entriesCount: entries.length, isLoading, hasError: Boolean(errorMessage) });
+  }, [entries.length, errorMessage, isLoading]);
+
   const onPressClearAll = useCallback(() => {
     Alert.alert('Clear collection?', 'This will remove all saved scans from this device.', [
       { text: 'Cancel', style: 'cancel' },
@@ -57,7 +61,8 @@ export default function JournalScreen() {
   const renderItem = useCallback(
     ({ item }: { item: ScanJournalEntry }) => {
       const date = new Date(item.createdAt);
-      const month = date.toLocaleString('en-AU', { month: 'short' }).toUpperCase();
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'] as const;
+      const month = monthNames[date.getMonth()] ?? '---';
       const day = String(date.getDate()).padStart(2, '0');
 
       const confidence = Number.isFinite(item.scan?.confidence) ? (item.scan.confidence as number) : 0;
