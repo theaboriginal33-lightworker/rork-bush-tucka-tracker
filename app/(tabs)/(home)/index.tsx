@@ -1308,20 +1308,24 @@ Return JSON with keys:
           );
         }
 
+        const allowsEditing = Platform.OS !== 'ios';
+
         const result =
           source === 'camera'
             ? await ImagePicker.launchCameraAsync({
-                allowsEditing: true,
+                allowsEditing,
                 aspect: [4, 3],
                 quality: 0.92,
                 base64: true,
+                exif: false,
               })
             : await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
+                allowsEditing,
                 aspect: [4, 3],
                 quality: 0.92,
                 base64: true,
+                exif: false,
                 selectionLimit: 1,
               });
 
@@ -1338,9 +1342,21 @@ Return JSON with keys:
           return null;
         }
 
+        const scheme = uri.split(':')[0];
         const mt = typeof asset?.mimeType === 'string' && asset.mimeType.length > 0 ? asset.mimeType : undefined;
         const base64Clean = typeof base64 === 'string' && base64.length > 0 ? base64 : undefined;
         const previewUri = base64Clean ? `data:${mt ?? 'image/jpeg'};base64,${base64Clean}` : undefined;
+
+        console.log('[Scan] collectImages picked', {
+          source,
+          index: i,
+          uriScheme: scheme,
+          hasBase64: Boolean(base64Clean),
+          base64Length: base64Clean?.length ?? 0,
+          mimeType: mt,
+          allowsEditing,
+          platform: Platform.OS,
+        });
 
         next.push({
           uri,

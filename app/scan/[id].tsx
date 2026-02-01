@@ -300,14 +300,15 @@ export default function ScanDetailsScreen() {
     }
 
     try {
+      console.log('[ScanDetails] addToCook start', { scanEntryId: entry.id, title: entry.title });
       const saved = await addFromScanEntry(entry);
       console.log('[ScanDetails] addToCook success', { cookId: saved.id, scanEntryId: entry.id });
-      Alert.alert('Added to Cook', 'You can now find recipes for this in the Cook tab.', [
+      Alert.alert('Added to Cook', 'Recipes and ideas are ready in Cook.', [
         { text: 'OK' },
         {
-          text: 'Open Cook',
+          text: 'Open in Cook',
           onPress: () => {
-            router.push('/cook');
+            router.push(`/cook/${encodeURIComponent(saved.id)}`);
           },
         },
       ]);
@@ -543,7 +544,16 @@ export default function ScanDetailsScreen() {
               }}
               style={styles.heroImage}
               contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={180}
               testID="scan-details-image"
+              onError={(e) => {
+                console.log('[ScanDetails] hero image load error', {
+                  entryId: entry.id,
+                  uri: entry.imageUri,
+                  error: (e as unknown as { error?: string })?.error,
+                });
+              }}
             />
             <View style={styles.heroOverlay}>
               <View style={styles.badgeRow}>
