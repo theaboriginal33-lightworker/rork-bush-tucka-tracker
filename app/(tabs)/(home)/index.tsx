@@ -467,7 +467,7 @@ export default function HomeScreen() {
           ? 'Confidence gate: 60–79%. Treat identification as provisional. Do NOT give cooking/preparation steps or consumption advice. Focus on verification steps, lookalikes, and safe observation.'
           : 'Confidence gate: <60%. Treat identification as very uncertain. Do NOT give cooking/preparation steps or consumption advice. Focus on observation tips and how to rescan/verify.';
 
-    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nIf the user asks for local organisations, contact details, or verification help, call the local_support tool. Only share phone/address/website details that come from the tool results. If the tool returns no results, say you do not have local contacts yet and ask for their town/state or to add contacts.\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
+    return `You are the Tucka Guide for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nIf the user asks for local organisations, contact details, or verification help, call the local_support tool. Only share phone/address/website details that come from the tool results. If the tool returns no results, say you do not have local contacts yet and ask for their town/state or to add contacts.\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
   }, [confidenceGate?.level, scanContext, scanResult]);
 
   const assistantGreeting = useMemo(() => {
@@ -2008,7 +2008,7 @@ Return JSON with keys:
           <View style={styles.chatCard} testID="ai-chat-card">
             <View style={styles.chatHeader}>
               <MessageCircle size={18} color={COLORS.primary} />
-              <Text style={styles.chatTitle}>Bush Tucker Companion</Text>
+              <Text style={styles.chatTitle}>Tucka Guide</Text>
             </View>
             {!scanResult ? (
               <Text style={styles.chatEmptyText}>
