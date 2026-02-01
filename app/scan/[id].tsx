@@ -5,13 +5,27 @@ import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
-import * as Location from 'expo-location';
+import type * as LocationType from 'expo-location';
 import { ChevronLeft, CookingPot, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
 
 const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
+
+type LocationModule = typeof LocationType;
+
+async function loadExpoLocation(): Promise<LocationModule | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const mod = (await import('expo-location')) as unknown as LocationModule;
+    return mod;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[ScanDetails] failed to load expo-location', { message });
+    return null;
+  }
+}
 
 function refineCulturalNotes(raw: string): string {
   const note = String(raw ?? '').trim();
@@ -337,6 +351,8 @@ export default function ScanDetailsScreen() {
 
     if (!nextLocationName && location && Platform.OS !== 'web') {
       try {
+        const Location = await loadExpoLocation();
+        if (!Location) return;
         const addresses = await Location.reverseGeocodeAsync({ latitude: location.latitude, longitude: location.longitude });
         const a = Array.isArray(addresses) ? addresses[0] : undefined;
         const parts = [a?.name, a?.street, a?.city ?? a?.district, a?.region].filter((p) => typeof p === 'string' && p.trim().length > 0) as string[];
@@ -374,7 +390,7 @@ export default function ScanDetailsScreen() {
       return;
     }
 
-    const buildLocationLabel = (address: Location.LocationGeocodedAddress | null | undefined) => {
+    const buildLocationLabel = (address: LocationType.LocationGeocodedAddress | null | undefined) => {
       const parts: string[] = [];
 
       const name = typeof address?.name === 'string' ? address.name : '';
@@ -400,6 +416,12 @@ export default function ScanDetailsScreen() {
     };
 
     try {
+      const Location = await loadExpoLocation();
+      if (!Location) {
+        Alert.alert('Location unavailable', 'Location services are not available in this environment.');
+        return;
+      }
+
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
         Alert.alert('Permission needed', 'Location permission is required to fetch your current location.');
