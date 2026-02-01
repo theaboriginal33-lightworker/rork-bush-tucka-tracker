@@ -1078,30 +1078,41 @@ Return JSON with keys:
             let persistedImageUri: string | undefined = primaryImage?.uri ?? undefined;
             const base64 = scanImages[0]?.base64;
             const mimeType = scanImages[0]?.mimeType;
-            const docDirUri = FileSystem.Paths.document?.uri ?? null;
 
-            if (docDirUri && typeof base64 === 'string' && base64.length > 0) {
-              try {
-                const scanDir = new FileSystem.Directory(FileSystem.Paths.document, 'scan-journal');
-                await scanDir.create({ intermediates: true, idempotent: true });
-
-                const ext = mimeType?.includes('png') ? 'png' : 'jpg';
-                const file = new FileSystem.File(scanDir, `${encodeURIComponent(entryId)}.${ext}`);
-                await file.create({ intermediates: true, overwrite: true });
-
-                console.log('[Scan] persisting scan photo to documentDirectory', { fileUri: file.uri, mimeType });
-                await file.write(base64, { encoding: 'base64' });
-                persistedImageUri = file.uri;
-              } catch (persistErr) {
-                const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
-                console.log('[Scan] persist scan photo failed, falling back to original uri', { message, originalUri: primaryImage?.uri });
+            if (Platform.OS === 'web') {
+              if (typeof base64 === 'string' && base64.length > 0) {
+                const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                persistedImageUri = `data:${mt};base64,${base64}`;
+                console.log('[Scan] persisted scan photo as data URI (web)', { mimeType: mt, length: base64.length });
+              } else {
+                console.log('[Scan] web scan has no base64; using original uri', { uri: primaryImage?.uri });
               }
             } else {
-              console.log('[Scan] skipping photo persist (no documentDirectory or base64)', {
-                hasDocDir: Boolean(docDirUri),
-                hasBase64: typeof base64 === 'string' && base64.length > 0,
-                platform: Platform.OS,
-              });
+              const docDirUri = FileSystem.Paths.document?.uri ?? null;
+
+              if (docDirUri) {
+                try {
+                  const scanDir = new FileSystem.Directory(FileSystem.Paths.document, 'scan-journal');
+                  await scanDir.create({ intermediates: true, idempotent: true });
+
+                  const ext = mimeType?.includes('png') ? 'png' : 'jpg';
+                  const file = new FileSystem.File(scanDir, `${encodeURIComponent(entryId)}.${ext}`);
+                  await file.create({ intermediates: true, overwrite: true });
+
+                  if (typeof base64 === 'string' && base64.length > 0) {
+                    console.log('[Scan] persisting scan photo to documentDirectory (base64)', { fileUri: file.uri, mimeType });
+                    await file.write(base64, { encoding: 'base64' });
+                    persistedImageUri = file.uri;
+                  } else {
+                    console.log('[Scan] skipping photo persist (no base64)', { platform: Platform.OS });
+                  }
+                } catch (persistErr) {
+                  const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
+                  console.log('[Scan] persist scan photo failed, falling back to original uri', { message, originalUri: primaryImage?.uri });
+                }
+              } else {
+                console.log('[Scan] skipping photo persist (no documentDirectory)', { platform: Platform.OS });
+              }
             }
 
             const savedEntry = await addEntry({
