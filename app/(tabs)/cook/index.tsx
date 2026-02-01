@@ -86,6 +86,11 @@ export default function CookScreen() {
             ? COLORS.error
             : COLORS.warning;
 
+      const resolvedUri = safeImageUri(item.imageUri);
+      const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
+      const rawScheme = (item.imageUri ?? '').split(':')[0] || 'none';
+      const isLocal = resolvedScheme === 'file' || resolvedScheme === 'data';
+
       return (
         <TouchableOpacity
           style={styles.itemCard}
@@ -98,30 +103,39 @@ export default function CookScreen() {
             <Image
               source={{
                 uri:
-                  safeImageUri(item.imageUri) ??
+                  resolvedUri ??
                   'https://images.unsplash.com/photo-1541544181051-e46601a43f2b?q=80&w=1600&auto=format&fit=crop',
               }}
               style={styles.itemImage}
               contentFit="cover"
-              cachePolicy="memory-disk"
+              cachePolicy={isLocal ? 'none' : 'memory-disk'}
               transition={120}
-              recyclingKey={`${item.id}:${safeImageUri(item.imageUri) ?? 'fallback'}`}
+              {...(!isLocal ? { recyclingKey: `${item.id}:${resolvedUri ?? 'fallback'}` } : {})}
               testID={`cook-item-image-${item.id}`}
+              onLoadStart={() => {
+                console.log('[Cook] image load start', {
+                  id: item.id,
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
+                });
+              }}
               onLoad={() => {
                 console.log('[Cook] image loaded', {
                   id: item.id,
-                  resolvedUriScheme: (safeImageUri(item.imageUri) ?? '').split(':')[0] || 'none',
-                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
                 });
               }}
               onError={(e) => {
-                const resolved = safeImageUri(item.imageUri);
                 console.log('[Cook] image load error', {
                   id: item.id,
                   uri: item.imageUri,
-                  resolvedUri: resolved,
-                  resolvedUriScheme: (resolved ?? '').split(':')[0] || 'none',
-                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                  resolvedUri,
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
                   error: (e as unknown as { error?: string })?.error,
                 });
               }}

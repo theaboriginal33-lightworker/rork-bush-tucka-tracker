@@ -65,6 +65,11 @@ export default function JournalScreen() {
         item.scan?.bushTuckerLikely ? 'Bush tucker' : null,
       ].filter(Boolean) as string[];
 
+      const resolvedUri = safeImageUri(item.imageUri);
+      const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
+      const rawScheme = (item.imageUri ?? '').split(':')[0] || 'none';
+      const isLocal = resolvedScheme === 'file' || resolvedScheme === 'data';
+
       return (
         <TouchableOpacity
           style={styles.entryCard}
@@ -77,31 +82,41 @@ export default function JournalScreen() {
             <Image
               source={{
                 uri:
-                  safeImageUri(item.imageUri) ??
+                  resolvedUri ??
                   'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop',
               }}
               style={styles.entryImage}
               contentFit="cover"
-              cachePolicy="memory-disk"
+              cachePolicy={isLocal ? 'none' : 'memory-disk'}
               transition={120}
-              recyclingKey={`${item.id}:${safeImageUri(item.imageUri) ?? 'fallback'}`}
+              {...(!isLocal ? { recyclingKey: `${item.id}:${resolvedUri ?? 'fallback'}` } : {})}
               testID={`journal-entry-image-${item.id}`}
+              onLoadStart={() => {
+                console.log('[Journal] image load start', {
+                  entryId: item.id,
+                  hasCustomUri: Boolean(item.imageUri),
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
+                });
+              }}
               onLoad={() => {
                 console.log('[Journal] image loaded', {
                   entryId: item.id,
                   hasCustomUri: Boolean(item.imageUri),
-                  resolvedUriScheme: (safeImageUri(item.imageUri) ?? '').split(':')[0] || 'none',
-                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
                 });
               }}
               onError={(e) => {
-                const resolved = safeImageUri(item.imageUri);
                 console.log('[Journal] image load error', {
                   entryId: item.id,
                   uri: item.imageUri,
-                  resolvedUri: resolved,
-                  resolvedUriScheme: (resolved ?? '').split(':')[0] || 'none',
-                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                  resolvedUri,
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
                   error: (e as unknown as { error?: string })?.error,
                 });
               }}
