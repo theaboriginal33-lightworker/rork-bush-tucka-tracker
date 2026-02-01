@@ -98,7 +98,7 @@ export default function JournalScreen() {
               contentFit="cover"
               cachePolicy={isLocal ? 'none' : 'memory-disk'}
               transition={120}
-              {...(!isLocal ? { recyclingKey: `${item.id}:${resolvedUri ?? 'fallback'}` } : {})}
+              recyclingKey={`${item.id}:${resolvedUri ?? 'fallback'}`}
               testID={`journal-entry-image-${item.id}`}
               onLoadStart={() => {
                 console.log('[Journal] image load start', {

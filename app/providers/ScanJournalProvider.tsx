@@ -286,12 +286,9 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
       setErrorMessage(null);
       setEntries((prev) => {
-        const prevTop = prev[0]?.createdAt ?? 0;
-        const createdAt = Math.max(inputCreatedAt, prevTop + 1);
-
         const entry: ScanJournalEntry = normalizeEntry({
           id,
-          createdAt,
+          createdAt: inputCreatedAt,
           title: entryInput.title,
           locationName: entryInput.locationName,
           location: entryInput.location,
@@ -308,7 +305,8 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         return next;
       });
 
-      const out = resolvedEntry ??
+      const out =
+        resolvedEntry ??
         normalizeEntry({
           id,
           createdAt: inputCreatedAt,
