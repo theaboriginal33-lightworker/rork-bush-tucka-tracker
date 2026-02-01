@@ -1182,119 +1182,93 @@ Return JSON with keys:
                   console.log('[Scan] makeDirectoryAsync failed (scan-journal)', { message, scanDirUri });
                 }
 
-                const uriExtMatch = (primaryImage?.uri ?? '').match(/\.(png|jpe?g|heic)$/i);
-                const extFromUri = uriExtMatch?.[1]?.toLowerCase();
-                const extFromMime = mimeType?.includes('png') ? 'png' : mimeType?.includes('heic') ? 'heic' : 'jpg';
-                const ext = extFromUri === 'png' || extFromUri === 'jpg' || extFromUri === 'jpeg' || extFromUri === 'heic'
-                  ? (extFromUri === 'jpeg' ? 'jpg' : extFromUri)
-                  : extFromMime;
-
-                const dest = `${scanDirUri}${encodeURIComponent(entryId)}.${ext}`;
+                const dest = `${scanDirUri}${encodeURIComponent(entryId)}.jpg`;
                 const from = primaryImage?.uri ?? '';
                 const fromScheme = from.split(':')[0];
 
-                const canCopyDirectly = fromScheme === 'file' || fromScheme === 'content';
+                const attemptTranscodeToJpeg = async () => {
+                  console.log('[Scan] transcoding scan photo to JPEG (ImageManipulator)', {
+                    from,
+                    fromScheme,
+                    dest,
+                    mimeType,
+                    platform: Platform.OS,
+                  });
 
-                if (fromScheme === 'ph' || fromScheme === 'assets-library') {
-                  try {
-                    console.log('[Scan] converting iOS PH asset to local file (ImageManipulator)', {
-                      from,
-                      dest,
-                      mimeType,
-                    });
+                  const manipResult = await ImageManipulator.manipulateAsync(
+                    from,
+                    [{ resize: { width: 1400 } }],
+                    {
+                      compress: 0.86,
+                      format: ImageManipulator.SaveFormat.JPEG,
+                    },
+                  );
 
-                    const manipResult = await ImageManipulator.manipulateAsync(
-                      from,
-                      [{ resize: { width: 1400 } }],
-                      {
-                        compress: 0.86,
-                        format: ImageManipulator.SaveFormat.JPEG,
-                      },
-                    );
+                  console.log('[Scan] transcode result', {
+                    intermediateUri: manipResult.uri,
+                    intermediateUriScheme: (manipResult.uri ?? '').split(':')[0],
+                  });
 
-                    await FileSystem.copyAsync({ from: manipResult.uri, to: dest });
-                    persistedImageUri = dest;
-                    console.log('[Scan] persisted scan photo via ImageManipulator + copyAsync', {
-                      dest,
-                      intermediateUriScheme: (manipResult.uri ?? '').split(':')[0],
-                    });
-                  } catch (e) {
-                    const message = e instanceof Error ? e.message : String(e);
-                    console.log('[Scan] ImageManipulator PH conversion failed; falling back', {
-                      message,
-                      fromScheme,
-                      from,
-                      dest,
-                      hasBase64: typeof base64 === 'string' && base64.length > 0,
-                    });
+                  await FileSystem.copyAsync({ from: manipResult.uri, to: dest });
+                  persistedImageUri = dest;
+                  console.log('[Scan] persisted scan photo via transcode + copyAsync', { dest });
+                };
 
-                    if (typeof base64 === 'string' && base64.length > 0) {
-                      try {
-                        await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
-                        persistedImageUri = dest;
-                        console.log('[Scan] persisted scan photo via base64 write (fallback)', { dest, length: base64.length });
-                      } catch (writeErr) {
-                        const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
-                        persistedImageUri = primaryImage?.uri ?? undefined;
-                        console.log('[Scan] base64 fallback write failed; using original uri', {
-                          writeMsg,
-                          originalUri: primaryImage?.uri,
-                          originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
-                        });
-                      }
-                    } else {
-                      persistedImageUri = primaryImage?.uri ?? undefined;
-                    }
-                  }
-                } else if (canCopyDirectly) {
-                  try {
-                    console.log('[Scan] persisting scan photo to documentDirectory (copyAsync attempt)', {
-                      from,
-                      dest,
-                      mimeType,
-                      platform: Platform.OS,
-                    });
+                try {
+                  await attemptTranscodeToJpeg();
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.log('[Scan] transcodeToJpeg failed; falling back', {
+                    message,
+                    from,
+                    fromScheme,
+                    dest,
+                    hasBase64: typeof base64 === 'string' && base64.length > 0,
+                  });
 
-                    await FileSystem.copyAsync({ from, to: dest });
-                    persistedImageUri = dest;
-                    console.log('[Scan] persisted scan photo via copyAsync', { dest });
-                  } catch (copyErr) {
-                    const message = copyErr instanceof Error ? copyErr.message : String(copyErr);
-                    console.log('[Scan] copyAsync failed; trying base64 write', { message, from, dest });
+                  const canCopyDirectly = fromScheme === 'file' || fromScheme === 'content';
 
-                    if (typeof base64 === 'string' && base64.length > 0) {
-                      try {
-                        await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
-                        persistedImageUri = dest;
-                        console.log('[Scan] persisted scan photo via base64 write', { dest, length: base64.length });
-                      } catch (writeErr) {
-                        const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
-                        persistedImageUri = primaryImage?.uri ?? undefined;
-                        console.log('[Scan] base64 write failed; falling back to original uri', {
-                          writeMsg,
-                          originalUri: primaryImage?.uri,
-                          originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
-                        });
-                      }
-                    } else {
-                      persistedImageUri = primaryImage?.uri ?? undefined;
-                      console.log('[Scan] no base64 available; falling back to original uri', {
-                        originalUri: primaryImage?.uri,
-                        originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
-                      });
-                    }
-                  }
-                } else {
-                  if (typeof base64 === 'string' && base64.length > 0) {
+                  if (canCopyDirectly) {
                     try {
-                      console.log('[Scan] persisting scan photo via base64 write (non-file uri scheme)', { fromScheme, dest, mimeType });
+                      console.log('[Scan] fallback copyAsync', { from, dest, platform: Platform.OS });
+                      await FileSystem.copyAsync({ from, to: dest });
+                      persistedImageUri = dest;
+                      console.log('[Scan] persisted scan photo via fallback copyAsync', { dest });
+                    } catch (copyErr) {
+                      const copyMsg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+                      console.log('[Scan] fallback copyAsync failed; trying base64 write', { copyMsg, from, dest });
+
+                      if (typeof base64 === 'string' && base64.length > 0) {
+                        try {
+                          await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
+                          persistedImageUri = dest;
+                          console.log('[Scan] persisted scan photo via base64 write (final fallback)', { dest, length: base64.length });
+                        } catch (writeErr) {
+                          const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+                          persistedImageUri = primaryImage?.uri ?? undefined;
+                          console.log('[Scan] base64 write failed; using original uri', {
+                            writeMsg,
+                            originalUri: primaryImage?.uri,
+                            originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                          });
+                        }
+                      } else {
+                        persistedImageUri = primaryImage?.uri ?? undefined;
+                        console.log('[Scan] no base64 available; using original uri', {
+                          originalUri: primaryImage?.uri,
+                          originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                        });
+                      }
+                    }
+                  } else if (typeof base64 === 'string' && base64.length > 0) {
+                    try {
                       await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
                       persistedImageUri = dest;
-                      console.log('[Scan] persisted scan photo via base64 write', { dest, length: base64.length });
+                      console.log('[Scan] persisted scan photo via base64 write (non-file uri scheme)', { fromScheme, dest, length: base64.length });
                     } catch (writeErr) {
                       const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
                       persistedImageUri = primaryImage?.uri ?? undefined;
-                      console.log('[Scan] base64 write failed; falling back to original uri', {
+                      console.log('[Scan] base64 write failed; using original uri', {
                         writeMsg,
                         originalUri: primaryImage?.uri,
                         originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
@@ -1302,7 +1276,7 @@ Return JSON with keys:
                     }
                   } else {
                     persistedImageUri = primaryImage?.uri ?? undefined;
-                    console.log('[Scan] cannot persist non-file uri (no base64 available); falling back to original uri', {
+                    console.log('[Scan] cannot persist non-file uri (no base64 available); using original uri', {
                       originalUri: primaryImage?.uri,
                       originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
                     });
