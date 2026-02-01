@@ -1091,10 +1091,11 @@ Return JSON with keys:
               }
             } else {
               const rawDocDirUri =
-                (FileSystem as unknown as { documentDirectory?: string }).documentDirectory ??
                 FileSystem.Paths.document?.uri ??
+                (FileSystem as unknown as { documentDirectory?: string }).documentDirectory ??
+                FileSystem.Paths.cache?.uri ??
+                (FileSystem as unknown as { cacheDirectory?: string }).cacheDirectory ??
                 null;
-
               const docDirUri = rawDocDirUri ? (rawDocDirUri.endsWith('/') ? rawDocDirUri : `${rawDocDirUri}/`) : null;
 
               if (docDirUri) {
@@ -1183,7 +1184,7 @@ Return JSON with keys:
                   }
                 }
               } else {
-                console.log('[Scan] skipping photo persist (no documentDirectory)', { platform: Platform.OS });
+                console.log('[Scan] skipping photo persist (no document/cache directory)', { platform: Platform.OS });
               }
             }
 

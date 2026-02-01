@@ -237,11 +237,14 @@ export default function ScanDetailsScreen() {
       }
 
       const fileName = `scan-${entry.id}.jpg`;
-      const cacheDirUri = FileSystem.Paths.cache?.uri ?? '';
+      const cacheDirUri =
+        FileSystem.Paths.cache?.uri ??
+        (FileSystem as unknown as { cacheDirectory?: string }).cacheDirectory ??
+        '';
       if (cacheDirUri.length === 0) {
         throw new Error('No cache directory available');
       }
-      const dest = `${cacheDirUri}${fileName}`;
+      const dest = cacheDirUri.endsWith('/') ? `${cacheDirUri}${fileName}` : `${cacheDirUri}/${fileName}`;
 
       if (imageUri.startsWith('file://')) {
         console.log('[ScanDetails] sharePhoto: shareAsync(local file)', { uri: imageUri, platform: Platform.OS });
