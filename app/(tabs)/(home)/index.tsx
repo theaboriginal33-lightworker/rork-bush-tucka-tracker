@@ -1287,6 +1287,48 @@ Return JSON with keys:
               }
             }
 
+            const beforeSanitize = persistedImageUri;
+            const beforeScheme = (beforeSanitize ?? '').split(':')[0] || 'none';
+
+            if (Platform.OS !== 'web') {
+              const scheme = beforeScheme;
+              const looksLikeBarePath = typeof beforeSanitize === 'string' && beforeSanitize.startsWith('/');
+              const isBadScheme = scheme === 'ph' || scheme === 'assets-library' || scheme === 'content';
+
+              if (looksLikeBarePath) {
+                persistedImageUri = `file://${beforeSanitize}`;
+                console.log('[Scan] sanitized persistedImageUri (added file:// prefix)', { beforeSanitize, persistedImageUri });
+              }
+
+              if (typeof persistedImageUri === 'string' && persistedImageUri.startsWith('file:/') && !persistedImageUri.startsWith('file://')) {
+                const fixed = `file:///${persistedImageUri.replace(/^file:\/*/i, '')}`;
+                console.log('[Scan] sanitized persistedImageUri (fixed file:/ -> file:///)', { before: persistedImageUri, fixed });
+                persistedImageUri = fixed;
+              }
+
+              if (isBadScheme && typeof base64 === 'string' && base64.length > 0) {
+                const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                persistedImageUri = `data:${mt};base64,${base64}`;
+                console.log('[Scan] sanitized persistedImageUri (fallback to data URI for bad scheme)', { scheme, mt, base64Length: base64.length });
+              }
+
+              if (typeof persistedImageUri === 'string' && persistedImageUri.startsWith('file://')) {
+                try {
+                  const info = await FileSystem.getInfoAsync(persistedImageUri);
+                  const size = 'size' in info ? (info as unknown as { size?: number }).size : undefined;
+                  console.log('[Scan] persisted image file info', { exists: info.exists, size, uri: persistedImageUri });
+                  if (!info.exists && typeof base64 === 'string' && base64.length > 0) {
+                    const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                    persistedImageUri = `data:${mt};base64,${base64}`;
+                    console.log('[Scan] persisted image missing on disk; using data URI instead', { mt, base64Length: base64.length });
+                  }
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.log('[Scan] getInfoAsync failed for persisted image', { message, uri: persistedImageUri });
+                }
+              }
+            }
+
             const savedEntry = await addEntry({
               id: entryId,
               title: parsed.commonName,
