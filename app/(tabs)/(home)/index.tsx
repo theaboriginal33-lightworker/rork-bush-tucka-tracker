@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import {
   AlertTriangle,
   ArrowRight,
@@ -1083,11 +1084,33 @@ Return JSON with keys:
 
             if (Platform.OS === 'web') {
               if (typeof base64 === 'string' && base64.length > 0) {
-                const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
-                persistedImageUri = `data:${mt};base64,${base64}`;
-                console.log('[Scan] persisted scan photo as data URI (web)', { mimeType: mt, length: base64.length });
+                try {
+                  const manipResult = await ImageManipulator.manipulateAsync(
+                    primaryImage?.uri ?? '',
+                    [{ resize: { width: 1200 } }],
+                    {
+                      compress: 0.72,
+                      format: ImageManipulator.SaveFormat.JPEG,
+                      base64: true,
+                    },
+                  );
+
+                  const mt = 'image/jpeg';
+                  const outBase64 = typeof manipResult.base64 === 'string' && manipResult.base64.length > 0 ? manipResult.base64 : base64;
+                  persistedImageUri = `data:${mt};base64,${outBase64}`;
+                  console.log('[Scan] persisted scan photo as data URI (web, compressed)', {
+                    inLength: base64.length,
+                    outLength: outBase64.length,
+                    outUriScheme: (manipResult.uri ?? '').split(':')[0],
+                  });
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                  persistedImageUri = `data:${mt};base64,${base64}`;
+                  console.log('[Scan] ImageManipulator failed; falling back to original base64 (web)', { message, mimeType: mt, length: base64.length });
+                }
               } else {
-                console.log('[Scan] web scan has no base64; using original uri', { uri: primaryImage?.uri });
+                console.log('[Scan] web scan has no base64; using original uri (non-persistent)', { uri: primaryImage?.uri });
               }
             } else {
               const rawDocDirUri =
@@ -1121,7 +1144,58 @@ Return JSON with keys:
 
                 const canCopyDirectly = fromScheme === 'file' || fromScheme === 'content';
 
-                if (canCopyDirectly) {
+                if (fromScheme === 'ph' || fromScheme === 'assets-library') {
+                  try {
+                    console.log('[Scan] converting iOS PH asset to local file (ImageManipulator)', {
+                      from,
+                      dest,
+                      mimeType,
+                    });
+
+                    const manipResult = await ImageManipulator.manipulateAsync(
+                      from,
+                      [{ resize: { width: 1400 } }],
+                      {
+                        compress: 0.86,
+                        format: ImageManipulator.SaveFormat.JPEG,
+                      },
+                    );
+
+                    await FileSystem.copyAsync({ from: manipResult.uri, to: dest });
+                    persistedImageUri = dest;
+                    console.log('[Scan] persisted scan photo via ImageManipulator + copyAsync', {
+                      dest,
+                      intermediateUriScheme: (manipResult.uri ?? '').split(':')[0],
+                    });
+                  } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    console.log('[Scan] ImageManipulator PH conversion failed; falling back', {
+                      message,
+                      fromScheme,
+                      from,
+                      dest,
+                      hasBase64: typeof base64 === 'string' && base64.length > 0,
+                    });
+
+                    if (typeof base64 === 'string' && base64.length > 0) {
+                      try {
+                        await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
+                        persistedImageUri = dest;
+                        console.log('[Scan] persisted scan photo via base64 write (fallback)', { dest, length: base64.length });
+                      } catch (writeErr) {
+                        const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+                        persistedImageUri = primaryImage?.uri ?? undefined;
+                        console.log('[Scan] base64 fallback write failed; using original uri', {
+                          writeMsg,
+                          originalUri: primaryImage?.uri,
+                          originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                        });
+                      }
+                    } else {
+                      persistedImageUri = primaryImage?.uri ?? undefined;
+                    }
+                  }
+                } else if (canCopyDirectly) {
                   try {
                     console.log('[Scan] persisting scan photo to documentDirectory (copyAsync attempt)', {
                       from,
