@@ -602,6 +602,17 @@ export default function ScanDetailsScreen() {
           </View>
 
 
+          <View style={styles.quickActionsRow} testID="scan-details-quick-actions">
+            <TouchableOpacity
+              style={[styles.quickCookButton, cookAlreadySaved && styles.quickCookButtonDisabled]}
+              onPress={onAddToCook}
+              testID="scan-details-quick-add-to-cook"
+            >
+              <CookingPot size={18} color={cookAlreadySaved ? COLORS.textSecondary : '#06120B'} />
+              <Text style={styles.quickCookButtonText}>{cookAlreadySaved ? 'In Cook' : 'Add to Cook'}</Text>
+            </TouchableOpacity>
+          </View>
+
           <Section title="Edit title">
             <TextInput
               value={titleDraft}
@@ -1183,6 +1194,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  quickActionsRow: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  quickCookButton: {
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: COLORS.action,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickCookButtonDisabled: {
+    opacity: 0.6,
+  },
+  quickCookButtonText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#06120B',
+    letterSpacing: 0.2,
   },
   locationButtons: {
     marginTop: 12,

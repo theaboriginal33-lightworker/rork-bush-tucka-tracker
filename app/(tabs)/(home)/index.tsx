@@ -119,7 +119,18 @@ export default function HomeScreen() {
 
   const [mode, setMode] = useState<'identify' | 'identify360'>('identify');
 
+  type ScanPhase =
+    | 'idle'
+    | 'preparing'
+    | 'listing-models'
+    | 'sending'
+    | 'parsing'
+    | 'saving'
+    | 'done'
+    | 'error';
+
   const [analyzing, setAnalyzing] = useState<boolean>(false);
+  const [scanPhase, setScanPhase] = useState<ScanPhase>('idle');
   const [scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState<string>('');
@@ -843,6 +854,7 @@ export default function HomeScreen() {
         hasOverride: Boolean(imagesOverride),
       });
 
+    setScanPhase('preparing');
     setScanError(null);
     setScanResult(null);
 
@@ -921,8 +933,25 @@ Return JSON with keys:
       const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models?key=${encodeURIComponent(apiKey)}`;
       console.log('[Scan] gemini listModels request', { apiVersion });
 
-      const res = await fetch(endpoint, { method: 'GET' });
-      const json = (await res.json()) as GeminiListModelsResponse;
+      setScanPhase('listing-models');
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = setTimeout(() => {
+        try {
+          controller?.abort();
+        } catch {
+          
+        }
+      }, 25000);
+
+      let res: Response;
+      let json: GeminiListModelsResponse;
+      try {
+        res = await fetch(endpoint, { method: 'GET', signal: controller?.signal });
+        json = (await res.json()) as GeminiListModelsResponse;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       console.log('[Scan] gemini listModels response', {
         apiVersion,
@@ -1014,15 +1043,33 @@ Return JSON with keys:
       const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
       console.log('[Scan] gemini request', { apiVersion, model });
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+      setScanPhase('sending');
 
-      const json = (await res.json()) as GeminiApiResponse;
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = setTimeout(() => {
+        try {
+          controller?.abort();
+        } catch {
+          
+        }
+      }, 30000);
+
+      let res: Response;
+      let json: GeminiApiResponse;
+      try {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: controller?.signal,
+        });
+
+        json = (await res.json()) as GeminiApiResponse;
+      } finally {
+        clearTimeout(timeoutId);
+      }
       console.log('[Scan] gemini response', {
         apiVersion,
         model,
@@ -1058,6 +1105,8 @@ Return JSON with keys:
             throw new Error('Gemini returned an empty response.');
           }
 
+          setScanPhase('parsing');
+
           let parsed: GeminiScanResult;
           try {
             parsed = parseGeminiResult(text);
@@ -1077,6 +1126,8 @@ Return JSON with keys:
               imageBase64: scanImages[0]?.base64 ?? null,
               imageUri: primaryImage?.uri ?? null,
             });
+
+            setScanPhase('saving');
 
             let persistedImageUri: string | undefined = primaryImage?.uri ?? undefined;
             const base64 = scanImages[0]?.base64;
@@ -1315,6 +1366,7 @@ Return JSON with keys:
             }
 
             console.log('[Scan] navigating to saved scan details', { scanEntryId: savedEntry.id });
+            setScanPhase('done');
             router.push(`/scan/${encodeURIComponent(savedEntry.id)}`);
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -1341,6 +1393,7 @@ Return JSON with keys:
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unknown error while scanning.';
       console.log('[Scan] analyzeWithGemini error', { message });
+      setScanPhase('error');
       setScanError(message);
       Alert.alert('Scan failed', message);
     } finally {
@@ -1598,7 +1651,7 @@ Return JSON with keys:
                 {analyzing ? (
                   <View style={styles.scanBusyPill} testID="scan-analyzing-badge">
                     <View style={styles.scanBusyDot} />
-                    <Text style={styles.scanBusyText}>Scanning…</Text>
+                    <Text style={styles.scanBusyText}>{scanPhase === 'sending' ? 'Starting…' : scanPhase === 'listing-models' ? 'Preparing…' : scanPhase === 'parsing' ? 'Reading…' : scanPhase === 'saving' ? 'Saving…' : 'Scanning…'}</Text>
                   </View>
                 ) : null}
               </View>
