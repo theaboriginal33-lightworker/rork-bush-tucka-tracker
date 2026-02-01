@@ -54,10 +54,18 @@ export default function JournalScreen() {
               transition={120}
               recyclingKey={item.id}
               testID={`journal-entry-image-${item.id}`}
+              onLoad={() => {
+                console.log('[Journal] image loaded', {
+                  entryId: item.id,
+                  hasCustomUri: Boolean(item.imageUri),
+                  uriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                });
+              }}
               onError={(e) => {
                 console.log('[Journal] image load error', {
                   entryId: item.id,
                   uri: item.imageUri,
+                  uriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
                   error: (e as unknown as { error?: string })?.error,
                 });
               }}

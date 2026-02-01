@@ -1165,12 +1165,11 @@ Return JSON with keys:
               }
             } else {
               const rawDocDirUri =
-                FileSystem.Paths.document?.uri ??
                 (FileSystem as unknown as { documentDirectory?: string }).documentDirectory ??
-                FileSystem.Paths.cache?.uri ??
                 (FileSystem as unknown as { cacheDirectory?: string }).cacheDirectory ??
                 null;
               const docDirUri = rawDocDirUri ? (rawDocDirUri.endsWith('/') ? rawDocDirUri : `${rawDocDirUri}/`) : null;
+              console.log('[Scan] resolved storage directory', { rawDocDirUri, docDirUri, platform: Platform.OS });
 
               if (docDirUri) {
                 const scanDirUri = `${docDirUri}scan-journal/`;
