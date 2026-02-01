@@ -1088,35 +1088,56 @@ Return JSON with keys:
                 console.log('[Scan] web scan has no base64; using original uri', { uri: primaryImage?.uri });
               }
             } else {
-              const docDirUri = FileSystem.Paths.document?.uri ?? null;
+              const docDirUri =
+                (FileSystem as unknown as { documentDirectory?: string }).documentDirectory ??
+                FileSystem.Paths.document?.uri ??
+                null;
 
               if (docDirUri) {
+                const scanDirUri = `${docDirUri}scan-journal/`;
+
                 try {
-                  const scanDirUri = `${docDirUri}scan-journal/`;
                   await FileSystem.makeDirectoryAsync(scanDirUri, { intermediates: true });
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.log('[Scan] makeDirectoryAsync failed (scan-journal)', { message, scanDirUri });
+                }
 
-                  const uriExtMatch = (primaryImage?.uri ?? '').match(/\.(png|jpe?g|heic)$/i);
-                  const extFromUri = uriExtMatch?.[1]?.toLowerCase();
-                  const extFromMime = mimeType?.includes('png') ? 'png' : 'jpg';
-                  const ext = extFromUri === 'png' || extFromUri === 'jpg' || extFromUri === 'jpeg' ? (extFromUri === 'jpeg' ? 'jpg' : extFromUri) : extFromMime;
+                const uriExtMatch = (primaryImage?.uri ?? '').match(/\.(png|jpe?g|heic)$/i);
+                const extFromUri = uriExtMatch?.[1]?.toLowerCase();
+                const extFromMime = mimeType?.includes('png') ? 'png' : 'jpg';
+                const ext = extFromUri === 'png' || extFromUri === 'jpg' || extFromUri === 'jpeg' ? (extFromUri === 'jpeg' ? 'jpg' : extFromUri) : extFromMime;
 
-                  const dest = `${scanDirUri}${encodeURIComponent(entryId)}.${ext}`;
-                  const from = primaryImage?.uri ?? '';
+                const dest = `${scanDirUri}${encodeURIComponent(entryId)}.${ext}`;
+                const from = primaryImage?.uri ?? '';
 
-                  if (from.startsWith('file://') || from.startsWith('content://')) {
-                    console.log('[Scan] persisting scan photo to documentDirectory (copyAsync)', { from, dest, mimeType });
-                    await FileSystem.copyAsync({ from, to: dest });
-                    persistedImageUri = dest;
-                  } else if (typeof base64 === 'string' && base64.length > 0) {
-                    console.log('[Scan] persisting scan photo to documentDirectory (write base64)', { dest, mimeType, length: base64.length });
-                    await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
-                    persistedImageUri = dest;
+                try {
+                  console.log('[Scan] persisting scan photo to documentDirectory (copyAsync attempt)', {
+                    from,
+                    dest,
+                    mimeType,
+                    platform: Platform.OS,
+                  });
+
+                  await FileSystem.copyAsync({ from, to: dest });
+                  persistedImageUri = dest;
+                  console.log('[Scan] persisted scan photo via copyAsync', { dest });
+                } catch (copyErr) {
+                  const message = copyErr instanceof Error ? copyErr.message : String(copyErr);
+                  console.log('[Scan] copyAsync failed; trying base64 write', { message, from, dest });
+
+                  if (typeof base64 === 'string' && base64.length > 0) {
+                    try {
+                      await FileSystem.writeAsStringAsync(dest, base64, { encoding: 'base64' });
+                      persistedImageUri = dest;
+                      console.log('[Scan] persisted scan photo via base64 write', { dest, length: base64.length });
+                    } catch (writeErr) {
+                      const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+                      console.log('[Scan] base64 write failed; falling back to original uri', { writeMsg, originalUri: primaryImage?.uri });
+                    }
                   } else {
-                    console.log('[Scan] skipping photo persist (unsupported uri and no base64)', { from, platform: Platform.OS });
+                    console.log('[Scan] no base64 available; falling back to original uri', { originalUri: primaryImage?.uri });
                   }
-                } catch (persistErr) {
-                  const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
-                  console.log('[Scan] persist scan photo failed, falling back to original uri', { message, originalUri: primaryImage?.uri });
                 }
               } else {
                 console.log('[Scan] skipping photo persist (no documentDirectory)', { platform: Platform.OS });
