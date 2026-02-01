@@ -6,7 +6,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 const STORAGE_KEY = 'bush-tucka.scan-journal.v1';
 
 export type SafetyEdibility = {
-  status: 'safe' | 'unsafe' | 'uncertain';
+  status: 'safe' | 'caution' | 'unknown';
   summary: string;
   keyRisks: string[];
 };
@@ -31,8 +31,10 @@ export type GeminiScanResult = {
   scientificName?: string;
   confidence: number;
 
-  bushTuckerLikely: boolean;
   safety: SafetyEdibility;
+  categories: string[];
+
+  bushTuckerLikely: boolean;
   preparation: Preparation;
   seasonality: Seasonality;
   culturalKnowledge: CulturalKnowledge;
@@ -76,6 +78,16 @@ function safeParseJson<T>(raw: string | null): T | null {
   }
 }
 
+function normalizeSafetyStatus(raw: unknown): SafetyEdibility['status'] {
+  const s = String(raw ?? 'unknown');
+  if (s === 'safe') return 'safe';
+  if (s === 'caution') return 'caution';
+  if (s === 'unknown') return 'unknown';
+  if (s === 'unsafe') return 'caution';
+  if (s === 'uncertain') return 'unknown';
+  return 'unknown';
+}
+
 function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
   const rawChat = Array.isArray(input.chatHistory) ? input.chatHistory : [];
   const chatHistory: ScanJournalChatMessage[] = rawChat
@@ -100,16 +112,46 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
       ? { latitude: (loc as ScanJournalLocation).latitude, longitude: (loc as ScanJournalLocation).longitude }
       : undefined;
 
+  const normalizedScan: GeminiScanResult = {
+    ...input.scan,
+    commonName: String(input.scan?.commonName ?? 'Unconfirmed Plant'),
+    scientificName: input.scan?.scientificName ? String(input.scan.scientificName) : undefined,
+    confidence: Number.isFinite(input.scan?.confidence) ? Math.max(0, Math.min(1, Number(input.scan.confidence))) : 0,
+    safety: {
+      status: normalizeSafetyStatus(input.scan?.safety?.status),
+      summary: String(input.scan?.safety?.summary ?? ''),
+      keyRisks: Array.isArray(input.scan?.safety?.keyRisks) ? input.scan.safety.keyRisks.map((r) => String(r)).filter((r) => r.trim().length > 0).slice(0, 12) : [],
+    },
+    categories: Array.isArray((input.scan as unknown as { categories?: unknown })?.categories)
+      ? ((input.scan as unknown as { categories?: unknown })?.categories as unknown[]).map((c) => String(c)).filter((c) => c.trim().length > 0).slice(0, 12)
+      : [],
+    bushTuckerLikely: Boolean(input.scan?.bushTuckerLikely ?? false),
+    preparation: {
+      ease: (input.scan?.preparation?.ease ?? 'unknown') as Preparation['ease'],
+      steps: Array.isArray(input.scan?.preparation?.steps) ? input.scan.preparation.steps.map((s) => String(s)).filter((s) => s.trim().length > 0).slice(0, 16) : [],
+    },
+    seasonality: {
+      bestMonths: Array.isArray(input.scan?.seasonality?.bestMonths) ? input.scan.seasonality.bestMonths.map((m) => String(m)).filter((m) => m.trim().length > 0).slice(0, 12) : [],
+      notes: String(input.scan?.seasonality?.notes ?? ''),
+    },
+    culturalKnowledge: {
+      notes: String(input.scan?.culturalKnowledge?.notes ?? ''),
+      respect: Array.isArray(input.scan?.culturalKnowledge?.respect) ? input.scan.culturalKnowledge.respect.map((r) => String(r)).filter((r) => r.trim().length > 0).slice(0, 12) : [],
+    },
+    warnings: Array.isArray(input.scan?.warnings) ? input.scan.warnings.map((w) => String(w)).filter((w) => w.trim().length > 0).slice(0, 16) : [],
+    suggestedUses: Array.isArray(input.scan?.suggestedUses) ? input.scan.suggestedUses.map((u) => String(u)).filter((u) => u.trim().length > 0).slice(0, 16) : [],
+  };
+
   return {
     id: String(input.id),
     createdAt: Number.isFinite(input.createdAt) ? input.createdAt : Date.now(),
-    title: String(input.title ?? input.scan?.commonName ?? 'Unknown'),
+    title: String(input.title ?? normalizedScan.commonName ?? 'Unconfirmed Plant'),
     locationName: input.locationName ? String(input.locationName) : undefined,
     location,
     imageUri: input.imageUri ? String(input.imageUri) : undefined,
     notes: typeof input.notes === 'string' ? input.notes : undefined,
     chatHistory,
-    scan: input.scan,
+    scan: normalizedScan,
   };
 }
 

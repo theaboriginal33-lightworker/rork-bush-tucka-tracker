@@ -33,10 +33,9 @@ import {
   type GeminiScanResult as JournalGeminiScanResult,
   type ScanJournalChatMessage,
 } from '@/app/providers/ScanJournalProvider';
-import { useCookbook } from '@/app/providers/CookbookProvider';
 
 type SafetyEdibility = {
-  status: 'safe' | 'unsafe' | 'uncertain';
+  status: 'safe' | 'caution' | 'unknown';
   summary: string;
   keyRisks: string[];
 };
@@ -76,8 +75,10 @@ type GeminiScanResult = {
   scientificName?: string;
   confidence: number;
 
-  bushTuckerLikely: boolean;
   safety: SafetyEdibility;
+  categories: string[];
+
+  bushTuckerLikely: boolean;
   preparation: Preparation;
   seasonality: Seasonality;
   culturalKnowledge: CulturalKnowledge;
@@ -109,7 +110,6 @@ type GeminiListModelsResponse = {
 
 export default function HomeScreen() {
   const { addEntry, updateEntry } = useScanJournal();
-  const { addFromScanEntry, getEntryByScanId } = useCookbook();
   const currentEntryIdRef = useRef<string | null>(null);
 
   type ScanImage = { uri: string; base64?: string; mimeType?: string; previewUri?: string };
@@ -176,7 +176,7 @@ export default function HomeScreen() {
   const displaySafetyStatus = useMemo((): GeminiScanResult['safety']['status'] | null => {
     if (!scanResult) return null;
     if (confidenceGate?.level === 'confident') return scanResult.safety.status;
-    return 'uncertain';
+    return 'unknown';
   }, [confidenceGate?.level, scanResult]);
 
   const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
@@ -777,6 +777,7 @@ export default function HomeScreen() {
           summary?: unknown;
           keyRisks?: unknown;
         };
+        categories?: unknown;
         preparation?: {
           ease?: unknown;
           steps?: unknown;
@@ -796,11 +797,15 @@ export default function HomeScreen() {
       const confidenceRaw = Number(parsed.confidence ?? 0);
       const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0;
 
-      const safetyStatusRaw = String(parsed.safety?.status ?? 'uncertain');
+      const safetyStatusRaw = String(parsed.safety?.status ?? 'unknown');
       const safetyStatus: SafetyEdibility['status'] =
-        safetyStatusRaw === 'safe' || safetyStatusRaw === 'unsafe' || safetyStatusRaw === 'uncertain'
+        safetyStatusRaw === 'safe' || safetyStatusRaw === 'caution' || safetyStatusRaw === 'unknown'
           ? safetyStatusRaw
-          : 'uncertain';
+          : safetyStatusRaw === 'unsafe'
+            ? 'caution'
+            : safetyStatusRaw === 'uncertain'
+              ? 'unknown'
+              : 'unknown';
 
       const prepEaseRaw = String(parsed.preparation?.ease ?? 'unknown');
       const prepEase: Preparation['ease'] =
@@ -813,8 +818,15 @@ export default function HomeScreen() {
         return value.map((v) => String(v)).filter(Boolean).slice(0, max);
       };
 
+      const rawCommonName = String(parsed.commonName ?? '').trim();
+      const commonName = rawCommonName.length > 0 ? rawCommonName : 'Unconfirmed Plant';
+
+      const categories = Array.isArray(parsed.categories)
+        ? parsed.categories.map((c) => String(c)).filter((c) => c.trim().length > 0).slice(0, 12)
+        : [];
+
       return {
-        commonName: String(parsed.commonName ?? 'Unknown'),
+        commonName,
         scientificName: parsed.scientificName ? String(parsed.scientificName) : undefined,
         confidence,
 
@@ -824,6 +836,7 @@ export default function HomeScreen() {
           summary: String(parsed.safety?.summary ?? ''),
           keyRisks: safeArray(parsed.safety?.keyRisks, 6),
         },
+        categories,
         preparation: {
           ease: prepEase,
           steps: safeArray(parsed.preparation?.steps, 8),
@@ -892,11 +905,12 @@ Rules:
 - Keep language concise, friendly, and Australia-specific.
 
 Return JSON with keys:
-- commonName: string
+- commonName: string (use "Unconfirmed Plant" if unsure)
 - scientificName: string or null
 - confidence: number (0..1)
+- safety: { status: 'safe'|'caution'|'unknown', summary: string, keyRisks: string[] }
+- categories: string[] (e.g. ['fruit','leaf','seed','medicinal','bush tucker'])
 - bushTuckerLikely: boolean
-- safety: { status: 'safe'|'unsafe'|'uncertain', summary: string, keyRisks: string[] }
 - preparation: { ease: 'easy'|'medium'|'hard'|'unknown', steps: string[] }
 - seasonality: { bestMonths: string[] (e.g. ['Sep','Oct']), notes: string }
 - culturalKnowledge: { notes: string, respect: string[] }
@@ -1331,7 +1345,7 @@ Return JSON with keys:
 
             const savedEntry = await addEntry({
               id: entryId,
-              title: parsed.commonName,
+              title: parsed.commonName?.trim().length ? parsed.commonName : 'Unconfirmed Plant',
               imageUri: persistedImageUri,
               chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
@@ -1354,32 +1368,12 @@ Return JSON with keys:
             currentEntryIdRef.current = savedEntry.id;
 
             const confidence = Number.isFinite(savedEntry.scan?.confidence) ? (savedEntry.scan.confidence as number) : 0;
-            const shouldAutoAddToCook =
-              confidence >= 0.8 &&
-              savedEntry.scan?.bushTuckerLikely === true &&
-              savedEntry.scan?.safety?.status === 'safe';
-
-            if (shouldAutoAddToCook) {
-              const existing = getEntryByScanId(savedEntry.id);
-              if (!existing) {
-                console.log('[Scan] auto-add to Cook (confidence gate passed)', { scanEntryId: savedEntry.id, confidence });
-                try {
-                  await addFromScanEntry(savedEntry);
-                } catch (e) {
-                  const message = e instanceof Error ? e.message : String(e);
-                  console.log('[Scan] auto-add to Cook failed', { message, scanEntryId: savedEntry.id });
-                }
-              } else {
-                console.log('[Scan] skip auto-add to Cook (already exists)', { scanEntryId: savedEntry.id, cookId: existing.id });
-              }
-            } else {
-              console.log('[Scan] skip auto-add to Cook (confidence gate not met)', {
-                scanEntryId: savedEntry.id,
-                confidence,
-                bushTuckerLikely: savedEntry.scan?.bushTuckerLikely,
-                safetyStatus: savedEntry.scan?.safety?.status,
-              });
-            }
+            console.log('[Scan] cook eligibility (derived view)', {
+              scanEntryId: savedEntry.id,
+              confidence,
+              safetyStatus: savedEntry.scan?.safety?.status,
+              eligible: savedEntry.scan?.safety?.status === 'safe' && confidence >= 0.75,
+            });
 
             console.log('[Scan] navigating to saved scan details', { scanEntryId: savedEntry.id });
             setScanPhase('done');
@@ -1415,7 +1409,7 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [addEntry, addFromScanEntry, apiKey, getEntryByScanId, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
+  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
 
   const collectImages = useCallback(
     async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
@@ -1758,7 +1752,7 @@ Return JSON with keys:
                         styles.pill,
                         displaySafetyStatus === 'safe'
                           ? styles.pillGood
-                          : displaySafetyStatus === 'unsafe'
+                          : displaySafetyStatus === 'caution'
                             ? styles.pillBad
                             : styles.pillNeutral,
                       ]}
@@ -1768,17 +1762,17 @@ Return JSON with keys:
                           styles.pillText,
                           displaySafetyStatus === 'safe'
                             ? styles.pillTextGood
-                            : displaySafetyStatus === 'unsafe'
+                            : displaySafetyStatus === 'caution'
                               ? styles.pillTextBad
                               : styles.pillTextNeutral,
                         ]}
                       >
                         {confidenceGate?.level === 'confident'
                           ? displaySafetyStatus === 'safe'
-                            ? 'Safe Edible (Check Locally)'
-                            : displaySafetyStatus === 'unsafe'
-                              ? 'Unsafe / Avoid'
-                              : 'Uncertain / Verify'
+                            ? 'Safe (Still verify locally)'
+                            : displaySafetyStatus === 'caution'
+                              ? 'Caution'
+                              : 'Unknown / Verify'
                           : confidenceGate?.level === 'likely'
                             ? 'Safety: Verify before consuming'
                             : 'Safety: Observe only'}

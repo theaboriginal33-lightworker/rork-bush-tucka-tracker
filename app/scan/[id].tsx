@@ -166,15 +166,14 @@ export default function ScanDetailsScreen() {
     };
   }, [entry?.scan?.confidence]);
 
-  const displaySafetyStatus = useMemo((): 'safe' | 'unsafe' | 'uncertain' => {
-    if (confidenceGate.level === 'confident') return entry?.scan?.safety?.status ?? 'uncertain';
-    return 'uncertain';
+  const displaySafetyStatus = useMemo((): 'safe' | 'caution' | 'unknown' => {
+    if (confidenceGate.level === 'confident') return (entry?.scan?.safety?.status as 'safe' | 'caution' | 'unknown' | undefined) ?? 'unknown';
+    return 'unknown';
   }, [confidenceGate.level, entry?.scan?.safety?.status]);
 
   const safetyTone = useMemo((): 'good' | 'warn' | 'bad' => {
     const status = displaySafetyStatus;
     if (status === 'safe') return 'good';
-    if (status === 'unsafe') return 'bad';
     return 'warn';
   }, [displaySafetyStatus]);
 
@@ -582,8 +581,8 @@ export default function ScanDetailsScreen() {
                   {entry.scan.scientificName ? <Text style={styles.heroSubtitle}>{entry.scan.scientificName}</Text> : null}
                 </View>
                 <View style={styles.heroIcon}>
-                  {entry.scan.safety.status === 'unsafe' ? (
-                    <ShieldAlert size={22} color={COLORS.error} />
+                  {entry.scan.safety.status === 'caution' ? (
+                    <ShieldAlert size={22} color={COLORS.warning} />
                   ) : (
                     <Sparkles size={22} color={COLORS.primary} />
                   )}

@@ -1,23 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, X } from 'lucide-react-native';
+import { Search } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook, type CookRecipeEntry } from '@/app/providers/CookbookProvider';
 
-type Chip = {
-  id: string;
-  label: string;
-};
-
-const CHIPS: Chip[] = [
-  { id: 'all', label: 'All' },
-  { id: 'safe', label: 'Safe' },
-  { id: 'uncertain', label: 'Uncertain' },
-  { id: 'unsafe', label: 'Unsafe' },
-];
 
 function safeImageUri(uri: string | undefined): string | null {
   const raw0 = typeof uri === 'string' ? uri.trim() : '';
@@ -48,43 +37,27 @@ function safeImageUri(uri: string | undefined): string | null {
 }
 
 export default function CookScreen() {
-  const { entries, isLoading, errorMessage, removeEntry } = useCookbook();
+  const { entries, isLoading, errorMessage } = useCookbook();
 
   const [query, setQuery] = useState<string>('');
-  const [chipId, setChipId] = useState<Chip['id']>('all');
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return entries
-      .filter((e) => {
-        if (chipId === 'all') return true;
-        return e.safetyStatus === chipId;
-      })
-      .filter((e) => {
-        if (q.length === 0) return true;
-        return (
-          e.title.toLowerCase().includes(q) ||
-          e.commonName.toLowerCase().includes(q) ||
-          (e.scientificName ?? '').toLowerCase().includes(q)
-        );
-      });
-  }, [chipId, entries, query]);
+    return entries.filter((e) => {
+      if (q.length === 0) return true;
+      return e.title.toLowerCase().includes(q) || e.commonName.toLowerCase().includes(q) || (e.scientificName ?? '').toLowerCase().includes(q);
+    });
+  }, [entries, query]);
 
   const headerSubtitle = useMemo(() => {
     if (isLoading) return 'Loading…';
     if (errorMessage) return errorMessage;
-    if (entries.length === 0) return 'Add a scan to Cook from Scan Details.';
+    if (entries.length === 0) return 'Cook pulls from Collection (Safe + 75%+ confidence).';
     return `${entries.length} saved ${entries.length === 1 ? 'ingredient' : 'ingredients'}`;
   }, [entries.length, errorMessage, isLoading]);
 
   const renderItem = useCallback(
     ({ item }: { item: CookRecipeEntry }) => {
-      const safetyDot =
-        item.safetyStatus === 'safe'
-          ? COLORS.success
-          : item.safetyStatus === 'unsafe'
-            ? COLORS.error
-            : COLORS.warning;
+      const safetyDot = item.safetyStatus === 'safe' ? COLORS.success : COLORS.warning;
 
       const resolvedUri = safeImageUri(item.imageUri);
       const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
@@ -95,7 +68,7 @@ export default function CookScreen() {
         <TouchableOpacity
           style={styles.itemCard}
           onPress={() => {
-            router.push(`/cook/${encodeURIComponent(item.id)}`);
+            router.push(`/scan/${encodeURIComponent(item.scanEntryId)}`);
           }}
           testID={`cook-item-${item.id}`}
         >
@@ -145,28 +118,7 @@ export default function CookScreen() {
                 <View style={[styles.safetyDot, { backgroundColor: safetyDot }]} />
                 <Text style={styles.safetyPillText}>{item.safetyStatus.toUpperCase()}</Text>
               </View>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => {
-                  Alert.alert('Remove from Cook?', 'This will remove it from your Cook list.', [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Remove',
-                      style: 'destructive',
-                      onPress: () => {
-                        removeEntry(item.id).catch((e) => {
-                          const message = e instanceof Error ? e.message : String(e);
-                          console.log('[Cook] removeEntry failed', { message });
-                        });
-                      },
-                    },
-                  ]);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                testID={`cook-item-remove-${item.id}`}
-              >
-                <X size={16} color={COLORS.text} />
-              </TouchableOpacity>
+
             </View>
           </View>
 
@@ -192,7 +144,7 @@ export default function CookScreen() {
         </TouchableOpacity>
       );
     },
-    [removeEntry],
+    [],
   );
 
   return (
@@ -220,22 +172,6 @@ export default function CookScreen() {
           </View>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} testID="cook-chips">
-          {CHIPS.map((c) => {
-            const active = c.id === chipId;
-            return (
-              <TouchableOpacity
-                key={c.id}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setChipId(c.id)}
-                testID={`cook-chip-${c.id}`}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{c.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
@@ -246,7 +182,7 @@ export default function CookScreen() {
             <View style={styles.emptyState} testID="cook-empty">
               <View style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>Nothing saved yet</Text>
-              <Text style={styles.emptyText}>Open a scan in Collection → Scan Details → tap the pot icon to add it to Cook.</Text>
+              <Text style={styles.emptyText}>Scan plants in Home. Anything marked Safe with 75%+ confidence will appear here automatically.</Text>
             </View>
           }
         />
@@ -304,31 +240,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     paddingVertical: 0,
-  },
-  chipsRow: {
-    paddingHorizontal: 24,
-    paddingBottom: 10,
-    gap: 10,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: COLORS.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-  chipActive: {
-    backgroundColor: 'rgba(56,217,137,0.14)',
-    borderColor: 'rgba(56,217,137,0.46)',
-  },
-  chipText: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  chipTextActive: {
-    color: COLORS.secondary,
   },
 
   listContent: {
@@ -392,16 +303,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.6,
   },
-  deleteButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(7,17,11,0.72)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,92,92,0.35)',
-  },
+
   itemBody: {
     padding: 16,
     gap: 6,

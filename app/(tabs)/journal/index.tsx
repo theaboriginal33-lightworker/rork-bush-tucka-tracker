@@ -60,8 +60,12 @@ export default function JournalScreen() {
       const month = date.toLocaleString('en-AU', { month: 'short' }).toUpperCase();
       const day = String(date.getDate()).padStart(2, '0');
 
+      const confidence = Number.isFinite(item.scan?.confidence) ? (item.scan.confidence as number) : 0;
+      const observeOnly = confidence < 0.75 || item.scan?.safety?.status !== 'safe';
+
       const tags = [
         item.scan?.safety?.status ? `Safety: ${item.scan.safety.status}` : null,
+        observeOnly ? 'Observe only' : null,
         item.scan?.bushTuckerLikely ? 'Bush tucker' : null,
       ].filter(Boolean) as string[];
 
