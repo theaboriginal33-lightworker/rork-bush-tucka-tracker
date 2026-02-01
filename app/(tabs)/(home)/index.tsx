@@ -425,6 +425,8 @@ export default function HomeScreen() {
     return chatMessagesRaw as unknown[];
   }, [chatMessagesRaw]);
 
+  const chatCreatedAtByIdRef = useRef<Record<string, number>>({});
+
   const scanContext = useMemo(() => {
     if (!scanResult) return null;
 
@@ -570,17 +572,33 @@ export default function HomeScreen() {
             cleanedText.trim() ||
             (role === 'assistant' ? 'I could not find an answer from the scan details.' : text);
 
+          const id = typeof message?.id === 'string' ? message.id : `msg-${Math.random().toString(16).slice(2)}`;
+          const rawCreatedAt = Number(message?.createdAt);
+          const createdAtFromMessage = Number.isFinite(rawCreatedAt) ? rawCreatedAt : null;
+
+          const seen = chatCreatedAtByIdRef.current[id];
+          const createdAt =
+            typeof seen === 'number'
+              ? seen
+              : typeof createdAtFromMessage === 'number'
+                ? createdAtFromMessage
+                : Date.now();
+          if (typeof seen !== 'number') {
+            chatCreatedAtByIdRef.current[id] = createdAt;
+          }
+
           return {
-            id: typeof message?.id === 'string' ? message.id : `msg-${Math.random().toString(16).slice(2)}`,
+            id,
             role,
             text: finalText,
+            createdAt,
           };
         })
-        .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string } => Boolean(message));
+        .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string; createdAt: number } => Boolean(message));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.log('[Chat] chatDisplayMessages compute failed', { msg });
-      return [] as { id: string; role: 'user' | 'assistant'; text: string }[];
+      return [] as { id: string; role: 'user' | 'assistant'; text: string; createdAt: number }[];
     }
   }, [chatMessages]);
 
@@ -591,14 +609,23 @@ export default function HomeScreen() {
       id: String(m.id),
       role: m.role,
       text: m.text,
-      createdAt: Date.now(),
+      createdAt: Number.isFinite(m.createdAt) ? m.createdAt : Date.now(),
     }));
   }, [chatDisplayMessages]);
+
+  const lastSavedChatHashRef = useRef<string>('');
 
   useEffect(() => {
     const entryId = currentEntryIdRef.current;
     if (!entryId) return;
     if (journalChatHistory.length === 0) return;
+
+    const hash = JSON.stringify(journalChatHistory.map((m) => ({ id: m.id, role: m.role, text: m.text, createdAt: m.createdAt })));
+    if (lastSavedChatHashRef.current === hash) {
+      return;
+    }
+
+    lastSavedChatHashRef.current = hash;
     updateEntry(entryId, { chatHistory: journalChatHistory }).catch((e) => {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[Scan] updateEntry chatHistory failed', { message });
