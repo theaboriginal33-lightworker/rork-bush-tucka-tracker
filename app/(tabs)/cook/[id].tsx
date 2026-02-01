@@ -89,6 +89,15 @@ function buildRecipeIdeas(commonName: string, suggestedUses: string[]): RecipeId
   ];
 }
 
+function safeImageUri(uri: string | undefined): string | null {
+  const raw = typeof uri === 'string' ? uri.trim() : '';
+  if (raw.length === 0 || raw === 'null' || raw === 'undefined') return null;
+  if (raw.startsWith('file://') && raw.includes('%')) {
+    return raw.replace(/%/g, '%25');
+  }
+  return raw;
+}
+
 export default function CookDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const cookId = typeof id === 'string' ? id : '';
@@ -172,7 +181,7 @@ export default function CookDetailsScreen() {
           <Image
             source={{
               uri:
-                entry.imageUri ??
+                safeImageUri(entry.imageUri) ??
                 'https://images.unsplash.com/photo-1541544181051-e46601a43f2b?q=80&w=1600&auto=format&fit=crop',
             }}
             style={styles.heroImage}

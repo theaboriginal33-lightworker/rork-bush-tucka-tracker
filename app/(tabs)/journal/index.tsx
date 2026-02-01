@@ -7,6 +7,15 @@ import { Brush, MapPin, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalEntry } from '@/app/providers/ScanJournalProvider';
 
+function safeImageUri(uri: string | undefined): string | null {
+  const raw = typeof uri === 'string' ? uri.trim() : '';
+  if (raw.length === 0 || raw === 'null' || raw === 'undefined') return null;
+  if (raw.startsWith('file://') && raw.includes('%')) {
+    return raw.replace(/%/g, '%25');
+  }
+  return raw;
+}
+
 export default function JournalScreen() {
   const { entries, isLoading, errorMessage, clearAll, removeEntry, refresh } = useScanJournal();
 
@@ -47,7 +56,11 @@ export default function JournalScreen() {
         >
           <View style={styles.cardHeader}>
             <Image
-              source={{ uri: item.imageUri ?? 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop' }}
+              source={{
+                uri:
+                  safeImageUri(item.imageUri) ??
+                  'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop',
+              }}
               style={styles.entryImage}
               contentFit="cover"
               cachePolicy="memory-disk"

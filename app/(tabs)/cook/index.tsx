@@ -18,6 +18,15 @@ const CHIPS: Chip[] = [
   { id: 'unsafe', label: 'Unsafe' },
 ];
 
+function safeImageUri(uri: string | undefined): string | null {
+  const raw = typeof uri === 'string' ? uri.trim() : '';
+  if (raw.length === 0 || raw === 'null' || raw === 'undefined') return null;
+  if (raw.startsWith('file://') && raw.includes('%')) {
+    return raw.replace(/%/g, '%25');
+  }
+  return raw;
+}
+
 export default function CookScreen() {
   const { entries, isLoading, errorMessage, removeEntry } = useCookbook();
 
@@ -69,7 +78,7 @@ export default function CookScreen() {
             <Image
               source={{
                 uri:
-                  item.imageUri ??
+                  safeImageUri(item.imageUri) ??
                   'https://images.unsplash.com/photo-1541544181051-e46601a43f2b?q=80&w=1600&auto=format&fit=crop',
               }}
               style={styles.itemImage}

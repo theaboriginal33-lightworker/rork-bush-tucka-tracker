@@ -8,7 +8,6 @@ import { Image } from 'expo-image';
 import type * as LocationType from 'expo-location';
 import { ChevronLeft, CookingPot, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
-import { useCookbook } from '@/app/providers/CookbookProvider';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
 
 const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
@@ -80,14 +79,21 @@ function Pill({ text, tone }: { text: string; tone: 'good' | 'warn' | 'bad' | 'n
   );
 }
 
+function safeImageUri(uri: string | undefined): string | null {
+  const raw = typeof uri === 'string' ? uri.trim() : '';
+  if (raw.length === 0 || raw === 'null' || raw === 'undefined') return null;
+  if (raw.startsWith('file://') && raw.includes('%')) {
+    return raw.replace(/%/g, '%25');
+  }
+  return raw;
+}
+
 export default function ScanDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const entryId = typeof id === 'string' ? id : '';
 
   const { getEntryById, updateEntry, removeEntry } = useScanJournal();
-  const { addFromScanEntry, getEntryByScanId } = useCookbook();
   const entry = getEntryById(entryId);
-  const cookAlreadySaved = entry ? Boolean(getEntryByScanId(entry.id)) : false;
 
   const [titleDraft, setTitleDraft] = useState<string>(entry?.title ?? '');
   const [notesDraft, setNotesDraft] = useState<string>(entry?.notes ?? '');
@@ -309,32 +315,6 @@ export default function ScanDetailsScreen() {
     ]);
   }, [entry, sharePhoto, shareSummary]);
 
-  const onAddToCook = useCallback(async () => {
-    if (!entry) return;
-    if (cookAlreadySaved) {
-      Alert.alert('Already in Cook', 'This scan is already in your Cook list.');
-      return;
-    }
-
-    try {
-      console.log('[ScanDetails] addToCook start', { scanEntryId: entry.id, title: entry.title });
-      const saved = await addFromScanEntry(entry);
-      console.log('[ScanDetails] addToCook success', { cookId: saved.id, scanEntryId: entry.id });
-      Alert.alert('Added to Cook', 'Recipes and ideas are ready in Cook.', [
-        { text: 'OK' },
-        {
-          text: 'Open in Cook',
-          onPress: () => {
-            router.push(`/cook/${encodeURIComponent(saved.id)}`);
-          },
-        },
-      ]);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      console.log('[ScanDetails] addToCook failed', { message, scanEntryId: entry.id, title: entry.title, commonName: entry.scan?.commonName });
-      Alert.alert('Could not add to Cook', message || 'Please try again.');
-    }
-  }, [addFromScanEntry, cookAlreadySaved, entry]);
 
   const onSave = useCallback(async () => {
     if (!entry) return;
@@ -540,13 +520,6 @@ export default function ScanDetailsScreen() {
             {entry.title}
           </Text>
           <View style={styles.topActions}>
-            <TouchableOpacity
-              style={[styles.iconButton, cookAlreadySaved && styles.iconButtonDisabled]}
-              onPress={onAddToCook}
-              testID="scan-details-add-to-cook"
-            >
-              <CookingPot size={18} color={cookAlreadySaved ? COLORS.textSecondary : COLORS.text} />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={onShare} testID="scan-details-share">
               <Share2 size={18} color={COLORS.text} />
             </TouchableOpacity>
@@ -563,7 +536,7 @@ export default function ScanDetailsScreen() {
             <Image
               source={{
                 uri:
-                  entry.imageUri ??
+                  safeImageUri(entry.imageUri) ??
                   'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop',
               }}
               style={styles.heroImage}
@@ -602,16 +575,6 @@ export default function ScanDetailsScreen() {
           </View>
 
 
-          <View style={styles.quickActionsRow} testID="scan-details-quick-actions">
-            <TouchableOpacity
-              style={[styles.quickCookButton, cookAlreadySaved && styles.quickCookButtonDisabled]}
-              onPress={onAddToCook}
-              testID="scan-details-quick-add-to-cook"
-            >
-              <CookingPot size={18} color={cookAlreadySaved ? COLORS.textSecondary : '#06120B'} />
-              <Text style={styles.quickCookButtonText}>{cookAlreadySaved ? 'In Cook' : 'Add to Cook'}</Text>
-            </TouchableOpacity>
-          </View>
 
           <Section title="Edit title">
             <TextInput

@@ -1181,7 +1181,8 @@ Return JSON with keys:
                   console.log('[Scan] makeDirectoryAsync failed (scan-journal)', { message, scanDirUri });
                 }
 
-                const dest = `${scanDirUri}${encodeURIComponent(entryId)}.jpg`;
+                const safeFileStem = entryId.replace(/[^a-z0-9-_]+/gi, '-');
+                const dest = `${scanDirUri}${safeFileStem}.jpg`;
                 const from = primaryImage?.uri ?? '';
                 const fromScheme = from.split(':')[0];
 
