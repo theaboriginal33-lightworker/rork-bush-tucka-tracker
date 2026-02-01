@@ -1,9 +1,8 @@
 // template
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
@@ -27,46 +26,47 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({});
+  const [splashHidden, setSplashHidden] = useState<boolean>(false);
 
   useEffect(() => {
-    console.log('[RootLayout] mounted', { fontsLoaded, hasFontError: !!fontError });
-  }, [fontError, fontsLoaded]);
+    console.log('[RootLayout] mounted');
 
-  useEffect(() => {
-    if (!fontsLoaded && !fontError) return;
-
-    console.log('[RootLayout] ready to hide splash', {
-      fontsLoaded,
-      hasFontError: !!fontError,
-      fontErrorMessage: fontError instanceof Error ? fontError.message : String(fontError ?? ''),
-    });
-
+    let cancelled = false;
     void SplashScreen.hideAsync()
       .then(() => {
         console.log('[SplashScreen] hideAsync ok');
+        if (!cancelled) setSplashHidden(true);
       })
       .catch((e) => {
         const message = e instanceof Error ? e.message : String(e);
         console.log('[SplashScreen] hideAsync failed', { message });
+        if (!cancelled) setSplashHidden(true);
       });
-  }, [fontError, fontsLoaded]);
 
-  if (fontError) {
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!splashHidden) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#07110B', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Text style={{ color: '#EAF6EE', fontSize: 16, fontWeight: '700', textAlign: 'center' }} testID="font-load-error-title">
-          Failed to load icon fonts
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#07110B',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+        }}
+        testID="app-starting-container">
+        <Text style={{ color: '#EAF6EE', fontSize: 16, fontWeight: '700', textAlign: 'center' }} testID="app-starting-title">
+          Starting…
         </Text>
-        <Text style={{ color: '#9BB3A4', marginTop: 10, textAlign: 'center' }} testID="font-load-error-message">
-          {fontError instanceof Error ? fontError.message : String(fontError)}
+        <Text style={{ color: '#9BB3A4', marginTop: 10, textAlign: 'center' }} testID="app-starting-subtitle">
+          Loading the app UI
         </Text>
       </View>
     );
-  }
-
-  if (!fontsLoaded) {
-    return null;
   }
 
   return (
