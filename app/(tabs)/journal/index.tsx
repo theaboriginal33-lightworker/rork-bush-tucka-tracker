@@ -8,23 +8,31 @@ import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalEntry } from '@/app/providers/ScanJournalProvider';
 
 function safeImageUri(uri: string | undefined): string | null {
-  const raw = typeof uri === 'string' ? uri.trim() : '';
-  if (raw.length === 0 || raw === 'null' || raw === 'undefined') return null;
-  if (raw.startsWith('ph://') || raw.startsWith('assets-library://')) return null;
+  const raw0 = typeof uri === 'string' ? uri.trim() : '';
+  if (raw0.length === 0 || raw0 === 'null' || raw0 === 'undefined') return null;
+
+  let raw = raw0;
+  const scheme = raw.split(':')[0] ?? '';
+
+  if (scheme === 'ph' || scheme === 'assets-library') return null;
 
   if (raw.startsWith('/')) {
-    return `file://${raw}`;
+    raw = `file://${raw}`;
   }
 
   if (raw.startsWith('file:/') && !raw.startsWith('file://')) {
-    return `file:///${raw.replace(/^file:\/*/i, '')}`;
+    raw = `file:///${raw.replace(/^file:\/*/i, '')}`;
   }
 
-  if (raw.startsWith('file://') && raw.includes('%')) {
-    return raw.replace(/%/g, '%25');
+  if (raw.includes(' ')) {
+    raw = raw.replace(/ /g, '%20');
   }
 
-  return raw;
+  try {
+    return encodeURI(raw);
+  } catch {
+    return raw;
+  }
 }
 
 export default function JournalScreen() {
