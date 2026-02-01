@@ -7,7 +7,6 @@ import { BookmarkPlus, Search } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook, type CookRecipeEntry } from '@/app/providers/CookbookProvider';
 
-
 function safeImageUri(uri: string | undefined): string | null {
   const raw0 = typeof uri === 'string' ? uri.trim() : '';
   if (raw0.length === 0 || raw0 === 'null' || raw0 === 'undefined') return null;
