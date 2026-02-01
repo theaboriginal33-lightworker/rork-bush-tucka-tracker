@@ -84,20 +84,24 @@ export default function JournalScreen() {
               contentFit="cover"
               cachePolicy="memory-disk"
               transition={120}
-              recyclingKey={item.id}
+              recyclingKey={`${item.id}:${safeImageUri(item.imageUri) ?? 'fallback'}`}
               testID={`journal-entry-image-${item.id}`}
               onLoad={() => {
                 console.log('[Journal] image loaded', {
                   entryId: item.id,
                   hasCustomUri: Boolean(item.imageUri),
-                  uriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                  resolvedUriScheme: (safeImageUri(item.imageUri) ?? '').split(':')[0] || 'none',
+                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
                 });
               }}
               onError={(e) => {
+                const resolved = safeImageUri(item.imageUri);
                 console.log('[Journal] image load error', {
                   entryId: item.id,
                   uri: item.imageUri,
-                  uriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                  resolvedUri: resolved,
+                  resolvedUriScheme: (resolved ?? '').split(':')[0] || 'none',
+                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
                   error: (e as unknown as { error?: string })?.error,
                 });
               }}

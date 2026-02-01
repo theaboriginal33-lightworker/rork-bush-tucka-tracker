@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, X } from 'lucide-react-native';
@@ -101,6 +102,29 @@ export default function CookScreen() {
                   'https://images.unsplash.com/photo-1541544181051-e46601a43f2b?q=80&w=1600&auto=format&fit=crop',
               }}
               style={styles.itemImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={120}
+              recyclingKey={`${item.id}:${safeImageUri(item.imageUri) ?? 'fallback'}`}
+              testID={`cook-item-image-${item.id}`}
+              onLoad={() => {
+                console.log('[Cook] image loaded', {
+                  id: item.id,
+                  resolvedUriScheme: (safeImageUri(item.imageUri) ?? '').split(':')[0] || 'none',
+                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                });
+              }}
+              onError={(e) => {
+                const resolved = safeImageUri(item.imageUri);
+                console.log('[Cook] image load error', {
+                  id: item.id,
+                  uri: item.imageUri,
+                  resolvedUri: resolved,
+                  resolvedUriScheme: (resolved ?? '').split(':')[0] || 'none',
+                  rawUriScheme: (item.imageUri ?? '').split(':')[0] || 'none',
+                  error: (e as unknown as { error?: string })?.error,
+                });
+              }}
             />
             <View style={styles.itemTopRow}>
               <View style={styles.safetyPill}>
