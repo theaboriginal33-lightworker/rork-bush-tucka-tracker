@@ -79,12 +79,7 @@ export default function TabLayout() {
         }}
       />
 
-      <Tabs.Screen
-        name="cook/[id]"
-        options={{
-          href: null,
-        }}
-      />
+
       <Tabs.Screen
         name="journal"
         options={{
