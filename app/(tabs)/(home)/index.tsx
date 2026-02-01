@@ -1,16 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput } from 'react-native';
+import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as Sharing from 'expo-sharing';
 import {
   AlertTriangle,
   ArrowRight,
+  BookmarkPlus,
   Bug,
+  Copy,
+  Download,
   ChevronRight,
   HelpCircle,
   Image as ImageIcon,
@@ -19,10 +24,12 @@ import {
   RefreshCcw,
   Scan,
   Send,
+  Share2,
   ShieldAlert,
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { useCookbook } from '@/app/providers/CookbookProvider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createRorkTool, useRorkAgent } from '@rork-ai/toolkit-sdk';
 import * as z from 'zod/v4';
@@ -110,6 +117,7 @@ type GeminiListModelsResponse = {
 
 export default function HomeScreen() {
   const { addEntry, updateEntry } = useScanJournal();
+  const { saveGuideEntry } = useCookbook();
   const currentEntryIdRef = useRef<string | null>(null);
 
   type ScanImage = { uri: string; base64?: string; mimeType?: string; previewUri?: string };
@@ -615,6 +623,134 @@ export default function HomeScreen() {
   }, [chatMessages]);
 
   const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
+
+  const [savedGuideByMessageId, setSavedGuideByMessageId] = useState<Record<string, boolean>>({});
+
+  const buildGuideExportText = useCallback(
+    (assistantText: string): string => {
+      const now = new Date();
+      const lines: string[] = [];
+      lines.push('Tucka Guide');
+      if (scanResult?.commonName) lines.push(`Plant: ${scanResult.commonName}`);
+      if (scanResult?.scientificName) lines.push(`Scientific: ${scanResult.scientificName}`);
+      if (scanResult?.confidence != null) lines.push(`Confidence: ${Math.round(scanResult.confidence * 100)}%`);
+      if (scanResult?.safety?.status) lines.push(`Safety: ${String(scanResult.safety.status).toUpperCase()}`);
+      lines.push(`Saved: ${now.toLocaleString()}`);
+      lines.push('');
+      lines.push(assistantText.trim());
+      lines.push('');
+      lines.push('—');
+      lines.push('Always verify locally before consuming.');
+      return lines.join('\n');
+    },
+    [scanResult?.commonName, scanResult?.confidence, scanResult?.scientificName, scanResult?.safety?.status],
+  );
+
+  const copyGuideText = useCallback(
+    async (assistantText: string) => {
+      const exportText = buildGuideExportText(assistantText);
+      try {
+        await Clipboard.setStringAsync(exportText);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert('Copied', 'Tucka Guide answer copied to clipboard.');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] copy failed', { message });
+        Alert.alert('Could not copy', 'Please try again.');
+      }
+    },
+    [buildGuideExportText],
+  );
+
+  const shareOrDownloadGuideText = useCallback(
+    async (assistantText: string) => {
+      const exportText = buildGuideExportText(assistantText);
+      const safeName = `tucka-guide-${Date.now()}.txt`;
+
+      if (Platform.OS === 'web') {
+        try {
+          const hasDocument = typeof document !== 'undefined';
+          if (!hasDocument) {
+            await copyGuideText(assistantText);
+            return;
+          }
+
+          const blob = new Blob([exportText], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = safeName;
+          a.rel = 'noopener';
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          return;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[TuckaGuide] web download failed', { message });
+          await copyGuideText(assistantText);
+          return;
+        }
+      }
+
+      try {
+        const file = new File(Paths.cache, safeName);
+        file.create();
+        file.write(exportText);
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(file.uri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
+          return;
+        }
+
+        await Share.share({ message: exportText });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] share/download failed', { message });
+        Alert.alert('Could not export', 'Please try again.');
+      }
+    },
+    [buildGuideExportText, copyGuideText],
+  );
+
+  const saveGuideToCook = useCallback(
+    async (assistantText: string, messageId: string) => {
+      if (!scanResult) return;
+      if (savedGuideByMessageId[messageId]) {
+        Alert.alert('Already saved', 'This answer is already saved to Cook.');
+        return;
+      }
+
+      try {
+        const titleBase = scanResult.commonName?.trim() ? `${scanResult.commonName} – Guide` : 'Tucka Guide – Saved';
+        const saved = await saveGuideEntry({
+          title: titleBase,
+          guideText: assistantText,
+          commonName: scanResult.commonName,
+          scientificName: scanResult.scientificName,
+          imageUri: primaryImageDisplayUri ?? undefined,
+          confidence: scanResult.confidence,
+          safetyStatus: scanResult.safety.status,
+          scanEntryId: currentEntryIdRef.current ?? undefined,
+          chatMessageId: messageId,
+          suggestedUses: scanResult.suggestedUses,
+        });
+
+        setSavedGuideByMessageId((prev) => ({ ...prev, [messageId]: true }));
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert('Saved to Cook', `Saved “${saved.title}”.`);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] save to Cook failed', { message });
+        Alert.alert('Could not save', 'Please try again.');
+      }
+    },
+    [primaryImageDisplayUri, saveGuideEntry, savedGuideByMessageId, scanResult],
+  );
 
   const journalChatHistory = useMemo((): ScanJournalChatMessage[] => {
     return chatDisplayMessages.map((m) => ({
@@ -2033,14 +2169,58 @@ Return JSON with keys:
                 {chatDisplayMessages.length > 0 ? (
                   <View style={styles.chatMessages}>
                     {(Array.isArray(chatDisplayMessages) ? chatDisplayMessages : []).map((message) => (
-                      <View
-                        key={message.id}
-                        style={[
-                          styles.chatBubble,
-                          message.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
-                        ]}
-                      >
-                        <Text style={styles.chatBubbleText}>{message.text}</Text>
+                      <View key={message.id} style={{ gap: 8 }} testID={`tucka-guide-message-${message.id}`}>
+                        <View
+                          style={[
+                            styles.chatBubble,
+                            message.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
+                          ]}
+                        >
+                          <Text style={styles.chatBubbleText}>{message.text}</Text>
+                        </View>
+
+                        {message.role === 'assistant' ? (
+                          <View style={styles.chatActionsRow} testID={`tucka-guide-actions-${message.id}`}>
+                            <TouchableOpacity
+                              style={[styles.chatActionButton, savedGuideByMessageId[message.id] ? styles.chatActionButtonSaved : null]}
+                              onPress={() => saveGuideToCook(message.text, message.id)}
+                              disabled={!scanResult}
+                              testID={`tucka-guide-save-${message.id}`}
+                            >
+                              <BookmarkPlus size={16} color={savedGuideByMessageId[message.id] ? COLORS.primary : COLORS.text} />
+                              <Text style={[styles.chatActionText, savedGuideByMessageId[message.id] ? styles.chatActionTextSaved : null]}>
+                                {savedGuideByMessageId[message.id] ? 'Saved' : 'Save'}
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.chatActionButton}
+                              onPress={() => shareOrDownloadGuideText(message.text)}
+                              testID={`tucka-guide-export-${message.id}`}
+                            >
+                              <Share2 size={16} color={COLORS.text} />
+                              <Text style={styles.chatActionText}>Export</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.chatActionButton}
+                              onPress={() => copyGuideText(message.text)}
+                              testID={`tucka-guide-copy-${message.id}`}
+                            >
+                              <Copy size={16} color={COLORS.text} />
+                              <Text style={styles.chatActionText}>Copy</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.chatActionButton}
+                              onPress={() => shareOrDownloadGuideText(message.text)}
+                              testID={`tucka-guide-download-${message.id}`}
+                            >
+                              <Download size={16} color={COLORS.text} />
+                              <Text style={styles.chatActionText}>Download</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
                       </View>
                     ))}
                   </View>
@@ -2757,6 +2937,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: DARK.subtext,
     fontWeight: '700',
+  },
+  chatActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginLeft: 4,
+  },
+  chatActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  chatActionButtonSaved: {
+    backgroundColor: 'rgba(56,217,137,0.12)',
+    borderColor: 'rgba(56,217,137,0.35)',
+  },
+  chatActionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: DARK.text,
+    letterSpacing: 0.2,
+  },
+  chatActionTextSaved: {
+    color: COLORS.primary,
   },
   chatInputRow: {
     flexDirection: 'row',

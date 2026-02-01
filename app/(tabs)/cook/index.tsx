@@ -3,7 +3,7 @@ import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'r
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search } from 'lucide-react-native';
+import { BookmarkPlus, Search } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook, type CookRecipeEntry } from '@/app/providers/CookbookProvider';
 
@@ -51,13 +51,18 @@ export default function CookScreen() {
   const headerSubtitle = useMemo(() => {
     if (isLoading) return 'Loading…';
     if (errorMessage) return errorMessage;
-    if (entries.length === 0) return 'Cook pulls from Collection (Safe + 75%+ confidence).';
+    if (entries.length === 0) return 'Cook pulls from Collection + saved Tucka Guide answers.';
+    const guideCount = entries.filter((e) => e.source === 'tucka-guide').length;
+    if (guideCount > 0) {
+      return `${entries.length} saved • ${guideCount} from Tucka Guide`;
+    }
     return `${entries.length} saved ${entries.length === 1 ? 'ingredient' : 'ingredients'}`;
-  }, [entries.length, errorMessage, isLoading]);
+  }, [entries, errorMessage, isLoading]);
 
   const renderItem = useCallback(
     ({ item }: { item: CookRecipeEntry }) => {
       const safetyDot = item.safetyStatus === 'safe' ? COLORS.success : COLORS.warning;
+      const isGuide = item.source === 'tucka-guide';
 
       const resolvedUri = safeImageUri(item.imageUri);
       const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
@@ -68,7 +73,11 @@ export default function CookScreen() {
         <TouchableOpacity
           style={styles.itemCard}
           onPress={() => {
-            router.push(`/scan/${encodeURIComponent(item.scanEntryId)}`);
+            if (item.source === 'collection' && item.scanEntryId) {
+              router.push(`/scan/${encodeURIComponent(item.scanEntryId)}`);
+              return;
+            }
+            router.push(`/cook/guide/${encodeURIComponent(item.id)}`);
           }}
           testID={`cook-item-${item.id}`}
         >
@@ -119,6 +128,12 @@ export default function CookScreen() {
                 <Text style={styles.safetyPillText}>{item.safetyStatus.toUpperCase()}</Text>
               </View>
 
+              {isGuide ? (
+                <View style={styles.guidePill} testID={`cook-item-guide-pill-${item.id}`}>
+                  <BookmarkPlus size={14} color={COLORS.primary} />
+                  <Text style={styles.guidePillText}>Guide</Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -182,7 +197,7 @@ export default function CookScreen() {
             <View style={styles.emptyState} testID="cook-empty">
               <View style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>Nothing saved yet</Text>
-              <Text style={styles.emptyText}>Scan plants in Home. Anything marked Safe with 75%+ confidence will appear here automatically.</Text>
+              <Text style={styles.emptyText}>Scan plants in Home. Safe + 75%+ confidence appears here automatically — and you can also save Tucka Guide answers from the chat.</Text>
             </View>
           }
         />
@@ -319,6 +334,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textSecondary,
   },
+  guidePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: 'rgba(56,217,137,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.35)',
+  },
+  guidePillText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.primary,
+    letterSpacing: 0.2,
+  },
+
   itemMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
