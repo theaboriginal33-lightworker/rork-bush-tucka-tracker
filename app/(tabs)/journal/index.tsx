@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo } from 'react';
-import { Alert, View, Text, StyleSheet, TouchableOpacity, FlatList, Image } from 'react-native';
+import { Alert, View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Brush, MapPin, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalEntry } from '@/app/providers/ScanJournalProvider';
@@ -48,6 +49,18 @@ export default function JournalScreen() {
             <Image
               source={{ uri: item.imageUri ?? 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop' }}
               style={styles.entryImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={120}
+              recyclingKey={item.id}
+              testID={`journal-entry-image-${item.id}`}
+              onError={(e) => {
+                console.log('[Journal] image load error', {
+                  entryId: item.id,
+                  uri: item.imageUri,
+                  error: (e as unknown as { error?: string })?.error,
+                });
+              }}
             />
             <View style={styles.metaOverlay}>
               <View style={styles.dateBadge}>
