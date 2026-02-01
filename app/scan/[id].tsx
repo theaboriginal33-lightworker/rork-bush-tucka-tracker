@@ -29,9 +29,11 @@ function refineCulturalNotes(raw: string): string {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <View style={styles.section} testID={`scan-details-section-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+    <View style={styles.sectionGroup} testID={`scan-details-section-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionBody}>{children}</View>
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionBody}>{children}</View>
+      </View>
     </View>
   );
 }
@@ -932,21 +934,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textSecondary,
   },
-  section: {
-    marginTop: 14,
+  sectionGroup: {
+    marginTop: 22,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.2,
+    marginBottom: 10,
+  },
+  sectionCard: {
     padding: 16,
     borderRadius: 22,
     backgroundColor: COLORS.card,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: COLORS.textSecondary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 10,
+    borderColor: 'rgba(155,179,164,0.20)',
   },
   sectionBody: {},
   bodyText: {

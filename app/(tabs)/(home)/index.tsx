@@ -652,7 +652,7 @@ export default function HomeScreen() {
           role: 'assistant',
           parts: [{ type: 'text', text: assistantText }],
         };
-        return [...base, userMessage, assistantMessage] as unknown as Parameters<typeof setChatMessages>[0];
+        return [...base, userMessage, assistantMessage] as unknown as typeof base;
       });
     },
     [setChatMessages],

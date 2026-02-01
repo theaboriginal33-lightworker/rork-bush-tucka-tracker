@@ -201,9 +201,11 @@ export default function CookDetailsScreen() {
           </View>
         </View>
 
-        <View style={styles.section} testID="cook-details-section-ideas">
+        <View style={styles.sectionGroup} testID="cook-details-section-ideas">
           <Text style={styles.sectionTitle}>Recipe ideas</Text>
-          <Text style={styles.bodyText}>These are quick, safe-style suggestions. Always cross-check your plant ID and safety before eating.</Text>
+          <View style={styles.sectionCard}>
+            <Text style={styles.bodyText}>These are quick, safe-style suggestions. Always cross-check your plant ID and safety before eating.</Text>
+          </View>
         </View>
 
         {ideas.map((idea) => (
@@ -256,12 +258,14 @@ export default function CookDetailsScreen() {
         ))}
 
         {entry.suggestedUses.length > 0 ? (
-          <View style={styles.section} testID="cook-details-section-suggested-uses">
+          <View style={styles.sectionGroup} testID="cook-details-section-suggested-uses">
             <Text style={styles.sectionTitle}>Suggested uses from scan</Text>
-            <View style={styles.pillRow}>
-              {entry.suggestedUses.slice(0, 12).map((u) => (
-                <Pill key={u} text={u} />
-              ))}
+            <View style={styles.sectionCard}>
+              <View style={styles.pillRow}>
+                {entry.suggestedUses.slice(0, 12).map((u) => (
+                  <Pill key={u} text={u} />
+                ))}
+              </View>
             </View>
           </View>
         ) : null}
@@ -413,21 +417,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  section: {
-    marginTop: 14,
+  sectionGroup: {
+    marginTop: 22,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.2,
+    marginBottom: 10,
+  },
+  sectionCard: {
     padding: 16,
     borderRadius: 22,
     backgroundColor: COLORS.card,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: COLORS.textSecondary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 10,
+    borderColor: 'rgba(155,179,164,0.20)',
   },
   bodyText: {
     fontSize: 14,
