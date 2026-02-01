@@ -181,7 +181,12 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       const parsed = safeParseJson<ScanJournalEntry[]>(raw) ?? [];
       const normalized = Array.isArray(parsed) ? parsed.map((e) => normalizeEntry(e)).filter(Boolean) : [];
-      return normalized.sort((a, b) => b.createdAt - a.createdAt);
+      return normalized.sort((a, b) => {
+        const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
+        const bT = Number.isFinite(b.createdAt) ? b.createdAt : 0;
+        if (bT !== aT) return bT - aT;
+        return String(b.id).localeCompare(String(a.id));
+      });
     },
   });
 
@@ -210,14 +215,21 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       for (const e of data) byId.set(e.id, e);
       for (const e of prev) byId.set(e.id, e);
 
-      const merged = Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt);
+      const merged = Array.from(byId.values()).sort((a, b) => {
+        const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
+        const bT = Number.isFinite(b.createdAt) ? b.createdAt : 0;
+        if (bT !== aT) return bT - aT;
+        return String(b.id).localeCompare(String(a.id));
+      });
       console.log('[ScanJournal] merged initial load with optimistic entries', { fromStorage: data.length, existing: prev.length, merged: merged.length });
       return merged;
     });
     setErrorMessage(null);
   }, [data, error, isLoading]);
 
-  const { mutate: persistMutate } = useMutation({
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const { mutateAsync: persistMutateAsync } = useMutation({
     mutationFn: async (nextEntries: ScanJournalEntry[]) => {
       const payload = JSON.stringify(nextEntries);
       await AsyncStorage.setItem(STORAGE_KEY, payload);
@@ -230,6 +242,24 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     },
   });
 
+  const persist = useCallback(
+    (nextEntries: ScanJournalEntry[]) => {
+      persistQueueRef.current = persistQueueRef.current
+        .catch(() => {
+          return;
+        })
+        .then(async () => {
+          console.log('[ScanJournal] persist queued', { count: nextEntries.length });
+          await persistMutateAsync(nextEntries);
+        })
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanJournal] persist queue error', { message });
+        });
+    },
+    [persistMutateAsync],
+  );
+
   const refresh = useCallback(async () => {
     console.log('[ScanJournal] refresh');
     setErrorMessage(null);
@@ -237,35 +267,64 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     await refetch();
   }, [refetch]);
 
+  const sortEntries = useCallback((list: ScanJournalEntry[]): ScanJournalEntry[] => {
+    return [...list].sort((a, b) => {
+      const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
+      const bT = Number.isFinite(b.createdAt) ? b.createdAt : 0;
+      if (bT !== aT) return bT - aT;
+      return String(b.id).localeCompare(String(a.id));
+    });
+  }, []);
+
   const addEntry = useCallback(
     async (entryInput: Omit<ScanJournalEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => {
       loadedOnceRef.current = true;
       const id = String(entryInput.id ?? `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-      const createdAt = Number.isFinite(entryInput.createdAt) ? (entryInput.createdAt as number) : Date.now();
+      const inputCreatedAt = Number.isFinite(entryInput.createdAt) ? (entryInput.createdAt as number) : Date.now();
 
-      const entry: ScanJournalEntry = normalizeEntry({
-        id,
-        createdAt,
-        title: entryInput.title,
-        locationName: entryInput.locationName,
-        location: entryInput.location,
-        imageUri: entryInput.imageUri,
-        notes: entryInput.notes,
-        chatHistory: entryInput.chatHistory,
-        scan: entryInput.scan,
-      });
+      let resolvedEntry: ScanJournalEntry | null = null;
 
       setErrorMessage(null);
       setEntries((prev) => {
-        const next = [entry, ...prev.filter((e) => e.id !== entry.id)];
-        persistMutate(next);
+        const prevTop = prev[0]?.createdAt ?? 0;
+        const createdAt = Math.max(inputCreatedAt, prevTop + 1);
+
+        const entry: ScanJournalEntry = normalizeEntry({
+          id,
+          createdAt,
+          title: entryInput.title,
+          locationName: entryInput.locationName,
+          location: entryInput.location,
+          imageUri: entryInput.imageUri,
+          notes: entryInput.notes,
+          chatHistory: entryInput.chatHistory,
+          scan: entryInput.scan,
+        });
+
+        resolvedEntry = entry;
+
+        const next = sortEntries([entry, ...prev.filter((e) => e.id !== entry.id)]);
+        persist(next);
         return next;
       });
 
-      console.log('[ScanJournal] addEntry', { id: entry.id, title: entry.title });
-      return entry;
+      const out = resolvedEntry ??
+        normalizeEntry({
+          id,
+          createdAt: inputCreatedAt,
+          title: entryInput.title,
+          locationName: entryInput.locationName,
+          location: entryInput.location,
+          imageUri: entryInput.imageUri,
+          notes: entryInput.notes,
+          chatHistory: entryInput.chatHistory,
+          scan: entryInput.scan,
+        });
+
+      console.log('[ScanJournal] addEntry', { id: out.id, title: out.title, createdAt: out.createdAt });
+      return out;
     },
-    [persistMutate],
+    [persist, sortEntries],
   );
 
   const getEntryById = useCallback(
@@ -303,13 +362,14 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
           return prev;
         }
 
-        persistMutate(next);
-        return next;
+        const sorted = sortEntries(next);
+        persist(sorted);
+        return sorted;
       });
 
       return updated;
     },
-    [persistMutate],
+    [persist, sortEntries],
   );
 
   const removeEntry = useCallback(
@@ -318,12 +378,12 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       setErrorMessage(null);
       setEntries((prev) => {
         const next = prev.filter((e) => e.id !== id);
-        persistMutate(next);
+        persist(next);
         return next;
       });
       console.log('[ScanJournal] removeEntry', { id });
     },
-    [persistMutate],
+    [persist],
   );
 
   const clearAll = useCallback(async () => {
@@ -331,11 +391,11 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     setErrorMessage(null);
     setEntries(() => {
       const next: ScanJournalEntry[] = [];
-      persistMutate(next);
+      persist(next);
       return next;
     });
     console.log('[ScanJournal] clearAll');
-  }, [persistMutate]);
+  }, [persist]);
 
   const value = useMemo<ScanJournalContextValue>(
     () => ({
