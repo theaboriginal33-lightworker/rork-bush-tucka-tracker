@@ -1105,8 +1105,10 @@ Return JSON with keys:
 
                 const uriExtMatch = (primaryImage?.uri ?? '').match(/\.(png|jpe?g|heic)$/i);
                 const extFromUri = uriExtMatch?.[1]?.toLowerCase();
-                const extFromMime = mimeType?.includes('png') ? 'png' : 'jpg';
-                const ext = extFromUri === 'png' || extFromUri === 'jpg' || extFromUri === 'jpeg' ? (extFromUri === 'jpeg' ? 'jpg' : extFromUri) : extFromMime;
+                const extFromMime = mimeType?.includes('png') ? 'png' : mimeType?.includes('heic') ? 'heic' : 'jpg';
+                const ext = extFromUri === 'png' || extFromUri === 'jpg' || extFromUri === 'jpeg' || extFromUri === 'heic'
+                  ? (extFromUri === 'jpeg' ? 'jpg' : extFromUri)
+                  : extFromMime;
 
                 const dest = `${scanDirUri}${encodeURIComponent(entryId)}.${ext}`;
                 const from = primaryImage?.uri ?? '';
@@ -1133,9 +1135,11 @@ Return JSON with keys:
                       console.log('[Scan] persisted scan photo via base64 write', { dest, length: base64.length });
                     } catch (writeErr) {
                       const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+                      persistedImageUri = primaryImage?.uri ?? undefined;
                       console.log('[Scan] base64 write failed; falling back to original uri', { writeMsg, originalUri: primaryImage?.uri });
                     }
                   } else {
+                    persistedImageUri = primaryImage?.uri ?? undefined;
                     console.log('[Scan] no base64 available; falling back to original uri', { originalUri: primaryImage?.uri });
                   }
                 }
