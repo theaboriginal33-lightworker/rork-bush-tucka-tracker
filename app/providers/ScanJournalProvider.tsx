@@ -178,9 +178,23 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
   const { data, error, isLoading, refetch } = useQuery({
     queryKey: ['scanJournal', 'entries'],
+    retry: 0,
     queryFn: async () => {
       console.log('[ScanJournal] loading from AsyncStorage');
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+
+      const timeoutMs = 2500;
+      const startedAt = Date.now();
+
+      const raw = await Promise.race<string | null>([
+        AsyncStorage.getItem(STORAGE_KEY),
+        new Promise<string | null>((resolve) => {
+          setTimeout(() => resolve(null), timeoutMs);
+        }),
+      ]);
+
+      const durationMs = Date.now() - startedAt;
+      console.log('[ScanJournal] load finished', { durationMs, timedOut: raw === null });
+
       const parsed = safeParseJson<ScanJournalEntry[]>(raw) ?? [];
       const normalized = Array.isArray(parsed) ? parsed.map((e) => normalizeEntry(e)).filter(Boolean) : [];
       return normalized.sort((a, b) => {
@@ -201,7 +215,10 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       return;
     }
 
-    if (!Array.isArray(data)) return;
+    if (!Array.isArray(data)) {
+      console.log('[ScanJournal] loadQuery no data (continuing)', { hasData: Boolean(data) });
+      return;
+    }
 
     if (loadedOnceRef.current) {
       return;

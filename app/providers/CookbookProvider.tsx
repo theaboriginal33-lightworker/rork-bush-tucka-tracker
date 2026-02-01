@@ -123,7 +123,19 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     console.log('[Cookbook] loading manual entries');
     setManualIsLoading(true);
     try {
-      const raw = await AsyncStorage.getItem(MANUAL_STORAGE_KEY);
+      const timeoutMs = 2500;
+      const startedAt = Date.now();
+
+      const raw = await Promise.race<string | null>([
+        AsyncStorage.getItem(MANUAL_STORAGE_KEY),
+        new Promise<string | null>((resolve) => {
+          setTimeout(() => resolve(null), timeoutMs);
+        }),
+      ]);
+
+      const durationMs = Date.now() - startedAt;
+      console.log('[Cookbook] loadManual finished', { durationMs, timedOut: raw === null });
+
       const parsed = safeParseJson<CookRecipeEntry[]>(raw) ?? [];
       const normalized = Array.isArray(parsed) ? parsed.map((e) => normalizeManualEntry(e)) : [];
       normalized.sort((a, b) => b.createdAt - a.createdAt);
