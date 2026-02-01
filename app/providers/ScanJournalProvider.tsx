@@ -320,13 +320,30 @@ export function createScanEntryId(params: {
   imageBase64?: string | null;
   imageUri?: string | null;
 }): string {
-  const keyParts = [
+  const base = [
     params.commonName.trim().toLowerCase(),
     (params.scientificName ?? '').trim().toLowerCase(),
     String(Math.round(params.confidence * 1000)),
-    params.imageBase64 ? `b64:${params.imageBase64.slice(0, 40)}` : null,
-    params.imageUri ? `uri:${params.imageUri}` : null,
-  ].filter(Boolean);
+  ]
+    .filter((p) => p.length > 0)
+    .join('|');
 
-  return `scan-${keyParts.join('|')}`;
+  const entropySeed =
+    (params.imageBase64 ? `b64:${params.imageBase64.slice(0, 120)}` : '') +
+    (params.imageUri ? `|uri:${params.imageUri.slice(0, 240)}` : '');
+
+  let hash = 5381;
+  const combined = `${base}|${entropySeed}`;
+  for (let i = 0; i < combined.length; i += 1) {
+    hash = (hash * 33) ^ combined.charCodeAt(i);
+  }
+
+  const safeHash = (hash >>> 0).toString(16);
+  const safeBase = base
+    .replace(/[^a-z0-9|]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-|]+|[-|]+$/g, '')
+    .slice(0, 72);
+
+  return `scan-${safeBase}-${safeHash}`;
 }

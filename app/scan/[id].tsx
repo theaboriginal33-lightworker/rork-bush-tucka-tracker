@@ -544,7 +544,6 @@ export default function ScanDetailsScreen() {
               style={[styles.iconButton, cookAlreadySaved && styles.iconButtonDisabled]}
               onPress={onAddToCook}
               testID="scan-details-add-to-cook"
-              disabled={cookAlreadySaved}
             >
               <CookingPot size={18} color={cookAlreadySaved ? COLORS.textSecondary : COLORS.text} />
             </TouchableOpacity>
