@@ -37,7 +37,7 @@ export default function TabLayout() {
         tabBarHideOnKeyboard: true,
       }}>
       <Tabs.Screen
-        name="(home)/index"
+        name="(home)"
         options={{
           title: 'Home',
           tabBarIcon: ({ focused, size }) => (
@@ -51,7 +51,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="learn/index"
+        name="learn"
         options={{
           title: 'Learn',
           tabBarIcon: ({ focused, size }) => (
@@ -65,7 +65,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="cook/index"
+        name="cook"
         options={{
           title: 'Cook',
           tabBarIcon: ({ focused, size }) => (
@@ -86,7 +86,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="journal/index"
+        name="journal"
         options={{
           title: 'Journal',
           tabBarIcon: ({ focused, size }) => (
