@@ -1088,10 +1088,12 @@ Return JSON with keys:
                 console.log('[Scan] web scan has no base64; using original uri', { uri: primaryImage?.uri });
               }
             } else {
-              const docDirUri =
+              const rawDocDirUri =
                 (FileSystem as unknown as { documentDirectory?: string }).documentDirectory ??
                 FileSystem.Paths.document?.uri ??
                 null;
+
+              const docDirUri = rawDocDirUri ? (rawDocDirUri.endsWith('/') ? rawDocDirUri : `${rawDocDirUri}/`) : null;
 
               if (docDirUri) {
                 const scanDirUri = `${docDirUri}scan-journal/`;
@@ -1136,11 +1138,18 @@ Return JSON with keys:
                     } catch (writeErr) {
                       const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
                       persistedImageUri = primaryImage?.uri ?? undefined;
-                      console.log('[Scan] base64 write failed; falling back to original uri', { writeMsg, originalUri: primaryImage?.uri });
+                      console.log('[Scan] base64 write failed; falling back to original uri', {
+                        writeMsg,
+                        originalUri: primaryImage?.uri,
+                        originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                      });
                     }
                   } else {
                     persistedImageUri = primaryImage?.uri ?? undefined;
-                    console.log('[Scan] no base64 available; falling back to original uri', { originalUri: primaryImage?.uri });
+                    console.log('[Scan] no base64 available; falling back to original uri', {
+                      originalUri: primaryImage?.uri,
+                      originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                    });
                   }
                 }
               } else {
@@ -1155,6 +1164,21 @@ Return JSON with keys:
               chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
             });
+
+            if (Platform.OS !== 'web') {
+              const scheme = (persistedImageUri ?? '').split(':')[0];
+              const isProblematic = scheme === 'ph' || scheme === 'assets-library' || scheme === 'content';
+              if (isProblematic) {
+                console.log('[Scan] WARNING: persistedImageUri is a non-file scheme; it may not render later', {
+                  persistedImageUri,
+                  scheme,
+                  originalUri: primaryImage?.uri,
+                });
+              } else {
+                console.log('[Scan] persistedImageUri scheme ok', { scheme, persistedImageUri });
+              }
+            }
+
             currentEntryIdRef.current = savedEntry.id;
 
             const confidence = Number.isFinite(savedEntry.scan?.confidence) ? (savedEntry.scan.confidence as number) : 0;
