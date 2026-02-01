@@ -548,7 +548,7 @@ export default function HomeScreen() {
       const safeMessages: unknown[] = Array.isArray(chatMessages) ? chatMessages : [];
       return safeMessages
         .filter((m) => (m as any)?.role !== 'system')
-        .map((m) => {
+        .map((m, index) => {
           const message = m as any;
           const partsArray: any[] = Array.isArray(message?.parts) ? message.parts : [];
           const textFromParts = partsArray
@@ -572,7 +572,19 @@ export default function HomeScreen() {
             cleanedText.trim() ||
             (role === 'assistant' ? 'I could not find an answer from the scan details.' : text);
 
-          const id = typeof message?.id === 'string' ? message.id : `msg-${Math.random().toString(16).slice(2)}`;
+          const hashText = (value: string): string => {
+            let h = 2166136261;
+            for (let i = 0; i < value.length; i += 1) {
+              h ^= value.charCodeAt(i);
+              h = Math.imul(h, 16777619);
+            }
+            return (h >>> 0).toString(16);
+          };
+
+          const rawId = typeof message?.id === 'string' ? message.id : '';
+          const stableIdSeed = `${role}|${index}|${finalText.slice(0, 120)}`;
+          const id = rawId.trim().length > 0 ? rawId : `msg-${hashText(stableIdSeed)}`;
+
           const rawCreatedAt = Number(message?.createdAt);
           const createdAtFromMessage = Number.isFinite(rawCreatedAt) ? rawCreatedAt : null;
 
