@@ -74,9 +74,9 @@ export default function JournalScreen() {
         item.scan?.bushTuckerLikely ? 'Bush tucker' : null,
       ].filter(Boolean) as string[];
 
-      const resolvedUri = safeImageUri(item.imageUri);
+      const resolvedUri = safeImageUri(item.imagePreviewUri ?? item.imageUri);
       const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
-      const rawScheme = (item.imageUri ?? '').split(':')[0] || 'none';
+      const rawScheme = ((item.imagePreviewUri ?? item.imageUri) ?? '').split(':')[0] || 'none';
       const isLocal = resolvedScheme === 'file' || resolvedScheme === 'data';
 
       return (
@@ -103,7 +103,7 @@ export default function JournalScreen() {
               onLoadStart={() => {
                 console.log('[Journal] image load start', {
                   entryId: item.id,
-                  hasCustomUri: Boolean(item.imageUri),
+                  hasCustomUri: Boolean(item.imagePreviewUri ?? item.imageUri),
                   resolvedUriScheme: resolvedScheme,
                   rawUriScheme: rawScheme,
                   isLocal,
@@ -112,7 +112,7 @@ export default function JournalScreen() {
               onLoad={() => {
                 console.log('[Journal] image loaded', {
                   entryId: item.id,
-                  hasCustomUri: Boolean(item.imageUri),
+                  hasCustomUri: Boolean(item.imagePreviewUri ?? item.imageUri),
                   resolvedUriScheme: resolvedScheme,
                   rawUriScheme: rawScheme,
                   isLocal,
@@ -121,7 +121,7 @@ export default function JournalScreen() {
               onError={(e) => {
                 console.log('[Journal] image load error', {
                   entryId: item.id,
-                  uri: item.imageUri,
+                  uri: item.imagePreviewUri ?? item.imageUri,
                   resolvedUri,
                   resolvedUriScheme: resolvedScheme,
                   rawUriScheme: rawScheme,

@@ -860,6 +860,7 @@ export default function HomeScreen() {
   const analyzeWithGemini = useCallback(
     async (imagesOverride?: ScanImage[]): Promise<void> => {
       const imagesToUse = Array.isArray(imagesOverride) ? imagesOverride : scanImages;
+      const primaryToUse = imagesToUse.length > 0 ? imagesToUse[0] : null;
 
       console.log('[Scan] analyzeWithGemini start', {
         imageCount: imagesToUse.length,
@@ -1137,21 +1138,22 @@ Return JSON with keys:
               commonName: parsed.commonName,
               scientificName: parsed.scientificName,
               confidence: parsed.confidence,
-              imageBase64: scanImages[0]?.base64 ?? null,
-              imageUri: primaryImage?.uri ?? null,
+              imageBase64: primaryToUse?.base64 ?? null,
+              imageUri: primaryToUse?.uri ?? null,
             });
 
             setScanPhase('saving');
 
-            let persistedImageUri: string | undefined = primaryImage?.uri ?? undefined;
-            const base64 = scanImages[0]?.base64;
-            const mimeType = scanImages[0]?.mimeType;
+            let persistedImageUri: string | undefined = primaryToUse?.uri ?? undefined;
+            let previewImageUri: string | undefined = primaryToUse?.previewUri ?? undefined;
+            const base64 = primaryToUse?.base64;
+            const mimeType = primaryToUse?.mimeType;
 
             if (Platform.OS === 'web') {
               if (typeof base64 === 'string' && base64.length > 0) {
                 try {
                   const manipResult = await ImageManipulator.manipulateAsync(
-                    primaryImage?.uri ?? '',
+                    primaryToUse?.uri ?? '',
                     [{ resize: { width: 1200 } }],
                     {
                       compress: 0.72,
@@ -1175,7 +1177,7 @@ Return JSON with keys:
                   console.log('[Scan] ImageManipulator failed; falling back to original base64 (web)', { message, mimeType: mt, length: base64.length });
                 }
               } else {
-                console.log('[Scan] web scan has no base64; using original uri (non-persistent)', { uri: primaryImage?.uri });
+                console.log('[Scan] web scan has no base64; using original uri (non-persistent)', { uri: primaryToUse?.uri });
               }
             } else {
               const rawDocDirUri =
@@ -1197,7 +1199,7 @@ Return JSON with keys:
 
                 const safeFileStem = entryId.replace(/[^a-z0-9-_]+/gi, '-');
                 const dest = `${scanDirUri}${safeFileStem}.jpg`;
-                const from = primaryImage?.uri ?? '';
+                const from = primaryToUse?.uri ?? '';
                 const fromScheme = from.split(':')[0];
 
                 const attemptTranscodeToJpeg = async () => {
@@ -1259,18 +1261,18 @@ Return JSON with keys:
                           console.log('[Scan] persisted scan photo via base64 write (final fallback)', { dest, length: base64.length });
                         } catch (writeErr) {
                           const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
-                          persistedImageUri = primaryImage?.uri ?? undefined;
+                          persistedImageUri = primaryToUse?.uri ?? undefined;
                           console.log('[Scan] base64 write failed; using original uri', {
                             writeMsg,
-                            originalUri: primaryImage?.uri,
-                            originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                            originalUri: primaryToUse?.uri,
+                            originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
                           });
                         }
                       } else {
-                        persistedImageUri = primaryImage?.uri ?? undefined;
+                        persistedImageUri = primaryToUse?.uri ?? undefined;
                         console.log('[Scan] no base64 available; using original uri', {
-                          originalUri: primaryImage?.uri,
-                          originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                          originalUri: primaryToUse?.uri,
+                          originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
                         });
                       }
                     }
@@ -1281,23 +1283,46 @@ Return JSON with keys:
                       console.log('[Scan] persisted scan photo via base64 write (non-file uri scheme)', { fromScheme, dest, length: base64.length });
                     } catch (writeErr) {
                       const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
-                      persistedImageUri = primaryImage?.uri ?? undefined;
+                      persistedImageUri = primaryToUse?.uri ?? undefined;
                       console.log('[Scan] base64 write failed; using original uri', {
                         writeMsg,
-                        originalUri: primaryImage?.uri,
-                        originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                        originalUri: primaryToUse?.uri,
+                        originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
                       });
                     }
                   } else {
-                    persistedImageUri = primaryImage?.uri ?? undefined;
+                    persistedImageUri = primaryToUse?.uri ?? undefined;
                     console.log('[Scan] cannot persist non-file uri (no base64 available); using original uri', {
-                      originalUri: primaryImage?.uri,
-                      originalUriScheme: (primaryImage?.uri ?? '').split(':')[0],
+                      originalUri: primaryToUse?.uri,
+                      originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
                     });
                   }
                 }
               } else {
                 console.log('[Scan] skipping photo persist (no document/cache directory)', { platform: Platform.OS });
+              }
+
+              if (typeof previewImageUri !== 'string' || previewImageUri.length === 0) {
+                if (typeof base64 === 'string' && base64.length > 0) {
+                  try {
+                    const manipPreview = await ImageManipulator.manipulateAsync(
+                      primaryToUse?.uri ?? '',
+                      [{ resize: { width: 900 } }],
+                      {
+                        compress: 0.65,
+                        format: ImageManipulator.SaveFormat.JPEG,
+                        base64: true,
+                      },
+                    );
+                    const outBase64 = typeof manipPreview.base64 === 'string' && manipPreview.base64.length > 0 ? manipPreview.base64 : base64;
+                    previewImageUri = `data:image/jpeg;base64,${outBase64}`;
+                    console.log('[Scan] generated preview image URI', { outLength: outBase64.length });
+                  } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    previewImageUri = `data:${typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg'};base64,${base64}`;
+                    console.log('[Scan] preview ImageManipulator failed; using raw base64', { message, length: base64.length });
+                  }
+                }
               }
             }
 
@@ -1347,6 +1372,7 @@ Return JSON with keys:
               id: entryId,
               title: parsed.commonName?.trim().length ? parsed.commonName : 'Unconfirmed Plant',
               imageUri: persistedImageUri,
+              imagePreviewUri: previewImageUri,
               chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
             });
@@ -1358,7 +1384,7 @@ Return JSON with keys:
                 console.log('[Scan] WARNING: persistedImageUri is a non-file scheme; it may not render later', {
                   persistedImageUri,
                   scheme,
-                  originalUri: primaryImage?.uri,
+                  originalUri: primaryToUse?.uri,
                 });
               } else {
                 console.log('[Scan] persistedImageUri scheme ok', { scheme, persistedImageUri });
@@ -1412,7 +1438,7 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
+  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, scanImages]);
 
   const collectImages = useCallback(
     async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {

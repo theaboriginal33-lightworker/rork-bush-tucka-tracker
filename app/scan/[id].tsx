@@ -113,6 +113,10 @@ export default function ScanDetailsScreen() {
 
   const { getEntryById, updateEntry, removeEntry } = useScanJournal();
   const entry = getEntryById(entryId);
+  const entryDisplayImageUri = useMemo(() => {
+    if (!entry) return null;
+    return safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
+  }, [entry]);
 
   const [titleDraft, setTitleDraft] = useState<string>(entry?.title ?? '');
   const [notesDraft, setNotesDraft] = useState<string>(entry?.notes ?? '');
@@ -244,7 +248,7 @@ export default function ScanDetailsScreen() {
   const sharePhoto = useCallback(async () => {
     if (!entry) return;
 
-    const imageUri = entry.imageUri;
+    const imageUri = entry.imageUri ?? entry.imagePreviewUri;
     if (!imageUri) {
       Alert.alert('No photo saved', 'This scan does not have an attached photo to share.');
       return;
@@ -554,7 +558,7 @@ export default function ScanDetailsScreen() {
             <Image
               source={{
                 uri:
-                  safeImageUri(entry.imageUri) ??
+                  entryDisplayImageUri ??
                   'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop',
               }}
               style={styles.heroImage}
@@ -565,7 +569,7 @@ export default function ScanDetailsScreen() {
               onError={(e) => {
                 console.log('[ScanDetails] hero image load error', {
                   entryId: entry.id,
-                  uri: entry.imageUri,
+                  uri: entryDisplayImageUri,
                   error: (e as unknown as { error?: string })?.error,
                 });
               }}

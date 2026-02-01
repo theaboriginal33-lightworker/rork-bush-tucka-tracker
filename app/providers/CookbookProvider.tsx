@@ -26,7 +26,7 @@ function normalizeCookEntryFromScan(scanEntry: ScanJournalEntry): CookRecipeEntr
     createdAt: scanEntry.createdAt,
     scanEntryId: scanEntry.id,
     title: String(scanEntry.title ?? scan.commonName ?? 'Unconfirmed Plant'),
-    imageUri: scanEntry.imageUri,
+    imageUri: scanEntry.imagePreviewUri ?? scanEntry.imageUri,
     commonName: String(scan.commonName ?? 'Unconfirmed Plant'),
     scientificName: scan.scientificName ? String(scan.scientificName) : undefined,
     confidence: Number.isFinite(scan.confidence) ? Math.max(0, Math.min(1, Number(scan.confidence))) : 0,

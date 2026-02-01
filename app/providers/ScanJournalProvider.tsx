@@ -62,6 +62,7 @@ export type ScanJournalEntry = {
   locationName?: string;
   location?: ScanJournalLocation;
   imageUri?: string;
+  imagePreviewUri?: string;
   notes?: string;
   chatHistory?: ScanJournalChatMessage[];
   scan: GeminiScanResult;
@@ -149,6 +150,7 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
     locationName: input.locationName ? String(input.locationName) : undefined,
     location,
     imageUri: input.imageUri ? String(input.imageUri) : undefined,
+    imagePreviewUri: input.imagePreviewUri ? String(input.imagePreviewUri) : undefined,
     notes: typeof input.notes === 'string' ? input.notes : undefined,
     chatHistory,
     scan: normalizedScan,
@@ -293,6 +295,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
           locationName: entryInput.locationName,
           location: entryInput.location,
           imageUri: entryInput.imageUri,
+          imagePreviewUri: entryInput.imagePreviewUri,
           notes: entryInput.notes,
           chatHistory: entryInput.chatHistory,
           scan: entryInput.scan,
@@ -314,6 +317,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
           locationName: entryInput.locationName,
           location: entryInput.location,
           imageUri: entryInput.imageUri,
+          imagePreviewUri: entryInput.imagePreviewUri,
           notes: entryInput.notes,
           chatHistory: entryInput.chatHistory,
           scan: entryInput.scan,
