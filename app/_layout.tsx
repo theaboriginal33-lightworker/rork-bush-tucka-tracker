@@ -2,8 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
@@ -26,48 +25,37 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [splashHidden, setSplashHidden] = useState<boolean>(false);
-
   useEffect(() => {
     console.log('[RootLayout] mounted');
 
     let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      console.log('[SplashScreen] hideAsync timeout fallback (continuing render)');
+      if (!cancelled) {
+        void SplashScreen.hideAsync().catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[SplashScreen] hideAsync failed (timeout fallback)', { message });
+        });
+      }
+    }, 1500);
+
     void SplashScreen.hideAsync()
       .then(() => {
         console.log('[SplashScreen] hideAsync ok');
-        if (!cancelled) setSplashHidden(true);
       })
       .catch((e) => {
         const message = e instanceof Error ? e.message : String(e);
         console.log('[SplashScreen] hideAsync failed', { message });
-        if (!cancelled) setSplashHidden(true);
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
   }, []);
-
-  if (!splashHidden) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: '#07110B',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 24,
-        }}
-        testID="app-starting-container">
-        <Text style={{ color: '#EAF6EE', fontSize: 16, fontWeight: '700', textAlign: 'center' }} testID="app-starting-title">
-          Starting…
-        </Text>
-        <Text style={{ color: '#9BB3A4', marginTop: 10, textAlign: 'center' }} testID="app-starting-subtitle">
-          Loading the app UI
-        </Text>
-      </View>
-    );
-  }
 
   return (
     <QueryClientProvider client={queryClient}>
