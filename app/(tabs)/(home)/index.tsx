@@ -1781,7 +1781,7 @@ Return JSON with keys:
               <View style={styles.resultHeader}>
                 <View style={styles.resultTitleRow}>
                   <Sparkles size={18} color={COLORS.primary} />
-                  <Text style={styles.resultTitle}>Gemini Detection</Text>
+                  <Text style={styles.resultTitle}>Bush Tucka ID</Text>
                 </View>
                 <TouchableOpacity style={styles.rescanButton} onPress={onPressRescan} disabled={analyzing} testID="scan-rescan-button">
                   <Text style={styles.rescanText}>{analyzing ? 'Scanning…' : 'Rescan'}</Text>
