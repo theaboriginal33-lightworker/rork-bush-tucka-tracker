@@ -698,8 +698,20 @@ export default function HomeScreen() {
 
       try {
         const file = new File(Paths.cache, safeName);
-        file.create();
-        file.write(exportText);
+        try {
+          file.create({ intermediates: true, overwrite: true });
+        } catch (createError) {
+          const createMessage = createError instanceof Error ? createError.message : String(createError);
+          console.log('[TuckaGuide] file.create failed (will continue)', { createMessage, uri: file.uri });
+        }
+
+        try {
+          file.write(exportText, { encoding: 'utf8' });
+        } catch (writeError) {
+          const writeMessage = writeError instanceof Error ? writeError.message : String(writeError);
+          console.log('[TuckaGuide] file.write failed', { writeMessage, uri: file.uri });
+          throw writeError;
+        }
 
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
