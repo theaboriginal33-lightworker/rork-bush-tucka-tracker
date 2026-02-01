@@ -124,6 +124,8 @@ export default function ScanDetailsScreen() {
   const [latDraft, setLatDraft] = useState<string>(entry?.location ? String(entry.location.latitude) : '');
   const [lngDraft, setLngDraft] = useState<string>(entry?.location ? String(entry.location.longitude) : '');
 
+  const [activeTab, setActiveTab] = useState<'guide' | 'details'>('guide');
+
   useEffect(() => {
     if (!entry) return;
     setTitleDraft(entry.title ?? '');
@@ -598,219 +600,291 @@ export default function ScanDetailsScreen() {
 
 
 
-          <Section title="Edit title">
-            <TextInput
-              value={titleDraft}
-              onChangeText={setTitleDraft}
-              placeholder="e.g. Backyard find"
-              placeholderTextColor={COLORS.textSecondary}
-              style={styles.fieldInputSolo}
-              testID="scan-details-edit-title"
-            />
-            <TouchableOpacity style={styles.primaryButton} onPress={onSaveTitle} testID="scan-details-save-title">
-              <Text style={styles.primaryButtonText}>Save title</Text>
+          <View style={styles.tabsWrap} testID="scan-details-tabs">
+            <TouchableOpacity
+              style={[styles.tabPill, activeTab === 'guide' ? styles.tabPillActive : null]}
+              onPress={() => setActiveTab('guide')}
+              testID="scan-details-tab-guide"
+            >
+              <Text style={[styles.tabPillText, activeTab === 'guide' ? styles.tabPillTextActive : null]}>Tucka Guide</Text>
             </TouchableOpacity>
-          </Section>
+            <TouchableOpacity
+              style={[styles.tabPill, activeTab === 'details' ? styles.tabPillActive : null]}
+              onPress={() => setActiveTab('details')}
+              testID="scan-details-tab-details"
+            >
+              <Text style={[styles.tabPillText, activeTab === 'details' ? styles.tabPillTextActive : null]}>Details</Text>
+            </TouchableOpacity>
+          </View>
 
-          <Section title="Safety">
-            {confidenceGate.level === 'confident' ? (
-              <>
-                <Text style={styles.bodyText}>{entry.scan.safety.summary || 'No safety summary available.'}</Text>
-                {entry.scan.safety.keyRisks.length > 0 ? (
+          {activeTab === 'guide' ? (
+            <>
+              <View style={styles.guideHeaderCard} testID="scan-details-guide-header">
+                <View style={styles.guideHeaderTop}>
+                  <View style={styles.guideHeaderLeft}>
+                    <Text style={styles.guideKicker}>Overview</Text>
+                    <Text style={styles.guideHeadline} numberOfLines={2}>
+                      {confidenceGate.level === 'confident' ? entry.scan.safety.summary || 'No safety summary available.' : confidenceGate.blurb}
+                    </Text>
+                  </View>
+                  <View style={styles.guideHeaderRight}>
+                    <Text style={styles.guideConfidenceLabel}>Confidence</Text>
+                    <Text style={styles.guideConfidenceValue}>{Math.round((entry?.scan?.confidence ?? 0) * 100)}%</Text>
+                    <Text style={styles.guideConfidenceHint}>{confidenceGate.title}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.guideChipRow}>
+                  <View style={styles.guideChip}>
+                    <Text style={styles.guideChipLabel}>Safety</Text>
+                    <Text style={[styles.guideChipValue, { color: safetyTone === 'good' ? COLORS.status : COLORS.warning }]}>
+                      {displaySafetyStatus.toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.guideChip}>
+                    <Text style={styles.guideChipLabel}>Category</Text>
+                    <Text style={styles.guideChipValue} numberOfLines={1}>
+                      {(entry.scan.categories[0] ?? 'Unknown').toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.guideChip}>
+                    <Text style={styles.guideChipLabel}>Season</Text>
+                    <Text style={styles.guideChipValue} numberOfLines={1}>
+                      {entry.scan.seasonality.bestMonths.length > 0 ? entry.scan.seasonality.bestMonths[0].toUpperCase() : 'ALL'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.guideStatsRow} testID="scan-details-guide-stats">
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>Easy to prepare</Text>
+                  <Text style={styles.statValue}>
+                    {(confidenceGate.level === 'confident' ? entry.scan.preparation.ease : 'unknown').toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>Seasonality</Text>
+                  <Text style={styles.statValue}>
+                    {entry.scan.seasonality.bestMonths.length > 0 ? 'SEASONAL' : 'ALL YEAR'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.insightsHeader}>
+                <Text style={styles.insightsTitle}>Insights</Text>
+              </View>
+
+              <View style={styles.insightCard} testID="scan-details-guide-prep">
+                <View style={styles.insightHeaderRow}>
+                  <CookingPot size={18} color={COLORS.secondary} />
+                  <Text style={styles.insightHeaderText}>Preparation</Text>
+                </View>
+                {confidenceGate.level === 'confident' ? (
+                  entry.scan.preparation.steps.length > 0 ? (
+                    <View style={styles.bullets}>
+                      {entry.scan.preparation.steps.map((step, idx) => (
+                        <View key={`${step}-${idx}`} style={styles.bulletRow}>
+                          <Text style={styles.stepIndex}>{idx + 1}</Text>
+                          <Text style={styles.bulletText}>{step}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.bodyText}>No preparation steps provided.</Text>
+                  )
+                ) : (
+                  <Text style={styles.bodyText}>Available when confidence is 80%+.</Text>
+                )}
+              </View>
+
+              <View style={styles.insightCard} testID="scan-details-guide-seasonality">
+                <View style={styles.insightHeaderRow}>
+                  <Sparkles size={18} color={COLORS.primary} />
+                  <Text style={styles.insightHeaderText}>Seasonality</Text>
+                </View>
+                {entry.scan.seasonality.bestMonths.length > 0 ? (
+                  <View style={styles.pillRow}>
+                    {entry.scan.seasonality.bestMonths.map((m) => (
+                      <Pill key={m} text={m} tone="neutral" />
+                    ))}
+                  </View>
+                ) : null}
+                {entry.scan.seasonality.notes ? <Text style={[styles.bodyText, { marginTop: 10 }]}>{entry.scan.seasonality.notes}</Text> : null}
+                {!entry.scan.seasonality.notes && entry.scan.seasonality.bestMonths.length === 0 ? (
+                  <Text style={styles.bodyText}>No seasonality info provided.</Text>
+                ) : null}
+              </View>
+
+              {entry.scan.warnings.length > 0 ? (
+                <View style={styles.insightCard} testID="scan-details-guide-warnings">
+                  <View style={styles.insightHeaderRow}>
+                    <ShieldAlert size={18} color={COLORS.warning} />
+                    <Text style={styles.insightHeaderText}>Warnings / lookalikes</Text>
+                  </View>
                   <View style={styles.bullets}>
-                    {entry.scan.safety.keyRisks.map((risk, idx) => (
-                      <View key={`${risk}-${idx}`} style={styles.bulletRow}>
-                        <ShieldAlert size={16} color={COLORS.warning} />
-                        <Text style={styles.bulletText}>{risk}</Text>
+                    {entry.scan.warnings.map((w, idx) => (
+                      <View key={`${w}-${idx}`} style={styles.bulletRow}>
+                        <AlertIcon />
+                        <Text style={styles.bulletText}>{w}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.insightCard} testID="scan-details-guide-uses">
+                <View style={styles.insightHeaderRow}>
+                  <Sparkles size={18} color={COLORS.secondary} />
+                  <Text style={styles.insightHeaderText}>Suggested uses</Text>
+                </View>
+                {confidenceGate.level === 'confident' && entry.scan.suggestedUses.length > 0 ? (
+                  <View style={styles.bullets}>
+                    {entry.scan.suggestedUses.map((u, idx) => (
+                      <View key={`${u}-${idx}`} style={styles.bulletRow}>
+                        <Sparkles size={16} color={COLORS.secondary} />
+                        <Text style={styles.bulletText}>{u}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : confidenceGate.level === 'confident' ? (
+                  <Text style={styles.bodyText}>No suggested uses provided.</Text>
+                ) : (
+                  <View style={styles.lockedCard} testID="scan-details-suggested-uses-locked">
+                    <View style={styles.lockedHeader}>
+                      <CookingPot size={16} color={COLORS.textSecondary} />
+                      <Text style={styles.lockedTitle}>Learning mode only</Text>
+                    </View>
+                    <Text style={styles.lockedText}>Cooking suggestions unlock with higher confidence.</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.insightCard} testID="scan-details-guide-culture">
+                <View style={styles.insightHeaderRow}>
+                  <Sparkles size={18} color={COLORS.primary} />
+                  <Text style={styles.insightHeaderText}>Cultural knowledge</Text>
+                </View>
+                <Text style={styles.bodyText} testID="scan-details-cultural-notes">
+                  {refineCulturalNotes(entry.scan.culturalKnowledge.notes) || 'No cultural notes provided.'}
+                </Text>
+                {entry.scan.culturalKnowledge.respect.length > 0 ? (
+                  <View style={[styles.bullets, { marginTop: 10 }]}>
+                    {entry.scan.culturalKnowledge.respect.map((r, idx) => (
+                      <View key={`${r}-${idx}`} style={styles.bulletRow}>
+                        <Sparkles size={16} color={COLORS.primary} />
+                        <Text style={styles.bulletText}>{r}</Text>
                       </View>
                     ))}
                   </View>
                 ) : null}
-              </>
-            ) : (
-              <View style={styles.gateCard} testID="scan-details-confidence-gate">
-                <View style={styles.gateHeader}>
-                  <ShieldAlert size={16} color={COLORS.error} />
-                  <Text style={styles.gateTitle}>{confidenceGate.title}</Text>
-                </View>
-                <Text style={styles.gateText}>{confidenceGate.blurb}</Text>
-                <Text style={styles.gateMeta}>Use the summary above as your source of truth.</Text>
+                <Text style={styles.culturalFooter} testID="cultural-footer">
+                  {CULTURAL_FOOTER}
+                </Text>
               </View>
-            )}
-          </Section>
-
-          <Section title="Prep steps">
-            {confidenceGate.level === 'confident' ? (
-              entry.scan.preparation.steps.length > 0 ? (
-                <View style={styles.bullets}>
-                  {entry.scan.preparation.steps.map((step, idx) => (
-                    <View key={`${step}-${idx}`} style={styles.bulletRow}>
-                      <Text style={styles.stepIndex}>{idx + 1}</Text>
-                      <Text style={styles.bulletText}>{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.bodyText}>No preparation steps provided.</Text>
-              )
-            ) : (
-              <Text style={styles.bodyText}>Available when confidence is 80%+.</Text>
-            )}
-          </Section>
-
-          <Section title="Seasonality">
-            {entry.scan.seasonality.bestMonths.length > 0 ? (
-              <View style={styles.pillRow}>
-                {entry.scan.seasonality.bestMonths.map((m) => (
-                  <Pill key={m} text={m} tone="neutral" />
-                ))}
-              </View>
-            ) : null}
-            {entry.scan.seasonality.notes ? <Text style={[styles.bodyText, { marginTop: 8 }]}>{entry.scan.seasonality.notes}</Text> : null}
-            {!entry.scan.seasonality.notes && entry.scan.seasonality.bestMonths.length === 0 ? (
-              <Text style={styles.bodyText}>No seasonality info provided.</Text>
-            ) : null}
-          </Section>
-
-          {entry.scan.warnings.length > 0 ? (
-            <Section title="Warnings / lookalikes">
-              <View style={styles.bullets}>
-                {entry.scan.warnings.map((w, idx) => (
-                  <View key={`${w}-${idx}`} style={styles.bulletRow}>
-                    <AlertIcon />
-                    <Text style={styles.bulletText}>{w}</Text>
-                  </View>
-                ))}
-              </View>
-            </Section>
-          ) : null}
-
-          <Section title="Suggested uses">
-            {confidenceGate.level === 'confident' && entry.scan.suggestedUses.length > 0 ? (
-              <View style={styles.bullets}>
-                {entry.scan.suggestedUses.map((u, idx) => (
-                  <View key={`${u}-${idx}`} style={styles.bulletRow}>
-                    <Sparkles size={16} color={COLORS.secondary} />
-                    <Text style={styles.bulletText}>{u}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : confidenceGate.level === 'confident' ? (
-              <Text style={styles.bodyText}>No suggested uses provided.</Text>
-            ) : (
-              <View style={styles.lockedCard} testID="scan-details-suggested-uses-locked">
-                <View style={styles.lockedHeader}>
-                  <CookingPot size={16} color={COLORS.textSecondary} />
-                  <Text style={styles.lockedTitle}>Learning mode only</Text>
-                </View>
-                <Text style={styles.lockedText}>Cooking suggestions unlock with higher confidence.</Text>
-              </View>
-            )}
-          </Section>
-
-          <Section title="Cultural knowledge">
-            <Text style={styles.bodyText} testID="scan-details-cultural-notes">
-              {refineCulturalNotes(entry.scan.culturalKnowledge.notes) || 'No cultural notes provided.'}
-            </Text>
-            {entry.scan.culturalKnowledge.respect.length > 0 ? (
-              <View style={[styles.bullets, { marginTop: 10 }]}>
-                {entry.scan.culturalKnowledge.respect.map((r, idx) => (
-                  <View key={`${r}-${idx}`} style={styles.bulletRow}>
-                    <Sparkles size={16} color={COLORS.primary} />
-                    <Text style={styles.bulletText}>{r}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            <Text style={styles.culturalFooter} testID="cultural-footer">
-              {CULTURAL_FOOTER}
-            </Text>
-          </Section>
-
-          <Section title="Chat history">
-            {chatHistory.length === 0 ? (
-              <Text style={styles.bodyText}>No chat history saved for this scan yet.</Text>
-            ) : (
-              <View style={styles.chatList}>
-                {chatHistory.map((m) => (
-                  <View
-                    key={m.id}
-                    style={[styles.chatBubble, m.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant]}
-                    testID={`scan-details-chat-${m.role}-${m.id}`}
-                  >
-                    <Text style={styles.chatRole}>{m.role === 'user' ? 'You' : 'Companion'}</Text>
-                    <Text style={styles.chatText}>{m.text}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </Section>
-
-          <Section title="Your notes">
-            <TextInput
-              value={notesDraft}
-              onChangeText={setNotesDraft}
-              placeholder="Add notes (taste, smell, ID tips, who confirmed it, etc.)"
-              placeholderTextColor={COLORS.textSecondary}
-              style={styles.textArea}
-              multiline
-              testID="scan-details-notes"
-            />
-            <TouchableOpacity style={styles.primaryButton} onPress={onSave} testID="scan-details-save">
-              <Text style={styles.primaryButtonText}>Save notes</Text>
-            </TouchableOpacity>
-          </Section>
-
-          <Section title="Location">
-            <View style={styles.fieldRow}>
-              <MapPin size={16} color={COLORS.primary} />
-              <TextInput
-                value={locationNameDraft}
-                onChangeText={setLocationNameDraft}
-                placeholder="Location name (optional)"
-                placeholderTextColor={COLORS.textSecondary}
-                style={styles.fieldInput}
-                testID="scan-details-location-name"
-              />
-            </View>
-
-            <View style={styles.coordRow}>
-              <View style={styles.coordField}>
-                <Text style={styles.coordLabel}>Lat</Text>
+            </>
+          ) : (
+            <>
+              <Section title="Edit title">
                 <TextInput
-                  value={latDraft}
-                  onChangeText={setLatDraft}
-                  placeholder="-27.47"
+                  value={titleDraft}
+                  onChangeText={setTitleDraft}
+                  placeholder="e.g. Backyard find"
                   placeholderTextColor={COLORS.textSecondary}
-                  keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                  style={styles.coordInput}
-                  testID="scan-details-lat"
+                  style={styles.fieldInputSolo}
+                  testID="scan-details-edit-title"
                 />
-              </View>
-              <View style={styles.coordField}>
-                <Text style={styles.coordLabel}>Lng</Text>
-                <TextInput
-                  value={lngDraft}
-                  onChangeText={setLngDraft}
-                  placeholder="153.02"
-                  placeholderTextColor={COLORS.textSecondary}
-                  keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                  style={styles.coordInput}
-                  testID="scan-details-lng"
-                />
-              </View>
-            </View>
+                <TouchableOpacity style={styles.primaryButton} onPress={onSaveTitle} testID="scan-details-save-title">
+                  <Text style={styles.primaryButtonText}>Save title</Text>
+                </TouchableOpacity>
+              </Section>
 
-            <View style={styles.locationButtons}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={onUseCurrentLocation} testID="scan-details-use-location">
-                <Navigation size={16} color={COLORS.text} />
-                <Text style={styles.secondaryButtonText}>Use current</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButtonCompact} onPress={onSave} testID="scan-details-save-location">
-                <Text style={styles.primaryButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </Section>
+              <Section title="Chat history">
+                {chatHistory.length === 0 ? (
+                  <Text style={styles.bodyText}>No chat history saved for this scan yet.</Text>
+                ) : (
+                  <View style={styles.chatList}>
+                    {chatHistory.map((m) => (
+                      <View
+                        key={m.id}
+                        style={[styles.chatBubble, m.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant]}
+                        testID={`scan-details-chat-${m.role}-${m.id}`}
+                      >
+                        <Text style={styles.chatRole}>{m.role === 'user' ? 'You' : 'Companion'}</Text>
+                        <Text style={styles.chatText}>{m.text}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </Section>
+
+              <Section title="Your notes">
+                <TextInput
+                  value={notesDraft}
+                  onChangeText={setNotesDraft}
+                  placeholder="Add notes (taste, smell, ID tips, who confirmed it, etc.)"
+                  placeholderTextColor={COLORS.textSecondary}
+                  style={styles.textArea}
+                  multiline
+                  testID="scan-details-notes"
+                />
+                <TouchableOpacity style={styles.primaryButton} onPress={onSave} testID="scan-details-save">
+                  <Text style={styles.primaryButtonText}>Save notes</Text>
+                </TouchableOpacity>
+              </Section>
+
+              <Section title="Location">
+                <View style={styles.fieldRow}>
+                  <MapPin size={16} color={COLORS.primary} />
+                  <TextInput
+                    value={locationNameDraft}
+                    onChangeText={setLocationNameDraft}
+                    placeholder="Location name (optional)"
+                    placeholderTextColor={COLORS.textSecondary}
+                    style={styles.fieldInput}
+                    testID="scan-details-location-name"
+                  />
+                </View>
+
+                <View style={styles.coordRow}>
+                  <View style={styles.coordField}>
+                    <Text style={styles.coordLabel}>Lat</Text>
+                    <TextInput
+                      value={latDraft}
+                      onChangeText={setLatDraft}
+                      placeholder="-27.47"
+                      placeholderTextColor={COLORS.textSecondary}
+                      keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+                      style={styles.coordInput}
+                      testID="scan-details-lat"
+                    />
+                  </View>
+                  <View style={styles.coordField}>
+                    <Text style={styles.coordLabel}>Lng</Text>
+                    <TextInput
+                      value={lngDraft}
+                      onChangeText={setLngDraft}
+                      placeholder="153.02"
+                      placeholderTextColor={COLORS.textSecondary}
+                      keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+                      style={styles.coordInput}
+                      testID="scan-details-lng"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.locationButtons}>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={onUseCurrentLocation} testID="scan-details-use-location">
+                    <Navigation size={16} color={COLORS.text} />
+                    <Text style={styles.secondaryButtonText}>Use current</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.primaryButtonCompact} onPress={onSave} testID="scan-details-save-location">
+                    <Text style={styles.primaryButtonText}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              </Section>
+            </>
+          )}
 
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -964,6 +1038,192 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textSecondary,
   },
+  tabsWrap: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(11,25,17,0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(155,179,164,0.22)',
+    borderRadius: 999,
+    padding: 6,
+    marginBottom: 14,
+  },
+  tabPill: {
+    flex: 1,
+    height: 38,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabPillActive: {
+    backgroundColor: COLORS.action,
+  },
+  tabPillText: {
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+    color: COLORS.textSecondary,
+  },
+  tabPillTextActive: {
+    color: '#06120B',
+  },
+
+  guideHeaderCard: {
+    padding: 16,
+    borderRadius: 24,
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.20)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.34,
+    shadowRadius: 22,
+    elevation: 8,
+    marginBottom: 14,
+  },
+  guideHeaderTop: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  guideHeaderLeft: {
+    flex: 1,
+  },
+  guideHeaderRight: {
+    width: 110,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(7,17,11,0.9)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(155,179,164,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideKicker: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  guideHeadline: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  guideConfidenceLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
+    marginBottom: 6,
+  },
+  guideConfidenceValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.6,
+  },
+  guideConfidenceHint: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  guideChipRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  guideChip: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    backgroundColor: 'rgba(155,179,164,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(155,179,164,0.22)',
+  },
+  guideChipLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  guideChipValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: 0.2,
+  },
+
+  guideStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 10,
+  },
+  statCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(155,179,164,0.20)',
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: 0.2,
+  },
+
+  insightsHeader: {
+    paddingHorizontal: 2,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  insightsTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+
+  insightCard: {
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(155,179,164,0.20)',
+    marginBottom: 14,
+  },
+  insightHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  insightHeaderText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+
   sectionGroup: {
     marginTop: 22,
   },
