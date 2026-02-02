@@ -18,3 +18,7 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKe
 if (!hasSupabaseConfig) {
 
 }
+(async () => {
+  const { data, error } = await supabase.auth.getSession();
+  console.log("✅ Supabase session check:", !!data?.session, error?.message);
+})();
