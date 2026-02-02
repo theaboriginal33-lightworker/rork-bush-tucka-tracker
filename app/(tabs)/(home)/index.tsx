@@ -469,6 +469,7 @@ export default function HomeScreen() {
       if (!trimmed) return;
 
       if (!apiKey) {
+        setChatStatus('idle');
         setChatError(new Error('Gemini API key is missing.'));
         return;
       }
@@ -482,43 +483,53 @@ export default function HomeScreen() {
       };
 
       setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), userMsg]);
+      setChatError(null);
 
-      try {
-        setChatStatus('submitted');
+      const model = 'gemini-1.5-flash';
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-        const model = 'gemini-1.5-flash';
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
 
-        const history = (Array.isArray(chatMessagesRaw) ? chatMessagesRaw : [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .slice(-10)
-          .map((m) => {
-            const text = Array.isArray(m.parts)
-              ? m.parts
-                  .filter((p) => p?.type === 'text')
-                  .map((p) => String(p.text ?? ''))
-                  .join('')
-              : '';
-            return {
-              role: m.role === 'user' ? ('user' as const) : ('model' as const),
-              parts: [{ text }],
-            };
-          });
+      const history = (Array.isArray(chatMessagesRaw) ? chatMessagesRaw : [])
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .slice(-10)
+        .map((m) => {
+          const text = Array.isArray(m.parts)
+            ? m.parts
+                .filter((p) => p?.type === 'text')
+                .map((p) => String(p.text ?? ''))
+                .join('')
+            : '';
+          return {
+            role: m.role === 'user' ? ('user' as const) : ('model' as const),
+            parts: [{ text }],
+          };
+        });
 
-        const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
-
-        const contents = [
-          {
-            role: 'user' as const,
-            parts: [{ text: promptText }],
-          },
+      const requestBody = {
+        systemInstruction: { parts: [{ text: promptText }] },
+        contents: [
           ...history,
           {
             role: 'user' as const,
             parts: [{ text: trimmed }],
           },
-        ];
+        ],
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 500,
+        },
+      };
 
+      const parseFailureMessage = (resStatus: number, payload: unknown): string => {
+        const p = payload as { error?: { message?: unknown; status?: unknown } };
+        const apiMsg = typeof p?.error?.message === 'string' ? p.error.message : '';
+        const apiStatus = typeof p?.error?.status === 'string' ? p.error.status : '';
+        const core = apiMsg || apiStatus || `Chat request failed (${resStatus}).`;
+        return core.trim().length > 0 ? core : `Chat request failed (${resStatus}).`;
+      };
+
+      const runOnce = async (): Promise<string> => {
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const timeoutId = setTimeout(() => {
           try {
@@ -528,27 +539,53 @@ export default function HomeScreen() {
           }
         }, 25000);
 
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents, generationConfig: { temperature: 0.35, maxOutputTokens: 500 } }),
-          signal: controller?.signal,
-        }).finally(() => {
-          clearTimeout(timeoutId);
-        });
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller?.signal,
+          });
 
-        const json = (await res.json()) as GeminiApiResponse;
-        const assistantText = (() => {
-          const parts = json?.candidates?.[0]?.content?.parts ?? [];
-          return parts
+          let json: unknown = null;
+          try {
+            json = (await res.json()) as unknown;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
+            json = null;
+          }
+
+          const data = json as GeminiApiResponse | null;
+          const parts = data?.candidates?.[0]?.content?.parts ?? [];
+          const assistantText = parts
             .map((p) => (typeof p?.text === 'string' ? p.text : ''))
             .join('\n')
             .trim();
-        })();
 
-        if (!res.ok || !assistantText) {
-          const message = json?.error?.message || `Chat request failed (${res.status}).`;
-          throw new Error(message);
+          if (!res.ok || assistantText.length === 0) {
+            throw new Error(parseFailureMessage(res.status, json));
+          }
+
+          return assistantText;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      try {
+        setChatStatus('submitted');
+
+        let assistantText: string | null = null;
+        try {
+          assistantText = await runOnce();
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          const shouldRetry = /timeout|network|unavailable|overloaded|429|503/i.test(message);
+          console.log('[TuckaGuide] first attempt failed', { message, shouldRetry });
+          if (!shouldRetry) throw e;
+          await new Promise<void>((resolve) => setTimeout(resolve, 800));
+          assistantText = await runOnce();
         }
 
         const assistantMsg: AgentMessage = {
@@ -559,12 +596,24 @@ export default function HomeScreen() {
         };
 
         setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
-        setChatStatus('idle');
       } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.log('[TuckaGuide] sendMessage failed', { message });
+        const rawMessage = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] sendMessage failed', { rawMessage });
+
+        const isKeyProblem = /api key not valid|api_key_invalid|permission denied|invalid/i.test(rawMessage);
+        const isRateLimited = /rate|quota|429/i.test(rawMessage);
+
+        const userMessage = isKeyProblem
+          ? 'Tucka Guide is not configured correctly (API key).'
+          : isRateLimited
+            ? 'Tucka Guide is busy right now. Please try again in a moment.'
+            : rawMessage.trim().length > 0
+              ? rawMessage
+              : 'Could not send message. Please try again.';
+
+        setChatError(new Error(userMessage));
+      } finally {
         setChatStatus('idle');
-        setChatError(new Error('Could not send message. Please try again.'));
       }
     },
     [apiKey, chatMessagesRaw],
