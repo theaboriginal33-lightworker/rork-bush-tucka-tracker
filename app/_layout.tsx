@@ -21,17 +21,19 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  console.log('[RootLayout] render');
+
   return (
     <QueryClientProvider client={queryClient}>
-      <ScanJournalProvider>
-        <CookbookProvider>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <AppErrorBoundary>
+      <AppErrorBoundary>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <ScanJournalProvider>
+            <CookbookProvider>
               <RootLayoutNav />
-            </AppErrorBoundary>
-          </GestureHandlerRootView>
-        </CookbookProvider>
-      </ScanJournalProvider>
+            </CookbookProvider>
+          </ScanJournalProvider>
+        </GestureHandlerRootView>
+      </AppErrorBoundary>
     </QueryClientProvider>
   );
 }
