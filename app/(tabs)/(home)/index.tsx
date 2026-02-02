@@ -398,6 +398,7 @@ export default function HomeScreen() {
     error: chatError,
     setMessages: setChatMessages,
     clearError: clearChatError,
+    regenerate: regenerateChat,
   } = useRorkAgent({ tools });
 
   const chatMessages = useMemo((): unknown[] => {
@@ -407,6 +408,78 @@ export default function HomeScreen() {
     }
     return chatMessagesRaw as unknown[];
   }, [chatMessagesRaw]);
+
+  const lastUserMessageRef = useRef<string | null>(null);
+  const busyRetryRef = useRef<{ attempts: number; timer: ReturnType<typeof setTimeout> | null }>({
+    attempts: 0,
+    timer: null,
+  });
+
+  const isBusyChatError = useCallback((error: Error | undefined): boolean => {
+    if (!error) return false;
+    const message = error.message?.toLowerCase?.() ?? '';
+    return (
+      message.includes('busy') ||
+      message.includes('try again') ||
+      message.includes('temporarily unavailable') ||
+      message.includes('overloaded') ||
+      message.includes('rate limit') ||
+      message.includes('429') ||
+      message.includes('503')
+    );
+  }, []);
+
+  const getLastUserMessageId = useCallback((): string | null => {
+    if (!Array.isArray(chatMessages)) return null;
+    for (let i = chatMessages.length - 1; i >= 0; i -= 1) {
+      const message = chatMessages[i] as { role?: string; id?: string };
+      if (message?.role === 'user' && typeof message.id === 'string') {
+        return message.id;
+      }
+    }
+    return null;
+  }, [chatMessages]);
+
+  const retryChatNow = useCallback(async () => {
+    if (!isBusyChatError(chatError)) return;
+    clearChatError();
+    if (chatStatus !== 'ready' && chatStatus !== 'error') return;
+    const lastUserId = getLastUserMessageId();
+    if (lastUserId) {
+      await regenerateChat({ messageId: lastUserId });
+      return;
+    }
+    if (lastUserMessageRef.current) {
+      sendMessage(lastUserMessageRef.current);
+    }
+  }, [chatError, chatStatus, clearChatError, getLastUserMessageId, isBusyChatError, regenerateChat, sendMessage]);
+
+  useEffect(() => {
+    if (!isBusyChatError(chatError)) {
+      busyRetryRef.current.attempts = 0;
+      if (busyRetryRef.current.timer) {
+        clearTimeout(busyRetryRef.current.timer);
+        busyRetryRef.current.timer = null;
+      }
+      return;
+    }
+
+    if (busyRetryRef.current.attempts >= 2) {
+      return;
+    }
+
+    const attempt = busyRetryRef.current.attempts + 1;
+    busyRetryRef.current.attempts = attempt;
+    const delayMs = attempt === 1 ? 1200 : 2500;
+
+    if (busyRetryRef.current.timer) {
+      clearTimeout(busyRetryRef.current.timer);
+    }
+
+    busyRetryRef.current.timer = setTimeout(() => {
+      retryChatNow().catch(() => undefined);
+    }, delayMs);
+  }, [chatError, isBusyChatError, retryChatNow]);
 
   const scanContext = useMemo(() => {
     if (!scanResult) return null;
@@ -703,6 +776,7 @@ export default function HomeScreen() {
 
     const handled = await handleSupportRequest(trimmed);
     if (!handled) {
+      lastUserMessageRef.current = trimmed;
       sendMessage(trimmed);
     }
     setChatInput('');
@@ -716,6 +790,7 @@ export default function HomeScreen() {
       }
       const handled = await handleSupportRequest(prompt);
       if (!handled) {
+        lastUserMessageRef.current = prompt;
         sendMessage(prompt);
       }
     },
@@ -1651,9 +1726,18 @@ Return JSON with keys:
                 {chatError ? (
                   <View style={styles.chatErrorRow}>
                     <AlertTriangle size={16} color="#B91C1C" />
-                    <Text style={styles.chatErrorText}>{chatError.message}</Text>
-                    <TouchableOpacity style={styles.chatErrorDismiss} onPress={clearChatError}>
-                      <Text style={styles.chatErrorDismissText}>Dismiss</Text>
+                    <Text style={styles.chatErrorText}>
+                      {isBusyChatError(chatError)
+                        ? 'Tucka Guide is busy right now. Retrying…'
+                        : chatError.message}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.chatErrorDismiss}
+                      onPress={isBusyChatError(chatError) ? retryChatNow : clearChatError}
+                    >
+                      <Text style={styles.chatErrorDismissText}>
+                        {isBusyChatError(chatError) ? 'Retry now' : 'Dismiss'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 ) : null}
