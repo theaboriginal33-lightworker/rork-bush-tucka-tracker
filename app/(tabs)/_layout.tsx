@@ -8,6 +8,7 @@ import { BookOpen, ChefHat, Home, NotebookPen } from 'lucide-react-native';
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="learn"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.tabBarActive,
@@ -37,7 +38,7 @@ export default function TabLayout() {
         tabBarHideOnKeyboard: true,
       }}>
       <Tabs.Screen
-        name="(home)/index"
+        name="(home)"
         options={{
           title: 'Home',
           tabBarIcon: ({ focused, size }) => (
@@ -51,21 +52,21 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="learn/index"
+        name="journal"
         options={{
-          title: 'Learn',
+          title: 'Collection',
           tabBarIcon: ({ focused, size }) => (
-            <BookOpen
+            <NotebookPen
               color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
               size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
-              testID="tab-learn-icon"
+              testID="tab-collection-icon"
             />
           ),
-          tabBarLabel: 'Learn',
+          tabBarLabel: 'Collection',
         }}
       />
       <Tabs.Screen
-        name="cook/index"
+        name="cook"
         options={{
           title: 'Cook',
           tabBarIcon: ({ focused, size }) => (
@@ -78,25 +79,18 @@ export default function TabLayout() {
           tabBarLabel: 'Cook',
         }}
       />
-
       <Tabs.Screen
-        name="cook/[id]"
+        name="learn"
         options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="journal/index"
-        options={{
-          title: 'Journal',
+          title: 'Learn',
           tabBarIcon: ({ focused, size }) => (
-            <NotebookPen
+            <BookOpen
               color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
               size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
-              testID="tab-journal-icon"
+              testID="tab-learn-icon"
             />
           ),
-          tabBarLabel: 'Journal',
+          tabBarLabel: 'Learn',
         }}
       />
     </Tabs>

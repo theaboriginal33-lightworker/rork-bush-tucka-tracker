@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, Alert, TextInput } from 'react-native';
+import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, TextInput, Share } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import * as FileSystem from 'expo-file-system';
 import {
   AlertTriangle,
   ArrowRight,
+  BookmarkPlus,
   Bug,
+  Copy,
+  Download,
   ChevronRight,
   HelpCircle,
   Image as ImageIcon,
@@ -16,13 +19,13 @@ import {
   RefreshCcw,
   Scan,
   Send,
+  Share2,
   ShieldAlert,
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { useCookbook } from '@/app/providers/CookbookProvider';
 import { LinearGradient } from 'expo-linear-gradient';
-import { createRorkTool, useRorkAgent } from '@rork-ai/toolkit-sdk';
-import * as z from 'zod/v4';
 import { getSupportDirectory, type SupportOrganization } from '@/constants/supportDirectory';
 import {
   createScanEntryId,
@@ -31,8 +34,119 @@ import {
   type ScanJournalChatMessage,
 } from '@/app/providers/ScanJournalProvider';
 
+type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
+
+type ExpoSharingModule = typeof import('expo-sharing');
+
+type ExpoClipboardModule = typeof import('expo-clipboard');
+
+type ExpoImagePickerModule = typeof import('expo-image-picker');
+
+type ExpoImageManipulatorModule = typeof import('expo-image-manipulator');
+
+let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
+let sharingPromise: Promise<ExpoSharingModule | null> | null = null;
+let clipboardPromise: Promise<ExpoClipboardModule | null> | null = null;
+let imagePickerPromise: Promise<ExpoImagePickerModule | null> | null = null;
+let imageManipulatorPromise: Promise<ExpoImageManipulatorModule | null> | null = null;
+
+async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
+  try {
+    if (!legacyFsPromise) {
+      legacyFsPromise = import('expo-file-system/legacy')
+        .then((m) => m as LegacyFileSystemModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-file-system/legacy', { message });
+          return null;
+        });
+    }
+    return await legacyFsPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getLegacyFileSystem unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoSharing(): Promise<ExpoSharingModule | null> {
+  try {
+    if (!sharingPromise) {
+      sharingPromise = import('expo-sharing')
+        .then((m) => m as ExpoSharingModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-sharing', { message });
+          return null;
+        });
+    }
+    return await sharingPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoSharing unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoClipboard(): Promise<ExpoClipboardModule | null> {
+  try {
+    if (!clipboardPromise) {
+      clipboardPromise = import('expo-clipboard')
+        .then((m) => m as ExpoClipboardModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-clipboard', { message });
+          return null;
+        });
+    }
+    return await clipboardPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoClipboard unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoImagePicker(): Promise<ExpoImagePickerModule | null> {
+  try {
+    if (!imagePickerPromise) {
+      imagePickerPromise = import('expo-image-picker')
+        .then((m) => m as ExpoImagePickerModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-image-picker', { message });
+          return null;
+        });
+    }
+    return await imagePickerPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoImagePicker unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoImageManipulator(): Promise<ExpoImageManipulatorModule | null> {
+  try {
+    if (!imageManipulatorPromise) {
+      imageManipulatorPromise = import('expo-image-manipulator')
+        .then((m) => m as ExpoImageManipulatorModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-image-manipulator', { message });
+          return null;
+        });
+    }
+    return await imageManipulatorPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoImageManipulator unexpected error', { message });
+    return null;
+  }
+}
+
 type SafetyEdibility = {
-  status: 'safe' | 'unsafe' | 'uncertain';
+  status: 'safe' | 'caution' | 'unknown';
   summary: string;
   keyRisks: string[];
 };
@@ -72,8 +186,10 @@ type GeminiScanResult = {
   scientificName?: string;
   confidence: number;
 
-  bushTuckerLikely: boolean;
   safety: SafetyEdibility;
+  categories: string[];
+
+  bushTuckerLikely: boolean;
   preparation: Preparation;
   seasonality: Seasonality;
   culturalKnowledge: CulturalKnowledge;
@@ -105,15 +221,28 @@ type GeminiListModelsResponse = {
 
 export default function HomeScreen() {
   const { addEntry, updateEntry } = useScanJournal();
+  const { saveGuideEntry } = useCookbook();
   const currentEntryIdRef = useRef<string | null>(null);
 
-  type ScanImage = { uri: string; base64: string; mimeType: string };
+  type ScanImage = { uri: string; base64?: string; mimeType?: string; previewUri?: string };
   const [scanImages, setScanImages] = useState<ScanImage[]>([]);
   const primaryImage = scanImages.length > 0 ? scanImages[0] : null;
+  const primaryImageDisplayUri = primaryImage?.previewUri ?? primaryImage?.uri ?? null;
 
   const [mode, setMode] = useState<'identify' | 'identify360'>('identify');
 
+  type ScanPhase =
+    | 'idle'
+    | 'preparing'
+    | 'listing-models'
+    | 'sending'
+    | 'parsing'
+    | 'saving'
+    | 'done'
+    | 'error';
+
   const [analyzing, setAnalyzing] = useState<boolean>(false);
+  const [scanPhase, setScanPhase] = useState<ScanPhase>('idle');
   const [scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState<string>('');
@@ -159,11 +288,12 @@ export default function HomeScreen() {
   const displaySafetyStatus = useMemo((): GeminiScanResult['safety']['status'] | null => {
     if (!scanResult) return null;
     if (confidenceGate?.level === 'confident') return scanResult.safety.status;
-    return 'uncertain';
+    return 'unknown';
   }, [confidenceGate?.level, scanResult]);
 
   const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
   const chatContextKeyRef = useRef<string | null>(null);
+  const systemPromptRef = useRef<string | null>(null);
 
   const canScan = useMemo(() => {
     return scanImages.length > 0 && Boolean(apiKey);
@@ -317,89 +447,194 @@ export default function HomeScreen() {
     [supportTriggerTokens, tokenizeSupportText],
   );
 
-  const localSupportTool = useMemo(
-    () =>
-      createRorkTool({
-        description:
-          'Find local Aboriginal organisations, Land Councils, or community support contacts with phone/address details. Use when the user asks for local verification, guides, councils, or help contacts.',
-        zodSchema: z.object({
-          query: z.string().optional(),
-          region: z.string().optional(),
-          limit: z.number().int().min(1).max(6).optional(),
-        }),
-        execute: async (input) => {
-          const directory = await getSupportDirectory();
-          const queryTokens = tokenizeSupportText(input.query);
-          const regionTokens = tokenizeSupportText(input.region);
-          const searchTokens = getSearchTokens([...queryTokens, ...regionTokens]);
-          const limit = Number.isFinite(input.limit) ? Math.min(Math.max(Number(input.limit), 1), 6) : 4;
+  type AgentTextPart = { type: 'text'; text: string };
+  type AgentMessage = {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    parts: AgentTextPart[];
+    createdAt?: number;
+  };
 
-          if (searchTokens.length === 0) {
-            return JSON.stringify({
-              results: [],
-              message: 'Please share your town/state or the organisation name so I can find the right local contacts.',
-            });
-          }
+  const [chatMessagesRaw, setChatMessages] = useState<AgentMessage[]>([]);
+  const [chatStatus, setChatStatus] = useState<'idle' | 'submitted' | 'streaming'>('idle');
+  const [chatError, setChatError] = useState<Error | null>(null);
+  const lastUserMessageRef = useRef<string | null>(null);
 
-          const matches = directory.filter((entry: SupportOrganization) => {
-            const haystack = [
-              entry.name,
-              entry.region,
-              entry.address ?? '',
-              entry.notes ?? '',
-              entry.phone ?? '',
-              entry.email ?? '',
-              entry.website ?? '',
-              ...(entry.categories ?? []),
-              ...(entry.tags ?? []),
+  const clearChatError = useCallback(() => {
+    setChatError(null);
+  }, []);
+
+  const sendMessage = useCallback(
+    async (userText: string, options?: { retry?: boolean }) => {
+      const trimmed = String(userText ?? '').trim();
+      if (!trimmed) return;
+      const isRetry = options?.retry === true;
+
+      if (!apiKey) {
+        setChatStatus('idle');
+        setChatError(new Error('Gemini API key is missing.'));
+        return;
+      }
+
+      if (!isRetry) {
+        const now = Date.now();
+        const userMsg: AgentMessage = {
+          id: `user-${now}-${Math.random().toString(16).slice(2)}`,
+          role: 'user',
+          parts: [{ type: 'text', text: trimmed }],
+          createdAt: now,
+        };
+
+        lastUserMessageRef.current = trimmed;
+        setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), userMsg]);
+      }
+      setChatError(null);
+
+      const model = 'gemini-1.5-flash';
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
+
+      const history = (Array.isArray(chatMessagesRaw) ? chatMessagesRaw : [])
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .slice(-10)
+        .map((m) => {
+          const text = Array.isArray(m.parts)
+            ? m.parts
+                .filter((p) => p?.type === 'text')
+                .map((p) => String(p.text ?? ''))
+                .join('')
+            : '';
+          return {
+            role: m.role === 'user' ? ('user' as const) : ('model' as const),
+            parts: [{ text }],
+          };
+        });
+
+      const shouldAppendUser =
+        !isRetry || history.length === 0 || history[history.length - 1]?.role !== 'user';
+
+      const requestBody = {
+        systemInstruction: { parts: [{ text: promptText }] },
+        contents: shouldAppendUser
+          ? [
+              ...history,
+              {
+                role: 'user' as const,
+                parts: [{ text: trimmed }],
+              },
             ]
-              .map((value) => normalizeSupportText(value))
-              .join(' ');
+          : history,
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 500,
+        },
+      };
 
-            if (!searchTokens.every((token) => haystack.includes(token))) return false;
-            return true;
+      const parseFailureMessage = (resStatus: number, payload: unknown): string => {
+        const p = payload as { error?: { message?: unknown; status?: unknown } };
+        const apiMsg = typeof p?.error?.message === 'string' ? p.error.message : '';
+        const apiStatus = typeof p?.error?.status === 'string' ? p.error.status : '';
+        const core = apiMsg || apiStatus || `Chat request failed (${resStatus}).`;
+        return core.trim().length > 0 ? core : `Chat request failed (${resStatus}).`;
+      };
+
+      const runOnce = async (): Promise<string> => {
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = setTimeout(() => {
+          try {
+            controller?.abort();
+          } catch {
+            
+          }
+        }, 25000);
+
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller?.signal,
           });
 
-          const results = matches.slice(0, limit).map((entry) => ({
-            name: entry.name,
-            region: entry.region,
-            categories: entry.categories,
-            phone: entry.phone ?? null,
-            address: entry.address ?? null,
-            website: entry.website ?? null,
-            email: entry.email ?? null,
-            notes: entry.notes ?? null,
-          }));
-
-          if (results.length === 0) {
-            return JSON.stringify({
-              results: [],
-              message:
-                'No local support contacts are configured yet. Ask the user for their region/state or add contacts in the support directory.',
-            });
+          let json: unknown = null;
+          try {
+            json = (await res.json()) as unknown;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
+            json = null;
           }
 
-          return JSON.stringify({ results });
-        },
-      }),
-    [getSearchTokens, normalizeSupportText, tokenizeSupportText],
-  );
+          const data = json as GeminiApiResponse | null;
+          const parts = data?.candidates?.[0]?.content?.parts ?? [];
+          const assistantText = parts
+            .map((p) => (typeof p?.text === 'string' ? p.text : ''))
+            .join('\n')
+            .trim();
 
-  const tools = useMemo(
-    () => ({
-      local_support: localSupportTool,
-    }),
-    [localSupportTool],
+          if (!res.ok || assistantText.length === 0) {
+            throw new Error(parseFailureMessage(res.status, json));
+          }
+
+          return assistantText;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      try {
+        setChatStatus('submitted');
+
+        let assistantText: string | null = null;
+        const retryDelays = [0, 900, 2200];
+        for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+          if (retryDelays[attempt] > 0) {
+            await new Promise<void>((resolve) => setTimeout(resolve, retryDelays[attempt]));
+          }
+          try {
+            assistantText = await runOnce();
+            break;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            const shouldRetry = /timeout|network|unavailable|overloaded|rate|quota|busy|429|503/i.test(message);
+            console.log('[TuckaGuide] attempt failed', { attempt, message, shouldRetry });
+            if (!shouldRetry || attempt === retryDelays.length - 1) {
+              throw e;
+            }
+          }
+        }
+
+        const assistantMsg: AgentMessage = {
+          id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: assistantText }],
+          createdAt: Date.now(),
+        };
+
+        setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
+      } catch (e) {
+        const rawMessage = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] sendMessage failed', { rawMessage });
+
+        const isKeyProblem = /api key not valid|api_key_invalid|permission denied|invalid/i.test(rawMessage);
+        const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable/i.test(rawMessage);
+
+        const userMessage = isKeyProblem
+          ? 'Tucka Guide is not configured correctly (API key).'
+          : isRateLimited
+            ? 'Tucka Guide is busy right now. Please try again in a moment.'
+            : rawMessage.trim().length > 0
+              ? rawMessage
+              : 'Could not send message. Please try again.';
+
+        setChatError(new Error(userMessage));
+      } finally {
+        setChatStatus('idle');
+      }
+    },
+    [apiKey, chatMessagesRaw],
   );
-  const {
-    messages: chatMessagesRaw,
-    sendMessage,
-    status: chatStatus,
-    error: chatError,
-    setMessages: setChatMessages,
-    clearError: clearChatError,
-    regenerate: regenerateChat,
-  } = useRorkAgent({ tools });
 
   const chatMessages = useMemo((): unknown[] => {
     if (!Array.isArray(chatMessagesRaw)) {
@@ -409,13 +644,12 @@ export default function HomeScreen() {
     return chatMessagesRaw as unknown[];
   }, [chatMessagesRaw]);
 
-  const lastUserMessageRef = useRef<string | null>(null);
   const busyRetryRef = useRef<{ attempts: number; timer: ReturnType<typeof setTimeout> | null }>({
     attempts: 0,
     timer: null,
   });
 
-  const isBusyChatError = useCallback((error: Error | undefined): boolean => {
+  const isBusyChatError = useCallback((error: Error | null): boolean => {
     if (!error) return false;
     const message = error.message?.toLowerCase?.() ?? '';
     return (
@@ -423,36 +657,20 @@ export default function HomeScreen() {
       message.includes('try again') ||
       message.includes('temporarily unavailable') ||
       message.includes('overloaded') ||
-      message.includes('rate limit') ||
+      message.includes('rate') ||
+      message.includes('quota') ||
       message.includes('429') ||
       message.includes('503')
     );
   }, []);
 
-  const getLastUserMessageId = useCallback((): string | null => {
-    if (!Array.isArray(chatMessages)) return null;
-    for (let i = chatMessages.length - 1; i >= 0; i -= 1) {
-      const message = chatMessages[i] as { role?: string; id?: string };
-      if (message?.role === 'user' && typeof message.id === 'string') {
-        return message.id;
-      }
-    }
-    return null;
-  }, [chatMessages]);
-
   const retryChatNow = useCallback(async () => {
     if (!isBusyChatError(chatError)) return;
     clearChatError();
-    if (chatStatus !== 'ready' && chatStatus !== 'error') return;
-    const lastUserId = getLastUserMessageId();
-    if (lastUserId) {
-      await regenerateChat({ messageId: lastUserId });
-      return;
-    }
-    if (lastUserMessageRef.current) {
-      sendMessage(lastUserMessageRef.current);
-    }
-  }, [chatError, chatStatus, clearChatError, getLastUserMessageId, isBusyChatError, regenerateChat, sendMessage]);
+    if (chatStatus !== 'idle') return;
+    if (!lastUserMessageRef.current) return;
+    await sendMessage(lastUserMessageRef.current, { retry: true });
+  }, [chatError, chatStatus, clearChatError, isBusyChatError, sendMessage]);
 
   useEffect(() => {
     if (!isBusyChatError(chatError)) {
@@ -470,7 +688,7 @@ export default function HomeScreen() {
 
     const attempt = busyRetryRef.current.attempts + 1;
     busyRetryRef.current.attempts = attempt;
-    const delayMs = attempt === 1 ? 1200 : 2500;
+    const delayMs = attempt === 1 ? 1500 : 3000;
 
     if (busyRetryRef.current.timer) {
       clearTimeout(busyRetryRef.current.timer);
@@ -479,7 +697,16 @@ export default function HomeScreen() {
     busyRetryRef.current.timer = setTimeout(() => {
       retryChatNow().catch(() => undefined);
     }, delayMs);
+
+    return () => {
+      if (busyRetryRef.current.timer) {
+        clearTimeout(busyRetryRef.current.timer);
+        busyRetryRef.current.timer = null;
+      }
+    };
   }, [chatError, isBusyChatError, retryChatNow]);
+
+  const chatCreatedAtByIdRef = useRef<Record<string, number>>({});
 
   const scanContext = useMemo(() => {
     if (!scanResult) return null;
@@ -521,8 +748,12 @@ export default function HomeScreen() {
           ? 'Confidence gate: 60–79%. Treat identification as provisional. Do NOT give cooking/preparation steps or consumption advice. Focus on verification steps, lookalikes, and safe observation.'
           : 'Confidence gate: <60%. Treat identification as very uncertain. Do NOT give cooking/preparation steps or consumption advice. Focus on observation tips and how to rescan/verify.';
 
-    return `You are the Bush Tucker companion for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nIf the user asks for local organisations, contact details, or verification help, call the local_support tool. Only share phone/address/website details that come from the tool results. If the tool returns no results, say you do not have local contacts yet and ask for their town/state or to add contacts.\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
+    return `You are the Tucka Guide for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nIf the user asks for local organisations, contact details, or verification help, call the local_support tool. Only share phone/address/website details that come from the tool results. If the tool returns no results, say you do not have local contacts yet and ask for their town/state or to add contacts.\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
   }, [confidenceGate?.level, scanContext, scanResult]);
+
+  useEffect(() => {
+    systemPromptRef.current = systemPrompt;
+  }, [systemPrompt]);
 
   const assistantGreeting = useMemo(() => {
     if (!scanResult) return '';
@@ -541,36 +772,6 @@ export default function HomeScreen() {
 
     return `I can answer questions about ${scanResult.commonName}. ${gateLine} ${safetyNote} Need local help? Ask for nearby organisations and include your town or region.`;
   }, [confidenceGate?.level, scanResult]);
-
-  useEffect(() => {
-    if (!scanResult || !systemPrompt || !scanContextKey) {
-      if (chatContextKeyRef.current) {
-        chatContextKeyRef.current = null;
-        setChatMessages([]);
-        setChatInput('');
-      }
-      return;
-    }
-
-    if (chatContextKeyRef.current === scanContextKey) {
-      return;
-    }
-
-    chatContextKeyRef.current = scanContextKey;
-    setChatMessages([
-      {
-        id: `system-${scanContextKey}`,
-        role: 'system',
-        parts: [{ type: 'text', text: systemPrompt }],
-      },
-      {
-        id: `assistant-${scanContextKey}`,
-        role: 'assistant',
-        parts: [{ type: 'text', text: assistantGreeting }],
-      },
-    ] as unknown as Parameters<typeof setChatMessages>[0]);
-    setChatInput('');
-  }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
 
   const chatDisplayMessages = useMemo(() => {
     const sanitizeChatText = (value: string): string => {
@@ -602,7 +803,7 @@ export default function HomeScreen() {
       const safeMessages: unknown[] = Array.isArray(chatMessages) ? chatMessages : [];
       return safeMessages
         .filter((m) => (m as any)?.role !== 'system')
-        .map((m) => {
+        .map((m, index) => {
           const message = m as any;
           const partsArray: any[] = Array.isArray(message?.parts) ? message.parts : [];
           const textFromParts = partsArray
@@ -626,35 +827,296 @@ export default function HomeScreen() {
             cleanedText.trim() ||
             (role === 'assistant' ? 'I could not find an answer from the scan details.' : text);
 
+          const hashText = (value: string): string => {
+            let h = 2166136261;
+            for (let i = 0; i < value.length; i += 1) {
+              h ^= value.charCodeAt(i);
+              h = Math.imul(h, 16777619);
+            }
+            return (h >>> 0).toString(16);
+          };
+
+          const rawId = typeof message?.id === 'string' ? message.id : '';
+          const stableIdSeed = `${role}|${index}|${finalText.slice(0, 120)}`;
+          const id = rawId.trim().length > 0 ? rawId : `msg-${hashText(stableIdSeed)}`;
+
+          const rawCreatedAt = Number(message?.createdAt);
+          const createdAtFromMessage = Number.isFinite(rawCreatedAt) ? rawCreatedAt : null;
+
+          const seen = chatCreatedAtByIdRef.current[id];
+          const createdAt =
+            typeof seen === 'number'
+              ? seen
+              : typeof createdAtFromMessage === 'number'
+                ? createdAtFromMessage
+                : Date.now();
+          if (typeof seen !== 'number') {
+            chatCreatedAtByIdRef.current[id] = createdAt;
+          }
+
           return {
-            id: typeof message?.id === 'string' ? message.id : `msg-${Math.random().toString(16).slice(2)}`,
+            id,
             role,
             text: finalText,
+            createdAt,
           };
         })
-        .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string } => Boolean(message));
+        .filter((message): message is { id: string; role: 'user' | 'assistant'; text: string; createdAt: number } => Boolean(message));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.log('[Chat] chatDisplayMessages compute failed', { msg });
-      return [] as { id: string; role: 'user' | 'assistant'; text: string }[];
+      return [] as { id: string; role: 'user' | 'assistant'; text: string; createdAt: number }[];
     }
   }, [chatMessages]);
 
+  const [chatTimeout, setChatTimeout] = useState<boolean>(false);
+  const chatBusySinceRef = useRef<number | null>(null);
+
+  const resetChatToGreeting = useCallback(() => {
+    if (!scanResult || !systemPrompt || !scanContextKey) {
+      setChatMessages([]);
+      setChatInput('');
+      chatContextKeyRef.current = null;
+      return;
+    }
+
+    chatContextKeyRef.current = scanContextKey;
+    setChatMessages([
+      {
+        id: `system-${scanContextKey}`,
+        role: 'system',
+        parts: [{ type: 'text', text: systemPrompt }],
+      },
+      {
+        id: `assistant-${scanContextKey}`,
+        role: 'assistant',
+        parts: [{ type: 'text', text: assistantGreeting }],
+      },
+    ] as unknown as Parameters<typeof setChatMessages>[0]);
+    setChatInput('');
+    setChatTimeout(false);
+    chatBusySinceRef.current = null;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
+
+  useEffect(() => {
+    if (!scanResult || !systemPrompt || !scanContextKey) {
+      if (chatContextKeyRef.current) {
+        chatContextKeyRef.current = null;
+        setChatMessages([]);
+        setChatInput('');
+        setChatTimeout(false);
+        chatBusySinceRef.current = null;
+      }
+      return;
+    }
+
+    if (chatContextKeyRef.current === scanContextKey) {
+      return;
+    }
+
+    resetChatToGreeting();
+  }, [resetChatToGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
+
   const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
+
+  useEffect(() => {
+    if (!chatBusy) {
+      setChatTimeout(false);
+      chatBusySinceRef.current = null;
+      return;
+    }
+
+    if (chatBusySinceRef.current === null) {
+      chatBusySinceRef.current = Date.now();
+      setChatTimeout(false);
+    }
+
+    const handle = setTimeout(() => {
+      const since = chatBusySinceRef.current;
+      const elapsedMs = typeof since === 'number' ? Date.now() - since : 0;
+      console.log('[TuckaGuide] chat busy watchdog fired', { chatStatus, elapsedMs });
+      setChatTimeout(true);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    }, 45000);
+
+    return () => {
+      clearTimeout(handle);
+    };
+  }, [chatBusy, chatStatus]);
+
+  const [savedGuideByMessageId, setSavedGuideByMessageId] = useState<Record<string, boolean>>({});
+
+  const buildGuideExportText = useCallback(
+    (assistantText: string): string => {
+      const now = new Date();
+      const lines: string[] = [];
+      lines.push('Tucka Guide');
+      if (scanResult?.commonName) lines.push(`Plant: ${scanResult.commonName}`);
+      if (scanResult?.scientificName) lines.push(`Scientific: ${scanResult.scientificName}`);
+      if (scanResult?.confidence != null) lines.push(`Confidence: ${Math.round(scanResult.confidence * 100)}%`);
+      if (scanResult?.safety?.status) lines.push(`Safety: ${String(scanResult.safety.status).toUpperCase()}`);
+      lines.push(`Saved: ${now.toLocaleString()}`);
+      lines.push('');
+      lines.push(assistantText.trim());
+      lines.push('');
+      lines.push('—');
+      lines.push('Always verify locally before consuming.');
+      return lines.join('\n');
+    },
+    [scanResult?.commonName, scanResult?.confidence, scanResult?.scientificName, scanResult?.safety?.status],
+  );
+
+  const copyGuideText = useCallback(
+    async (assistantText: string) => {
+      const exportText = buildGuideExportText(assistantText);
+      try {
+        const Clipboard = await getExpoClipboard();
+        if (!Clipboard) {
+          await Share.share({ message: exportText });
+          return;
+        }
+        await Clipboard.setStringAsync(exportText);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert('Copied', 'Tucka Guide answer copied to clipboard.');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] copy failed', { message });
+        Alert.alert('Could not copy', 'Please try again.');
+      }
+    },
+    [buildGuideExportText],
+  );
+
+  const shareOrDownloadGuideText = useCallback(
+    async (assistantText: string) => {
+      const exportText = buildGuideExportText(assistantText);
+      const safeName = `tucka-guide-${Date.now()}.txt`;
+
+      if (Platform.OS === 'web') {
+        try {
+          const hasDocument = typeof document !== 'undefined';
+          if (!hasDocument) {
+            await copyGuideText(assistantText);
+            return;
+          }
+
+          const blob = new Blob([exportText], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = safeName;
+          a.rel = 'noopener';
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          return;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[TuckaGuide] web download failed', { message });
+          await copyGuideText(assistantText);
+          return;
+        }
+      }
+
+      try {
+        const fs = await getLegacyFileSystem();
+        const baseDir = fs?.cacheDirectory ?? fs?.documentDirectory;
+        if (!baseDir) {
+          console.log('[TuckaGuide] no writable directory available');
+          await Share.share({ message: exportText });
+          return;
+        }
+
+        if (!fs) {
+          await Share.share({ message: exportText });
+          return;
+        }
+
+        const fileUri = `${baseDir}${safeName}`;
+        console.log('[TuckaGuide] writing export file', { fileUri });
+
+        await fs.writeAsStringAsync(fileUri, exportText, { encoding: fs.EncodingType.UTF8 });
+
+        const Sharing = await getExpoSharing();
+        if (Sharing) {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
+            return;
+          }
+        }
+
+        await Share.share({ message: exportText });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] share/download failed', { message });
+        Alert.alert('Could not export', message.length > 140 ? 'Please try again.' : message);
+      }
+    },
+    [buildGuideExportText, copyGuideText],
+  );
+
+  const saveGuideToCook = useCallback(
+    async (assistantText: string, messageId: string) => {
+      if (!scanResult) return;
+      if (savedGuideByMessageId[messageId]) {
+        Alert.alert('Already saved', 'This answer is already saved to Cook.');
+        return;
+      }
+
+      try {
+        const titleBase = scanResult.commonName?.trim() ? `${scanResult.commonName} – Guide` : 'Tucka Guide – Saved';
+        const saved = await saveGuideEntry({
+          title: titleBase,
+          guideText: assistantText,
+          commonName: scanResult.commonName,
+          scientificName: scanResult.scientificName,
+          imageUri: primaryImageDisplayUri ?? undefined,
+          confidence: scanResult.confidence,
+          safetyStatus: scanResult.safety.status,
+          scanEntryId: currentEntryIdRef.current ?? undefined,
+          chatMessageId: messageId,
+          suggestedUses: scanResult.suggestedUses,
+        });
+
+        setSavedGuideByMessageId((prev) => ({ ...prev, [messageId]: true }));
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert('Saved to Cook', `Saved “${saved.title}”.`);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] save to Cook failed', { message });
+        Alert.alert('Could not save', 'Please try again.');
+      }
+    },
+    [primaryImageDisplayUri, saveGuideEntry, savedGuideByMessageId, scanResult],
+  );
 
   const journalChatHistory = useMemo((): ScanJournalChatMessage[] => {
     return chatDisplayMessages.map((m) => ({
       id: String(m.id),
       role: m.role,
       text: m.text,
-      createdAt: Date.now(),
+      createdAt: Number.isFinite(m.createdAt) ? m.createdAt : Date.now(),
     }));
   }, [chatDisplayMessages]);
+
+  const lastSavedChatHashRef = useRef<string>('');
 
   useEffect(() => {
     const entryId = currentEntryIdRef.current;
     if (!entryId) return;
     if (journalChatHistory.length === 0) return;
+
+    const hash = JSON.stringify(journalChatHistory.map((m) => ({ id: m.id, role: m.role, text: m.text, createdAt: m.createdAt })));
+    if (lastSavedChatHashRef.current === hash) {
+      return;
+    }
+
+    lastSavedChatHashRef.current = hash;
     updateEntry(entryId, { chatHistory: journalChatHistory }).catch((e) => {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[Scan] updateEntry chatHistory failed', { message });
@@ -725,7 +1187,7 @@ export default function HomeScreen() {
           role: 'assistant',
           parts: [{ type: 'text', text: assistantText }],
         };
-        return [...base, userMessage, assistantMessage] as unknown as Parameters<typeof setChatMessages>[0];
+        return [...base, userMessage, assistantMessage] as unknown as typeof base;
       });
     },
     [setChatMessages],
@@ -835,6 +1297,7 @@ export default function HomeScreen() {
           summary?: unknown;
           keyRisks?: unknown;
         };
+        categories?: unknown;
         preparation?: {
           ease?: unknown;
           steps?: unknown;
@@ -854,11 +1317,15 @@ export default function HomeScreen() {
       const confidenceRaw = Number(parsed.confidence ?? 0);
       const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0;
 
-      const safetyStatusRaw = String(parsed.safety?.status ?? 'uncertain');
+      const safetyStatusRaw = String(parsed.safety?.status ?? 'unknown');
       const safetyStatus: SafetyEdibility['status'] =
-        safetyStatusRaw === 'safe' || safetyStatusRaw === 'unsafe' || safetyStatusRaw === 'uncertain'
+        safetyStatusRaw === 'safe' || safetyStatusRaw === 'caution' || safetyStatusRaw === 'unknown'
           ? safetyStatusRaw
-          : 'uncertain';
+          : safetyStatusRaw === 'unsafe'
+            ? 'caution'
+            : safetyStatusRaw === 'uncertain'
+              ? 'unknown'
+              : 'unknown';
 
       const prepEaseRaw = String(parsed.preparation?.ease ?? 'unknown');
       const prepEase: Preparation['ease'] =
@@ -871,8 +1338,15 @@ export default function HomeScreen() {
         return value.map((v) => String(v)).filter(Boolean).slice(0, max);
       };
 
+      const rawCommonName = String(parsed.commonName ?? '').trim();
+      const commonName = rawCommonName.length > 0 ? rawCommonName : 'Unconfirmed Plant';
+
+      const categories = Array.isArray(parsed.categories)
+        ? parsed.categories.map((c) => String(c)).filter((c) => c.trim().length > 0).slice(0, 12)
+        : [];
+
       return {
-        commonName: String(parsed.commonName ?? 'Unknown'),
+        commonName,
         scientificName: parsed.scientificName ? String(parsed.scientificName) : undefined,
         confidence,
 
@@ -882,6 +1356,7 @@ export default function HomeScreen() {
           summary: String(parsed.safety?.summary ?? ''),
           keyRisks: safeArray(parsed.safety?.keyRisks, 6),
         },
+        categories,
         preparation: {
           ease: prepEase,
           steps: safeArray(parsed.preparation?.steps, 8),
@@ -905,6 +1380,7 @@ export default function HomeScreen() {
   const analyzeWithGemini = useCallback(
     async (imagesOverride?: ScanImage[]): Promise<void> => {
       const imagesToUse = Array.isArray(imagesOverride) ? imagesOverride : scanImages;
+      const primaryToUse = imagesToUse.length > 0 ? imagesToUse[0] : null;
 
       console.log('[Scan] analyzeWithGemini start', {
         imageCount: imagesToUse.length,
@@ -912,6 +1388,7 @@ export default function HomeScreen() {
         hasOverride: Boolean(imagesOverride),
       });
 
+    setScanPhase('preparing');
     setScanError(null);
     setScanResult(null);
 
@@ -949,11 +1426,12 @@ Rules:
 - Keep language concise, friendly, and Australia-specific.
 
 Return JSON with keys:
-- commonName: string
+- commonName: string (use "Unconfirmed Plant" if unsure)
 - scientificName: string or null
 - confidence: number (0..1)
+- safety: { status: 'safe'|'caution'|'unknown', summary: string, keyRisks: string[] }
+- categories: string[] (e.g. ['fruit','leaf','seed','medicinal','bush tucker'])
 - bushTuckerLikely: boolean
-- safety: { status: 'safe'|'unsafe'|'uncertain', summary: string, keyRisks: string[] }
 - preparation: { ease: 'easy'|'medium'|'hard'|'unknown', steps: string[] }
 - seasonality: { bestMonths: string[] (e.g. ['Sep','Oct']), notes: string }
 - culturalKnowledge: { notes: string, respect: string[] }
@@ -990,8 +1468,25 @@ Return JSON with keys:
       const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models?key=${encodeURIComponent(apiKey)}`;
       console.log('[Scan] gemini listModels request', { apiVersion });
 
-      const res = await fetch(endpoint, { method: 'GET' });
-      const json = (await res.json()) as GeminiListModelsResponse;
+      setScanPhase('listing-models');
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = setTimeout(() => {
+        try {
+          controller?.abort();
+        } catch {
+          
+        }
+      }, 25000);
+
+      let res: Response;
+      let json: GeminiListModelsResponse;
+      try {
+        res = await fetch(endpoint, { method: 'GET', signal: controller?.signal });
+        json = (await res.json()) as GeminiListModelsResponse;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       console.log('[Scan] gemini listModels response', {
         apiVersion,
@@ -1083,15 +1578,33 @@ Return JSON with keys:
       const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
       console.log('[Scan] gemini request', { apiVersion, model });
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+      setScanPhase('sending');
 
-      const json = (await res.json()) as GeminiApiResponse;
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = setTimeout(() => {
+        try {
+          controller?.abort();
+        } catch {
+          
+        }
+      }, 30000);
+
+      let res: Response;
+      let json: GeminiApiResponse;
+      try {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: controller?.signal,
+        });
+
+        json = (await res.json()) as GeminiApiResponse;
+      } finally {
+        clearTimeout(timeoutId);
+      }
       console.log('[Scan] gemini response', {
         apiVersion,
         model,
@@ -1127,6 +1640,8 @@ Return JSON with keys:
             throw new Error('Gemini returned an empty response.');
           }
 
+          setScanPhase('parsing');
+
           let parsed: GeminiScanResult;
           try {
             parsed = parseGeminiResult(text);
@@ -1143,53 +1658,316 @@ Return JSON with keys:
               commonName: parsed.commonName,
               scientificName: parsed.scientificName,
               confidence: parsed.confidence,
-              imageBase64: scanImages[0]?.base64 ?? null,
-              imageUri: primaryImage?.uri ?? null,
+              imageBase64: primaryToUse?.base64 ?? null,
+              imageUri: primaryToUse?.uri ?? null,
             });
 
-            let persistedImageUri: string | undefined = primaryImage?.uri ?? undefined;
-            const base64 = scanImages[0]?.base64;
-            const mimeType = scanImages[0]?.mimeType;
-            const docDirUri = FileSystem.Paths.document?.uri ?? null;
+            setScanPhase('saving');
 
-            if (docDirUri && typeof base64 === 'string' && base64.length > 0) {
-              try {
-                const scanDir = new FileSystem.Directory(FileSystem.Paths.document, 'scan-journal');
-                scanDir.create({ intermediates: true, idempotent: true });
+            let persistedImageUri: string | undefined = primaryToUse?.uri ?? undefined;
+            let previewImageUri: string | undefined = primaryToUse?.previewUri ?? undefined;
+            const base64 = primaryToUse?.base64;
+            const mimeType = primaryToUse?.mimeType;
 
-                const ext = mimeType?.includes('png') ? 'png' : 'jpg';
-                const file = new FileSystem.File(scanDir, `${encodeURIComponent(entryId)}.${ext}`);
-                file.create({ intermediates: true, overwrite: true });
+            if (Platform.OS === 'web') {
+              if (typeof base64 === 'string' && base64.length > 0) {
+                try {
+                  const ImageManipulator = await getExpoImageManipulator();
+                  if (!ImageManipulator) {
+                    throw new Error('ImageManipulator unavailable');
+                  }
 
-                console.log('[Scan] persisting scan photo to documentDirectory', { fileUri: file.uri, mimeType });
-                file.write(base64, { encoding: 'base64' });
+                  const manipResult = await ImageManipulator.manipulateAsync(
+                    primaryToUse?.uri ?? '',
+                    [{ resize: { width: 1200 } }],
+                    {
+                      compress: 0.72,
+                      format: ImageManipulator.SaveFormat.JPEG,
+                      base64: true,
+                    },
+                  );
 
-                if (file.exists) {
-                  persistedImageUri = file.uri;
+                  const mt = 'image/jpeg';
+                  const outBase64 = typeof manipResult.base64 === 'string' && manipResult.base64.length > 0 ? manipResult.base64 : base64;
+                  persistedImageUri = `data:${mt};base64,${outBase64}`;
+                  console.log('[Scan] persisted scan photo as data URI (web, compressed)', {
+                    inLength: base64.length,
+                    outLength: outBase64.length,
+                    outUriScheme: (manipResult.uri ?? '').split(':')[0],
+                  });
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                  persistedImageUri = `data:${mt};base64,${base64}`;
+                  console.log('[Scan] ImageManipulator failed; falling back to original base64 (web)', { message, mimeType: mt, length: base64.length });
                 }
-              } catch (persistErr) {
-                const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
-                console.log('[Scan] persist scan photo failed, falling back to original uri', { message, originalUri: primaryImage?.uri });
+              } else {
+                console.log('[Scan] web scan has no base64; using original uri (non-persistent)', { uri: primaryToUse?.uri });
               }
             } else {
-              console.log('[Scan] skipping photo persist (no documentDirectory or base64)', {
-                hasDocDir: Boolean(docDirUri),
-                hasBase64: typeof base64 === 'string' && base64.length > 0,
-                platform: Platform.OS,
-              });
+              const fs = await getLegacyFileSystem();
+              const rawDocDirUri = fs?.documentDirectory ?? fs?.cacheDirectory ?? null;
+              const docDirUri = rawDocDirUri ? (rawDocDirUri.endsWith('/') ? rawDocDirUri : `${rawDocDirUri}/`) : null;
+              console.log('[Scan] resolved storage directory', { rawDocDirUri, docDirUri, platform: Platform.OS, hasFs: Boolean(fs) });
+
+              if (docDirUri) {
+                const scanDirUri = `${docDirUri}scan-journal/`;
+
+                try {
+                  if (!fs) {
+                    throw new Error('FileSystem unavailable');
+                  }
+                  await fs.makeDirectoryAsync(scanDirUri, { intermediates: true });
+                  console.log('[Scan] ensured scan directory', { scanDirUri });
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.log('[Scan] makeDirectoryAsync failed (scan-journal)', { message, scanDirUri });
+                }
+
+                const safeFileStem = entryId.replace(/[^a-z0-9-_]+/gi, '-');
+                const dest = `${scanDirUri}${safeFileStem}.jpg`;
+                const from = primaryToUse?.uri ?? '';
+                const fromScheme = from.split(':')[0];
+
+                const attemptTranscodeToJpeg = async () => {
+                  console.log('[Scan] transcoding scan photo to JPEG (ImageManipulator)', {
+                    from,
+                    fromScheme,
+                    dest,
+                    mimeType,
+                    platform: Platform.OS,
+                  });
+
+                  const ImageManipulator = await getExpoImageManipulator();
+                  if (!ImageManipulator) {
+                    throw new Error('ImageManipulator unavailable');
+                  }
+
+                  const manipResult = await ImageManipulator.manipulateAsync(
+                    from,
+                    [{ resize: { width: 1400 } }],
+                    {
+                      compress: 0.86,
+                      format: ImageManipulator.SaveFormat.JPEG,
+                    },
+                  );
+
+                  console.log('[Scan] transcode result', {
+                    intermediateUri: manipResult.uri,
+                    intermediateUriScheme: (manipResult.uri ?? '').split(':')[0],
+                  });
+
+                  if (!fs) {
+                    throw new Error('FileSystem unavailable');
+                  }
+                  await fs.copyAsync({ from: manipResult.uri, to: dest });
+                  persistedImageUri = dest;
+                  console.log('[Scan] persisted scan photo via transcode + copy', { dest });
+                };
+
+                try {
+                  await attemptTranscodeToJpeg();
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.log('[Scan] transcodeToJpeg failed; falling back', {
+                    message,
+                    from,
+                    fromScheme,
+                    dest,
+                    hasBase64: typeof base64 === 'string' && base64.length > 0,
+                  });
+
+                  const canCopyDirectly = fromScheme === 'file' || fromScheme === 'content';
+
+                  if (canCopyDirectly) {
+                    try {
+                      console.log('[Scan] fallback copyAsync', { from, dest, platform: Platform.OS });
+                      if (!fs) {
+                        throw new Error('FileSystem unavailable');
+                      }
+                      await fs.copyAsync({ from, to: dest });
+                      persistedImageUri = dest;
+                      console.log('[Scan] persisted scan photo via fallback copyAsync', { dest });
+                    } catch (copyErr) {
+                      const copyMsg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+                      console.log('[Scan] fallback copyAsync failed; trying base64 write', { copyMsg, from, dest });
+
+                      if (typeof base64 === 'string' && base64.length > 0) {
+                        try {
+                          if (!fs) {
+                            throw new Error('FileSystem unavailable');
+                          }
+                          await fs.writeAsStringAsync(dest, base64, { encoding: fs.EncodingType.Base64 });
+                          persistedImageUri = dest;
+                          console.log('[Scan] persisted scan photo via base64 write (final fallback)', { dest, length: base64.length });
+                        } catch (writeErr) {
+                          const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+                          persistedImageUri = primaryToUse?.uri ?? undefined;
+                          console.log('[Scan] base64 write failed; using original uri', {
+                            writeMsg,
+                            originalUri: primaryToUse?.uri,
+                            originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
+                          });
+                        }
+                      } else {
+                        persistedImageUri = primaryToUse?.uri ?? undefined;
+                        console.log('[Scan] no base64 available; using original uri', {
+                          originalUri: primaryToUse?.uri,
+                          originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
+                        });
+                      }
+                    }
+                  } else if (typeof base64 === 'string' && base64.length > 0) {
+                    try {
+                      if (!fs) {
+                        throw new Error('FileSystem unavailable');
+                      }
+                      await fs.writeAsStringAsync(dest, base64, { encoding: fs.EncodingType.Base64 });
+                      persistedImageUri = dest;
+                      console.log('[Scan] persisted scan photo via base64 write (non-file uri scheme)', { fromScheme, dest, length: base64.length });
+                    } catch (writeErr) {
+                      const writeMsg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+                      persistedImageUri = primaryToUse?.uri ?? undefined;
+                      console.log('[Scan] base64 write failed; using original uri', {
+                        writeMsg,
+                        originalUri: primaryToUse?.uri,
+                        originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
+                      });
+                    }
+                  } else {
+                    persistedImageUri = primaryToUse?.uri ?? undefined;
+                    console.log('[Scan] cannot persist non-file uri (no base64 available); using original uri', {
+                      originalUri: primaryToUse?.uri,
+                      originalUriScheme: (primaryToUse?.uri ?? '').split(':')[0],
+                    });
+                  }
+                }
+              } else {
+                console.log('[Scan] skipping photo persist (no document/cache directory)', { platform: Platform.OS });
+              }
+
+              if (typeof previewImageUri !== 'string' || previewImageUri.length === 0) {
+                if (typeof base64 === 'string' && base64.length > 0) {
+                  try {
+                    const ImageManipulator = await getExpoImageManipulator();
+                    if (!ImageManipulator) {
+                      throw new Error('ImageManipulator unavailable');
+                    }
+
+                    const manipPreview = await ImageManipulator.manipulateAsync(
+                      primaryToUse?.uri ?? '',
+                      [{ resize: { width: 900 } }],
+                      {
+                        compress: 0.65,
+                        format: ImageManipulator.SaveFormat.JPEG,
+                        base64: true,
+                      },
+                    );
+                    const outBase64 = typeof manipPreview.base64 === 'string' && manipPreview.base64.length > 0 ? manipPreview.base64 : base64;
+                    previewImageUri = `data:image/jpeg;base64,${outBase64}`;
+                    console.log('[Scan] generated preview image URI', { outLength: outBase64.length });
+                  } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    previewImageUri = `data:${typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg'};base64,${base64}`;
+                    console.log('[Scan] preview ImageManipulator failed; using raw base64', { message, length: base64.length });
+                  }
+                }
+              }
             }
 
-            await addEntry({
+            const beforeSanitize = persistedImageUri;
+            const beforeScheme = (beforeSanitize ?? '').split(':')[0] || 'none';
+
+            if (Platform.OS !== 'web') {
+              const scheme = beforeScheme;
+              const looksLikeBarePath = typeof beforeSanitize === 'string' && beforeSanitize.startsWith('/');
+              const isBadScheme = scheme === 'ph' || scheme === 'assets-library' || scheme === 'content';
+
+              if (looksLikeBarePath) {
+                persistedImageUri = `file://${beforeSanitize}`;
+                console.log('[Scan] sanitized persistedImageUri (added file:// prefix)', { beforeSanitize, persistedImageUri });
+              }
+
+              if (typeof persistedImageUri === 'string' && persistedImageUri.startsWith('file:/') && !persistedImageUri.startsWith('file://')) {
+                const fixed = `file:///${persistedImageUri.replace(/^file:\/*/i, '')}`;
+                console.log('[Scan] sanitized persistedImageUri (fixed file:/ -> file:///)', { before: persistedImageUri, fixed });
+                persistedImageUri = fixed;
+              }
+
+              if (isBadScheme && typeof base64 === 'string' && base64.length > 0) {
+                const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                persistedImageUri = `data:${mt};base64,${base64}`;
+                console.log('[Scan] sanitized persistedImageUri (fallback to data URI for bad scheme)', { scheme, mt, base64Length: base64.length });
+              }
+
+              if (typeof persistedImageUri === 'string' && persistedImageUri.startsWith('file://')) {
+                try {
+                  const fs = await getLegacyFileSystem();
+                  if (!fs) {
+                    console.log('[Scan] FileSystem not available; skipping getInfoAsync', { uri: persistedImageUri });
+                    return;
+                  }
+
+                  const info = await fs.getInfoAsync(persistedImageUri);
+                  const size =
+                    info.exists && 'size' in info && typeof (info as unknown as { size?: number }).size === 'number' && Number.isFinite((info as unknown as { size?: number }).size)
+                      ? (info as unknown as { size?: number }).size
+                      : undefined;
+                  console.log('[Scan] persisted image file info', { exists: info.exists, size, uri: persistedImageUri });
+                  if (!info.exists && typeof base64 === 'string' && base64.length > 0) {
+                    const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                    persistedImageUri = `data:${mt};base64,${base64}`;
+                    console.log('[Scan] persisted image missing on disk; using data URI instead', { mt, base64Length: base64.length });
+                  }
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.log('[Scan] getInfoAsync failed for persisted image', { message, uri: persistedImageUri });
+                }
+              }
+            }
+
+            const savedEntry = await addEntry({
               id: entryId,
-              title: parsed.commonName,
+              title: parsed.commonName?.trim().length ? parsed.commonName : 'Unconfirmed Plant',
               imageUri: persistedImageUri,
+              imagePreviewUri: previewImageUri,
               chatHistory: journalChatHistory,
               scan: parsed as unknown as JournalGeminiScanResult,
             });
-            currentEntryIdRef.current = entryId;
+
+            if (Platform.OS !== 'web') {
+              const scheme = (persistedImageUri ?? '').split(':')[0];
+              const isProblematic = scheme === 'ph' || scheme === 'assets-library' || scheme === 'content';
+              if (isProblematic) {
+                console.log('[Scan] WARNING: persistedImageUri is a non-file scheme; it may not render later', {
+                  persistedImageUri,
+                  scheme,
+                  originalUri: primaryToUse?.uri,
+                });
+              } else {
+                console.log('[Scan] persistedImageUri scheme ok', { scheme, persistedImageUri });
+              }
+            }
+
+            currentEntryIdRef.current = savedEntry.id;
+
+            const confidence = Number.isFinite(savedEntry.scan?.confidence) ? (savedEntry.scan.confidence as number) : 0;
+            console.log('[Scan] cook eligibility (derived view)', {
+              scanEntryId: savedEntry.id,
+              confidence,
+              safetyStatus: savedEntry.scan?.safety?.status,
+              eligible: savedEntry.scan?.safety?.status === 'safe' && confidence >= 0.75,
+            });
+
+            console.log('[Scan] navigating to saved scan details', { scanEntryId: savedEntry.id });
+            setScanPhase('done');
+            router.push(`/scan/${encodeURIComponent(savedEntry.id)}`);
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             console.log('[Scan] saving scan to journal failed', { message });
+            setScanPhase('error');
+            setScanError('Could not save this scan to your Collection. Please try again.');
+            Alert.alert('Save failed', 'Could not save this scan to your Collection. Please try again.');
           }
 
           if (parsed.safety.status !== 'safe' && parsed.warnings.length === 0) {
@@ -1212,17 +1990,24 @@ Return JSON with keys:
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unknown error while scanning.';
       console.log('[Scan] analyzeWithGemini error', { message });
+      setScanPhase('error');
       setScanError(message);
       Alert.alert('Scan failed', message);
     } finally {
       setAnalyzing(false);
     }
-  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, primaryImage?.uri, scanImages]);
+  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, scanImages]);
 
   const collectImages = useCallback(
     async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
       const count = mode === 'identify360' ? 3 : 1;
       const label = source === 'camera' ? 'Take photo' : 'Select photo';
+
+      const ImagePicker = await getExpoImagePicker();
+      if (!ImagePicker) {
+        Alert.alert('Unavailable', 'Photo picker is not available right now.');
+        return null;
+      }
 
       if (source === 'library') {
         if (Platform.OS !== 'web') {
@@ -1254,20 +2039,24 @@ Return JSON with keys:
           );
         }
 
+        const allowsEditing = Platform.OS !== 'ios';
+
         const result =
           source === 'camera'
             ? await ImagePicker.launchCameraAsync({
-                allowsEditing: true,
+                allowsEditing,
                 aspect: [4, 3],
                 quality: 0.92,
                 base64: true,
+                exif: false,
               })
             : await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
+                allowsEditing,
                 aspect: [4, 3],
                 quality: 0.92,
                 base64: true,
+                exif: false,
                 selectionLimit: 1,
               });
 
@@ -1279,15 +2068,32 @@ Return JSON with keys:
         const asset = result.assets?.[0];
         const base64 = asset?.base64;
         const uri = asset?.uri;
-        if (!uri || !base64) {
-          console.log('[Scan] collectImages missing base64/uri', { hasUri: Boolean(uri), hasBase64: Boolean(base64) });
+        if (!uri) {
+          console.log('[Scan] collectImages missing uri', { hasUri: Boolean(uri), hasBase64: Boolean(base64) });
           return null;
         }
 
+        const scheme = uri.split(':')[0];
+        const mt = typeof asset?.mimeType === 'string' && asset.mimeType.length > 0 ? asset.mimeType : undefined;
+        const base64Clean = typeof base64 === 'string' && base64.length > 0 ? base64 : undefined;
+        const previewUri = base64Clean ? `data:${mt ?? 'image/jpeg'};base64,${base64Clean}` : undefined;
+
+        console.log('[Scan] collectImages picked', {
+          source,
+          index: i,
+          uriScheme: scheme,
+          hasBase64: Boolean(base64Clean),
+          base64Length: base64Clean?.length ?? 0,
+          mimeType: mt,
+          allowsEditing,
+          platform: Platform.OS,
+        });
+
         next.push({
           uri,
-          base64,
-          mimeType: asset?.mimeType ?? 'image/jpeg',
+          base64: base64Clean,
+          mimeType: mt,
+          previewUri,
         });
       }
 
@@ -1374,10 +2180,13 @@ Return JSON with keys:
               <Text style={styles.greeting}>Good Morning,</Text>
               <Text style={styles.title}>Bush Tucka</Text>
             </View>
-            <TouchableOpacity style={styles.profileButton}>
-              <Image 
-                source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop' }} 
-                style={styles.profileImage} 
+            <TouchableOpacity style={styles.profileButton} testID="home-profile-button">
+              <Image
+                source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop' }}
+                style={styles.profileImage}
+                contentFit="cover"
+                transition={120}
+                testID="home-profile-image"
               />
             </TouchableOpacity>
           </View>
@@ -1415,7 +2224,20 @@ Return JSON with keys:
 
               <View style={styles.focusArea}>
                 {primaryImage?.uri ? (
-                  <Image source={{ uri: primaryImage.uri }} style={styles.focusImage} />
+                  <Image
+                    source={{ uri: primaryImageDisplayUri ?? primaryImage.uri }}
+                    style={styles.focusImage}
+                    contentFit="cover"
+                    transition={120}
+                    cachePolicy="memory-disk"
+                    testID="scan-primary-image"
+                    onError={(e) => {
+                      console.log('[Home] primary image load error', {
+                        uri: primaryImageDisplayUri ?? primaryImage.uri,
+                        error: (e as unknown as { error?: string })?.error,
+                      });
+                    }}
+                  />
                 ) : (
                   <View style={styles.focusPlaceholder}>
                     <Scan size={70} color="rgba(255,255,255,0.18)" />
@@ -1432,7 +2254,7 @@ Return JSON with keys:
                 {analyzing ? (
                   <View style={styles.scanBusyPill} testID="scan-analyzing-badge">
                     <View style={styles.scanBusyDot} />
-                    <Text style={styles.scanBusyText}>Scanning…</Text>
+                    <Text style={styles.scanBusyText}>{scanPhase === 'sending' ? 'Starting…' : scanPhase === 'listing-models' ? 'Preparing…' : scanPhase === 'parsing' ? 'Reading…' : scanPhase === 'saving' ? 'Saving…' : 'Scanning…'}</Text>
                   </View>
                 ) : null}
               </View>
@@ -1496,7 +2318,7 @@ Return JSON with keys:
               <View style={styles.resultHeader}>
                 <View style={styles.resultTitleRow}>
                   <Sparkles size={18} color={COLORS.primary} />
-                  <Text style={styles.resultTitle}>Gemini Detection</Text>
+                  <Text style={styles.resultTitle}>Bush Tucka ID</Text>
                 </View>
                 <TouchableOpacity style={styles.rescanButton} onPress={onPressRescan} disabled={analyzing} testID="scan-rescan-button">
                   <Text style={styles.rescanText}>{analyzing ? 'Scanning…' : 'Rescan'}</Text>
@@ -1523,7 +2345,7 @@ Return JSON with keys:
                         styles.pill,
                         displaySafetyStatus === 'safe'
                           ? styles.pillGood
-                          : displaySafetyStatus === 'unsafe'
+                          : displaySafetyStatus === 'caution'
                             ? styles.pillBad
                             : styles.pillNeutral,
                       ]}
@@ -1533,17 +2355,17 @@ Return JSON with keys:
                           styles.pillText,
                           displaySafetyStatus === 'safe'
                             ? styles.pillTextGood
-                            : displaySafetyStatus === 'unsafe'
+                            : displaySafetyStatus === 'caution'
                               ? styles.pillTextBad
                               : styles.pillTextNeutral,
                         ]}
                       >
                         {confidenceGate?.level === 'confident'
                           ? displaySafetyStatus === 'safe'
-                            ? 'Safe Edible (Check Locally)'
-                            : displaySafetyStatus === 'unsafe'
-                              ? 'Unsafe / Avoid'
-                              : 'Uncertain / Verify'
+                            ? 'Safe (Still verify locally)'
+                            : displaySafetyStatus === 'caution'
+                              ? 'Caution'
+                              : 'Unknown / Verify'
                           : confidenceGate?.level === 'likely'
                             ? 'Safety: Verify before consuming'
                             : 'Safety: Observe only'}
@@ -1711,7 +2533,7 @@ Return JSON with keys:
           <View style={styles.chatCard} testID="ai-chat-card">
             <View style={styles.chatHeader}>
               <MessageCircle size={18} color={COLORS.primary} />
-              <Text style={styles.chatTitle}>Bush Tucker Companion</Text>
+              <Text style={styles.chatTitle}>Tucka Guide</Text>
             </View>
             {!scanResult ? (
               <Text style={styles.chatEmptyText}>
@@ -1745,22 +2567,84 @@ Return JSON with keys:
                 {chatDisplayMessages.length > 0 ? (
                   <View style={styles.chatMessages}>
                     {(Array.isArray(chatDisplayMessages) ? chatDisplayMessages : []).map((message) => (
-                      <View
-                        key={message.id}
-                        style={[
-                          styles.chatBubble,
-                          message.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
-                        ]}
-                      >
-                        <Text style={styles.chatBubbleText}>{message.text}</Text>
+                      <View key={message.id} style={{ gap: 8 }} testID={`tucka-guide-message-${message.id}`}>
+                        <View
+                          style={[
+                            styles.chatBubble,
+                            message.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAssistant,
+                          ]}
+                        >
+                          <Text style={styles.chatBubbleText}>{message.text}</Text>
+                        </View>
+
+                        {message.role === 'assistant' ? (
+                          <View style={styles.chatActionsRow} testID={`tucka-guide-actions-${message.id}`}>
+                            <TouchableOpacity
+                              style={[styles.chatActionButton, savedGuideByMessageId[message.id] ? styles.chatActionButtonSaved : null]}
+                              onPress={() => saveGuideToCook(message.text, message.id)}
+                              disabled={!scanResult}
+                              testID={`tucka-guide-save-${message.id}`}
+                            >
+                              <BookmarkPlus size={16} color={savedGuideByMessageId[message.id] ? COLORS.primary : COLORS.text} />
+                              <Text style={[styles.chatActionText, savedGuideByMessageId[message.id] ? styles.chatActionTextSaved : null]}>
+                                {savedGuideByMessageId[message.id] ? 'Saved' : 'Save'}
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.chatActionButton}
+                              onPress={() => shareOrDownloadGuideText(message.text)}
+                              testID={`tucka-guide-export-${message.id}`}
+                            >
+                              <Share2 size={16} color={COLORS.text} />
+                              <Text style={styles.chatActionText}>Export</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.chatActionButton}
+                              onPress={() => copyGuideText(message.text)}
+                              testID={`tucka-guide-copy-${message.id}`}
+                            >
+                              <Copy size={16} color={COLORS.text} />
+                              <Text style={styles.chatActionText}>Copy</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.chatActionButton}
+                              onPress={() => shareOrDownloadGuideText(message.text)}
+                              testID={`tucka-guide-download-${message.id}`}
+                            >
+                              <Download size={16} color={COLORS.text} />
+                              <Text style={styles.chatActionText}>Download</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
                       </View>
                     ))}
                   </View>
                 ) : null}
 
                 {chatBusy ? (
-                  <View style={[styles.chatBubble, styles.chatBubbleAssistant]}>
+                  <View style={[styles.chatBubble, styles.chatBubbleAssistant]} testID="tucka-guide-thinking">
                     <Text style={styles.chatBubbleText}>Thinking...</Text>
+                    {chatTimeout ? (
+                      <View style={styles.chatTimeoutRow} testID="tucka-guide-timeout">
+                        <Text style={styles.chatTimeoutText}>Taking longer than usual. Check your connection and try again.</Text>
+                        <View style={styles.chatTimeoutActions}>
+                          <TouchableOpacity
+                            style={styles.chatTimeoutButton}
+                            onPress={() => {
+                              console.log('[TuckaGuide] user pressed Reset chat');
+                              clearChatError();
+                              resetChatToGreeting();
+                            }}
+                            testID="tucka-guide-reset-chat"
+                          >
+                            <Text style={styles.chatTimeoutButtonText}>Reset</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
 
@@ -2469,6 +3353,69 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: DARK.subtext,
     fontWeight: '700',
+  },
+  chatActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginLeft: 4,
+  },
+  chatActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  chatActionButtonSaved: {
+    backgroundColor: 'rgba(56,217,137,0.12)',
+    borderColor: 'rgba(56,217,137,0.35)',
+  },
+  chatActionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: DARK.text,
+    letterSpacing: 0.2,
+  },
+  chatActionTextSaved: {
+    color: COLORS.primary,
+  },
+  chatTimeoutRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.10)',
+    gap: 10,
+  },
+  chatTimeoutText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: 'rgba(242,245,242,0.72)',
+  },
+  chatTimeoutActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  chatTimeoutButton: {
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    justifyContent: 'center',
+  },
+  chatTimeoutButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: DARK.text,
+    letterSpacing: 0.2,
   },
   chatInputRow: {
     flexDirection: 'row',

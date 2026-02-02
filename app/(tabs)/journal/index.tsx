@@ -1,13 +1,46 @@
-import React, { useCallback, useMemo } from 'react';
-import { Alert, View, Text, StyleSheet, TouchableOpacity, FlatList, Image } from 'react-native';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { Alert, View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Brush, MapPin, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalEntry } from '@/app/providers/ScanJournalProvider';
 
+function safeImageUri(uri: string | undefined): string | null {
+  const raw0 = typeof uri === 'string' ? uri.trim() : '';
+  if (raw0.length === 0 || raw0 === 'null' || raw0 === 'undefined') return null;
+
+  let raw = raw0;
+  const scheme = raw.split(':')[0] ?? '';
+
+  if (scheme === 'ph' || scheme === 'assets-library') return null;
+
+  if (raw.startsWith('/')) {
+    raw = `file://${raw}`;
+  }
+
+  if (raw.startsWith('file:/') && !raw.startsWith('file://')) {
+    raw = `file:///${raw.replace(/^file:\/*/i, '')}`;
+  }
+
+  if (raw.includes(' ')) {
+    raw = raw.replace(/ /g, '%20');
+  }
+
+  try {
+    return encodeURI(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export default function JournalScreen() {
   const { entries, isLoading, errorMessage, clearAll, removeEntry, refresh } = useScanJournal();
+
+  useEffect(() => {
+    console.log('[Journal] render', { entriesCount: entries.length, isLoading, hasError: Boolean(errorMessage) });
+  }, [entries.length, errorMessage, isLoading]);
 
   const onPressClearAll = useCallback(() => {
     Alert.alert('Clear collection?', 'This will remove all saved scans from this device.', [
@@ -28,13 +61,23 @@ export default function JournalScreen() {
   const renderItem = useCallback(
     ({ item }: { item: ScanJournalEntry }) => {
       const date = new Date(item.createdAt);
-      const month = date.toLocaleString('en-AU', { month: 'short' }).toUpperCase();
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'] as const;
+      const month = monthNames[date.getMonth()] ?? '---';
       const day = String(date.getDate()).padStart(2, '0');
+
+      const confidence = Number.isFinite(item.scan?.confidence) ? (item.scan.confidence as number) : 0;
+      const observeOnly = confidence < 0.75 || item.scan?.safety?.status !== 'safe';
 
       const tags = [
         item.scan?.safety?.status ? `Safety: ${item.scan.safety.status}` : null,
+        observeOnly ? 'Observe only' : null,
         item.scan?.bushTuckerLikely ? 'Bush tucker' : null,
       ].filter(Boolean) as string[];
+
+      const resolvedUri = safeImageUri(item.imagePreviewUri ?? item.imageUri);
+      const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
+      const rawScheme = ((item.imagePreviewUri ?? item.imageUri) ?? '').split(':')[0] || 'none';
+      const isLocal = resolvedScheme === 'file' || resolvedScheme === 'data';
 
       return (
         <TouchableOpacity
@@ -46,8 +89,46 @@ export default function JournalScreen() {
         >
           <View style={styles.cardHeader}>
             <Image
-              source={{ uri: item.imageUri ?? 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop' }}
+              source={{
+                uri:
+                  resolvedUri ??
+                  'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=1200&auto=format&fit=crop',
+              }}
               style={styles.entryImage}
+              contentFit="cover"
+              cachePolicy={isLocal ? 'none' : 'memory-disk'}
+              transition={120}
+              recyclingKey={`${item.id}:${resolvedUri ?? 'fallback'}`}
+              testID={`journal-entry-image-${item.id}`}
+              onLoadStart={() => {
+                console.log('[Journal] image load start', {
+                  entryId: item.id,
+                  hasCustomUri: Boolean(item.imagePreviewUri ?? item.imageUri),
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
+                });
+              }}
+              onLoad={() => {
+                console.log('[Journal] image loaded', {
+                  entryId: item.id,
+                  hasCustomUri: Boolean(item.imagePreviewUri ?? item.imageUri),
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
+                });
+              }}
+              onError={(e) => {
+                console.log('[Journal] image load error', {
+                  entryId: item.id,
+                  uri: item.imagePreviewUri ?? item.imageUri,
+                  resolvedUri,
+                  resolvedUriScheme: resolvedScheme,
+                  rawUriScheme: rawScheme,
+                  isLocal,
+                  error: (e as unknown as { error?: string })?.error,
+                });
+              }}
             />
             <View style={styles.metaOverlay}>
               <View style={styles.dateBadge}>
