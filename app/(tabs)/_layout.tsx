@@ -8,6 +8,7 @@ import { BookOpen, ChefHat, Home, NotebookPen } from 'lucide-react-native';
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="learn"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.tabBarActive,
