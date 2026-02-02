@@ -51,17 +51,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="learn"
+        name="journal"
         options={{
-          title: 'Learn',
+          title: 'Journal',
           tabBarIcon: ({ focused, size }) => (
-            <BookOpen
+            <NotebookPen
               color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
               size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
-              testID="tab-learn-icon"
+              testID="tab-journal-icon"
             />
           ),
-          tabBarLabel: 'Learn',
+          tabBarLabel: 'Journal',
         }}
       />
       <Tabs.Screen
@@ -78,20 +78,18 @@ export default function TabLayout() {
           tabBarLabel: 'Cook',
         }}
       />
-
-
       <Tabs.Screen
-        name="journal"
+        name="learn"
         options={{
-          title: 'Journal',
+          title: 'Learn',
           tabBarIcon: ({ focused, size }) => (
-            <NotebookPen
+            <BookOpen
               color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
               size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
-              testID="tab-journal-icon"
+              testID="tab-learn-icon"
             />
           ),
-          tabBarLabel: 'Journal',
+          tabBarLabel: 'Learn',
         }}
       />
     </Tabs>
