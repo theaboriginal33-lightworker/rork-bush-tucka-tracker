@@ -30,8 +30,6 @@ import {
 import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { LinearGradient } from 'expo-linear-gradient';
-import { createRorkTool, useRorkAgent } from '@rork-ai/toolkit-sdk';
-import * as z from 'zod';
 import { getSupportDirectory, type SupportOrganization } from '@/constants/supportDirectory';
 import {
   createScanEntryId,
@@ -211,6 +209,7 @@ export default function HomeScreen() {
 
   const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
   const chatContextKeyRef = useRef<string | null>(null);
+  const systemPromptRef = useRef<string | null>(null);
 
   const canScan = useMemo(() => {
     return scanImages.length > 0 && Boolean(apiKey);
@@ -364,88 +363,128 @@ export default function HomeScreen() {
     [supportTriggerTokens, tokenizeSupportText],
   );
 
-  const localSupportTool = useMemo(
-    () =>
-      createRorkTool({
-        description:
-          'Find local Aboriginal organisations, Land Councils, or community support contacts with phone/address details. Use when the user asks for local verification, guides, councils, or help contacts.',
-        zodSchema: z.object({
-          query: z.string().optional(),
-          region: z.string().optional(),
-          limit: z.number().int().min(1).max(6).optional(),
-        }),
-        execute: async (input) => {
-          const directory = await getSupportDirectory();
-          const queryTokens = tokenizeSupportText(input.query);
-          const regionTokens = tokenizeSupportText(input.region);
-          const searchTokens = getSearchTokens([...queryTokens, ...regionTokens]);
-          const limit = Number.isFinite(input.limit) ? Math.min(Math.max(Number(input.limit), 1), 6) : 4;
+  type AgentTextPart = { type: 'text'; text: string };
+  type AgentMessage = {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    parts: AgentTextPart[];
+    createdAt?: number;
+  };
 
-          if (searchTokens.length === 0) {
-            return JSON.stringify({
-              results: [],
-              message: 'Please share your town/state or the organisation name so I can find the right local contacts.',
-            });
-          }
+  const [chatMessagesRaw, setChatMessages] = useState<AgentMessage[]>([]);
+  const [chatStatus, setChatStatus] = useState<'idle' | 'submitted' | 'streaming'>('idle');
+  const [chatError, setChatError] = useState<Error | null>(null);
 
-          const matches = directory.filter((entry: SupportOrganization) => {
-            const haystack = [
-              entry.name,
-              entry.region,
-              entry.address ?? '',
-              entry.notes ?? '',
-              entry.phone ?? '',
-              entry.email ?? '',
-              entry.website ?? '',
-              ...(entry.categories ?? []),
-              ...(entry.tags ?? []),
-            ]
-              .map((value) => normalizeSupportText(value))
-              .join(' ');
+  const clearChatError = useCallback(() => {
+    setChatError(null);
+  }, []);
 
-            if (!searchTokens.every((token) => haystack.includes(token))) return false;
-            return true;
+  const sendMessage = useCallback(
+    async (userText: string) => {
+      const trimmed = String(userText ?? '').trim();
+      if (!trimmed) return;
+
+      if (!apiKey) {
+        setChatError(new Error('Gemini API key is missing.'));
+        return;
+      }
+
+      const now = Date.now();
+      const userMsg: AgentMessage = {
+        id: `user-${now}-${Math.random().toString(16).slice(2)}`,
+        role: 'user',
+        parts: [{ type: 'text', text: trimmed }],
+        createdAt: now,
+      };
+
+      setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), userMsg]);
+
+      try {
+        setChatStatus('submitted');
+
+        const model = 'gemini-1.5-flash';
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        const history = (Array.isArray(chatMessagesRaw) ? chatMessagesRaw : [])
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .slice(-10)
+          .map((m) => {
+            const text = Array.isArray(m.parts)
+              ? m.parts
+                  .filter((p) => p?.type === 'text')
+                  .map((p) => String(p.text ?? ''))
+                  .join('')
+              : '';
+            return {
+              role: m.role === 'user' ? ('user' as const) : ('model' as const),
+              parts: [{ text }],
+            };
           });
 
-          const results = matches.slice(0, limit).map((entry) => ({
-            name: entry.name,
-            region: entry.region,
-            categories: entry.categories,
-            phone: entry.phone ?? null,
-            address: entry.address ?? null,
-            website: entry.website ?? null,
-            email: entry.email ?? null,
-            notes: entry.notes ?? null,
-          }));
+        const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
 
-          if (results.length === 0) {
-            return JSON.stringify({
-              results: [],
-              message:
-                'No local support contacts are configured yet. Ask the user for their region/state or add contacts in the support directory.',
-            });
+        const contents = [
+          {
+            role: 'user' as const,
+            parts: [{ text: promptText }],
+          },
+          ...history,
+          {
+            role: 'user' as const,
+            parts: [{ text: trimmed }],
+          },
+        ];
+
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = setTimeout(() => {
+          try {
+            controller?.abort();
+          } catch {
+            
           }
+        }, 25000);
 
-          return JSON.stringify({ results });
-        },
-      }),
-    [getSearchTokens, normalizeSupportText, tokenizeSupportText],
-  );
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents, generationConfig: { temperature: 0.35, maxOutputTokens: 500 } }),
+          signal: controller?.signal,
+        }).finally(() => {
+          clearTimeout(timeoutId);
+        });
 
-  const tools = useMemo(
-    () => ({
-      local_support: localSupportTool,
-    }),
-    [localSupportTool],
+        const json = (await res.json()) as GeminiApiResponse;
+        const assistantText = (() => {
+          const parts = json?.candidates?.[0]?.content?.parts ?? [];
+          return parts
+            .map((p) => (typeof p?.text === 'string' ? p.text : ''))
+            .join('\n')
+            .trim();
+        })();
+
+        if (!res.ok || !assistantText) {
+          const message = json?.error?.message || `Chat request failed (${res.status}).`;
+          throw new Error(message);
+        }
+
+        const assistantMsg: AgentMessage = {
+          id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: assistantText }],
+          createdAt: Date.now(),
+        };
+
+        setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
+        setChatStatus('idle');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[TuckaGuide] sendMessage failed', { message });
+        setChatStatus('idle');
+        setChatError(new Error('Could not send message. Please try again.'));
+      }
+    },
+    [apiKey, chatMessagesRaw],
   );
-  const {
-    messages: chatMessagesRaw,
-    sendMessage,
-    status: chatStatus,
-    error: chatError,
-    setMessages: setChatMessages,
-    clearError: clearChatError,
-  } = useRorkAgent({ tools });
 
   const chatMessages = useMemo((): unknown[] => {
     if (!Array.isArray(chatMessagesRaw)) {
@@ -499,6 +538,10 @@ export default function HomeScreen() {
 
     return `You are the Tucka Guide for this app. Answer questions only about the scanned plant. Use the scan info as the ground truth, and do not guess beyond it. If the user asks for details that are missing, say you do not have that detail and suggest rescanning or consulting a local Indigenous guide or botanist. Always prioritize safety and remind users to verify before consuming any plant. Respond in plain text only (no markdown headings, no code blocks, no tool logs or execution tags).\n\nIf the user asks for local organisations, contact details, or verification help, call the local_support tool. Only share phone/address/website details that come from the tool results. If the tool returns no results, say you do not have local contacts yet and ask for their town/state or to add contacts.\n\n${gateInstruction}\nConfidence: ${confidencePct}%\n\nScan info:\n${scanContext}`;
   }, [confidenceGate?.level, scanContext, scanResult]);
+
+  useEffect(() => {
+    systemPromptRef.current = systemPrompt;
+  }, [systemPrompt]);
 
   const assistantGreeting = useMemo(() => {
     if (!scanResult) return '';
