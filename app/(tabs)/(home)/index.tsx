@@ -6,7 +6,6 @@ import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Sharing from 'expo-sharing';
 import {
@@ -40,6 +39,29 @@ import {
   type GeminiScanResult as JournalGeminiScanResult,
   type ScanJournalChatMessage,
 } from '@/app/providers/ScanJournalProvider';
+
+type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
+
+let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
+
+async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
+  try {
+    if (!legacyFsPromise) {
+      legacyFsPromise = import('expo-file-system/legacy')
+        .then((m) => m as LegacyFileSystemModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-file-system/legacy', { message });
+          return null;
+        });
+    }
+    return await legacyFsPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getLegacyFileSystem unexpected error', { message });
+    return null;
+  }
+}
 
 type SafetyEdibility = {
   status: 'safe' | 'caution' | 'unknown';
@@ -741,9 +763,15 @@ export default function HomeScreen() {
       }
 
       try {
-        const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+        const fs = await getLegacyFileSystem();
+        const baseDir = fs?.cacheDirectory ?? fs?.documentDirectory;
         if (!baseDir) {
           console.log('[TuckaGuide] no writable directory available');
+          await Share.share({ message: exportText });
+          return;
+        }
+
+        if (!fs) {
           await Share.share({ message: exportText });
           return;
         }
@@ -751,7 +779,7 @@ export default function HomeScreen() {
         const fileUri = `${baseDir}${safeName}`;
         console.log('[TuckaGuide] writing export file', { fileUri });
 
-        await FileSystem.writeAsStringAsync(fileUri, exportText, { encoding: FileSystem.EncodingType.UTF8 });
+        await fs.writeAsStringAsync(fileUri, exportText, { encoding: fs.EncodingType.UTF8 });
 
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
@@ -1407,15 +1435,19 @@ Return JSON with keys:
                 console.log('[Scan] web scan has no base64; using original uri (non-persistent)', { uri: primaryToUse?.uri });
               }
             } else {
-              const rawDocDirUri = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? null;
+              const fs = await getLegacyFileSystem();
+              const rawDocDirUri = fs?.documentDirectory ?? fs?.cacheDirectory ?? null;
               const docDirUri = rawDocDirUri ? (rawDocDirUri.endsWith('/') ? rawDocDirUri : `${rawDocDirUri}/`) : null;
-              console.log('[Scan] resolved storage directory', { rawDocDirUri, docDirUri, platform: Platform.OS });
+              console.log('[Scan] resolved storage directory', { rawDocDirUri, docDirUri, platform: Platform.OS, hasFs: Boolean(fs) });
 
               if (docDirUri) {
                 const scanDirUri = `${docDirUri}scan-journal/`;
 
                 try {
-                  await FileSystem.makeDirectoryAsync(scanDirUri, { intermediates: true });
+                  if (!fs) {
+                    throw new Error('FileSystem unavailable');
+                  }
+                  await fs.makeDirectoryAsync(scanDirUri, { intermediates: true });
                   console.log('[Scan] ensured scan directory', { scanDirUri });
                 } catch (e) {
                   const message = e instanceof Error ? e.message : String(e);
@@ -1450,7 +1482,10 @@ Return JSON with keys:
                     intermediateUriScheme: (manipResult.uri ?? '').split(':')[0],
                   });
 
-                  await FileSystem.copyAsync({ from: manipResult.uri, to: dest });
+                  if (!fs) {
+                    throw new Error('FileSystem unavailable');
+                  }
+                  await fs.copyAsync({ from: manipResult.uri, to: dest });
                   persistedImageUri = dest;
                   console.log('[Scan] persisted scan photo via transcode + copy', { dest });
                 };
@@ -1472,7 +1507,10 @@ Return JSON with keys:
                   if (canCopyDirectly) {
                     try {
                       console.log('[Scan] fallback copyAsync', { from, dest, platform: Platform.OS });
-                      await FileSystem.copyAsync({ from, to: dest });
+                      if (!fs) {
+                        throw new Error('FileSystem unavailable');
+                      }
+                      await fs.copyAsync({ from, to: dest });
                       persistedImageUri = dest;
                       console.log('[Scan] persisted scan photo via fallback copyAsync', { dest });
                     } catch (copyErr) {
@@ -1481,7 +1519,10 @@ Return JSON with keys:
 
                       if (typeof base64 === 'string' && base64.length > 0) {
                         try {
-                          await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
+                          if (!fs) {
+                            throw new Error('FileSystem unavailable');
+                          }
+                          await fs.writeAsStringAsync(dest, base64, { encoding: fs.EncodingType.Base64 });
                           persistedImageUri = dest;
                           console.log('[Scan] persisted scan photo via base64 write (final fallback)', { dest, length: base64.length });
                         } catch (writeErr) {
@@ -1503,7 +1544,10 @@ Return JSON with keys:
                     }
                   } else if (typeof base64 === 'string' && base64.length > 0) {
                     try {
-                      await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
+                      if (!fs) {
+                        throw new Error('FileSystem unavailable');
+                      }
+                      await fs.writeAsStringAsync(dest, base64, { encoding: fs.EncodingType.Base64 });
                       persistedImageUri = dest;
                       console.log('[Scan] persisted scan photo via base64 write (non-file uri scheme)', { fromScheme, dest, length: base64.length });
                     } catch (writeErr) {
@@ -1578,7 +1622,13 @@ Return JSON with keys:
 
               if (typeof persistedImageUri === 'string' && persistedImageUri.startsWith('file://')) {
                 try {
-                  const info = await FileSystem.getInfoAsync(persistedImageUri);
+                  const fs = await getLegacyFileSystem();
+                  if (!fs) {
+                    console.log('[Scan] FileSystem not available; skipping getInfoAsync', { uri: persistedImageUri });
+                    return;
+                  }
+
+                  const info = await fs.getInfoAsync(persistedImageUri);
                   const size =
                     info.exists && 'size' in info && typeof (info as unknown as { size?: number }).size === 'number' && Number.isFinite((info as unknown as { size?: number }).size)
                       ? (info as unknown as { size?: number }).size

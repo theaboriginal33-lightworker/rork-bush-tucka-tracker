@@ -3,11 +3,33 @@ import { Alert, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { ChevronLeft, Download, Share2, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
+
+type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
+
+let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
+
+async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
+  try {
+    if (!legacyFsPromise) {
+      legacyFsPromise = import('expo-file-system/legacy')
+        .then((m) => m as LegacyFileSystemModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[CookGuide] failed to load expo-file-system/legacy', { message });
+          return null;
+        });
+    }
+    return await legacyFsPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[CookGuide] getLegacyFileSystem unexpected error', { message });
+    return null;
+  }
+}
 
 function safeImageUri(uri: string | undefined): string | null {
   const raw0 = typeof uri === 'string' ? uri.trim() : '';
@@ -97,9 +119,10 @@ export default function CookGuideDetailsScreen() {
     }
 
     try {
-      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-      if (!baseDir) {
-        console.log('[CookGuide] no writable directory available');
+      const fs = await getLegacyFileSystem();
+      const baseDir = fs?.cacheDirectory ?? fs?.documentDirectory;
+      if (!baseDir || !fs) {
+        console.log('[CookGuide] no writable directory available', { hasFs: Boolean(fs), baseDir });
         await Share.share({ message: exportText });
         return;
       }
@@ -107,7 +130,7 @@ export default function CookGuideDetailsScreen() {
       const fileUri = `${baseDir}${safeName}`;
       console.log('[CookGuide] writing export file', { fileUri });
 
-      await FileSystem.writeAsStringAsync(fileUri, exportText, { encoding: FileSystem.EncodingType.UTF8 });
+      await fs.writeAsStringAsync(fileUri, exportText, { encoding: fs.EncodingType.UTF8 });
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
