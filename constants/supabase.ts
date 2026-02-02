@@ -16,5 +16,5 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKe
 });
 
 if (!hasSupabaseConfig) {
-  console.log('[Supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY');
+
 }
