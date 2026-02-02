@@ -2,6 +2,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
 const supabaseAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+console.log("SUPABASE_URL:", process.env.EXPO_PUBLIC_SUPABASE_URL);
+console.log("SUPABASE_ANON:", process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.slice(0, 10));
 
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 
