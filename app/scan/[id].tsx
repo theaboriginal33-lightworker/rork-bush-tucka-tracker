@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -9,6 +8,45 @@ import type * as LocationType from 'expo-location';
 import { ChevronLeft, CookingPot, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
+
+type ExpoFileSystemModule = typeof import('expo-file-system');
+
+type MaybePaths = {
+  Paths?: {
+    cache?: {
+      uri?: string;
+    };
+    document?: {
+      uri?: string;
+    };
+  };
+  cacheDirectory?: string;
+  documentDirectory?: string;
+};
+
+let fileSystemPromise: Promise<ExpoFileSystemModule | null> | null = null;
+
+async function loadExpoFileSystem(): Promise<ExpoFileSystemModule | null> {
+  if (Platform.OS === 'web') return null;
+
+  try {
+    if (!fileSystemPromise) {
+      fileSystemPromise = import('expo-file-system')
+        .then((m) => m as ExpoFileSystemModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanDetails] failed to load expo-file-system', { message });
+          return null;
+        });
+    }
+
+    return await fileSystemPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[ScanDetails] loadExpoFileSystem unexpected error', { message });
+    return null;
+  }
+}
 
 const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
 
@@ -280,11 +318,19 @@ export default function ScanDetailsScreen() {
         return;
       }
 
+      const fs = await loadExpoFileSystem();
+      if (!fs) {
+        Alert.alert('Sharing unavailable', 'File sharing is not available on this device.');
+        return;
+      }
+
       const fileName = `scan-${entry.id}.jpg`;
+      const fsAny = fs as unknown as MaybePaths;
       const cacheDirUri =
-        FileSystem.Paths.cache?.uri ??
-        (FileSystem as unknown as { cacheDirectory?: string }).cacheDirectory ??
-        '';
+        (typeof fsAny.Paths?.cache?.uri === 'string' ? fsAny.Paths.cache.uri : '') ||
+        (typeof fsAny.cacheDirectory === 'string' ? fsAny.cacheDirectory : '') ||
+        (typeof fsAny.documentDirectory === 'string' ? fsAny.documentDirectory : '') ||
+        (typeof fsAny.Paths?.document?.uri === 'string' ? fsAny.Paths.document.uri : '');
       if (cacheDirUri.length === 0) {
         throw new Error('No cache directory available');
       }
@@ -302,7 +348,7 @@ export default function ScanDetailsScreen() {
 
       if (imageUri.startsWith('content://')) {
         console.log('[ScanDetails] sharePhoto: copyAsync(content uri)', { from: imageUri, to: dest, platform: Platform.OS });
-        await FileSystem.copyAsync({ from: imageUri, to: dest });
+        await fs.copyAsync({ from: imageUri, to: dest });
 
         console.log('[ScanDetails] sharePhoto: shareAsync(copied content uri)', { uri: dest });
         await Sharing.shareAsync(dest, {
@@ -314,7 +360,7 @@ export default function ScanDetailsScreen() {
       }
 
       console.log('[ScanDetails] sharePhoto: downloadAsync(remote)', { from: imageUri, to: dest, platform: Platform.OS });
-      const download = await FileSystem.downloadAsync(imageUri, dest);
+      const download = await fs.downloadAsync(imageUri, dest);
 
       console.log('[ScanDetails] sharePhoto: shareAsync(downloaded)', { uri: download.uri });
       await Sharing.shareAsync(download.uri, {
