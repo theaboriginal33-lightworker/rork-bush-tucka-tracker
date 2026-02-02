@@ -32,7 +32,7 @@ import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createRorkTool, useRorkAgent } from '@rork-ai/toolkit-sdk';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import { getSupportDirectory, type SupportOrganization } from '@/constants/supportDirectory';
 import {
   createScanEntryId,
