@@ -3,7 +3,7 @@ import { Alert, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
-import { File, Paths } from 'expo-file-system';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { ChevronLeft, Download, Share2, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
@@ -97,25 +97,21 @@ export default function CookGuideDetailsScreen() {
     }
 
     try {
-      const file = new File(Paths.cache, safeName);
-      try {
-        file.create({ intermediates: true, overwrite: true });
-      } catch (createError) {
-        const createMessage = createError instanceof Error ? createError.message : String(createError);
-        console.log('[CookGuide] file.create failed (will continue)', { createMessage, uri: file.uri });
+      const baseDir = LegacyFileSystem.cacheDirectory ?? LegacyFileSystem.documentDirectory;
+      if (!baseDir) {
+        console.log('[CookGuide] no writable directory available');
+        await Share.share({ message: exportText });
+        return;
       }
 
-      try {
-        file.write(exportText, { encoding: 'utf8' });
-      } catch (writeError) {
-        const writeMessage = writeError instanceof Error ? writeError.message : String(writeError);
-        console.log('[CookGuide] file.write failed', { writeMessage, uri: file.uri });
-        throw writeError;
-      }
+      const fileUri = `${baseDir}${safeName}`;
+      console.log('[CookGuide] writing export file', { fileUri });
+
+      await LegacyFileSystem.writeAsStringAsync(fileUri, exportText, { encoding: LegacyFileSystem.EncodingType.UTF8 });
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(file.uri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
         return;
       }
 
@@ -123,7 +119,7 @@ export default function CookGuideDetailsScreen() {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[CookGuide] export failed', { message });
-      Alert.alert('Could not export', 'Please try again.');
+      Alert.alert('Could not export', message.length > 140 ? 'Please try again.' : message);
     }
   }, [entry, exportText]);
 

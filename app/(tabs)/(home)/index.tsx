@@ -7,6 +7,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Directory, File, Paths } from 'expo-file-system';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Sharing from 'expo-sharing';
 import {
@@ -496,36 +497,6 @@ export default function HomeScreen() {
     return `I can answer questions about ${scanResult.commonName}. ${gateLine} ${safetyNote} Need local help? Ask for nearby organisations and include your town or region.`;
   }, [confidenceGate?.level, scanResult]);
 
-  useEffect(() => {
-    if (!scanResult || !systemPrompt || !scanContextKey) {
-      if (chatContextKeyRef.current) {
-        chatContextKeyRef.current = null;
-        setChatMessages([]);
-        setChatInput('');
-      }
-      return;
-    }
-
-    if (chatContextKeyRef.current === scanContextKey) {
-      return;
-    }
-
-    chatContextKeyRef.current = scanContextKey;
-    setChatMessages([
-      {
-        id: `system-${scanContextKey}`,
-        role: 'system',
-        parts: [{ type: 'text', text: systemPrompt }],
-      },
-      {
-        id: `assistant-${scanContextKey}`,
-        role: 'assistant',
-        parts: [{ type: 'text', text: assistantGreeting }],
-      },
-    ] as unknown as Parameters<typeof setChatMessages>[0]);
-    setChatInput('');
-  }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
-
   const chatDisplayMessages = useMemo(() => {
     const sanitizeChatText = (value: string): string => {
       let cleaned = value;
@@ -622,7 +593,81 @@ export default function HomeScreen() {
     }
   }, [chatMessages]);
 
+  const [chatTimeout, setChatTimeout] = useState<boolean>(false);
+  const chatBusySinceRef = useRef<number | null>(null);
+
+  const resetChatToGreeting = useCallback(() => {
+    if (!scanResult || !systemPrompt || !scanContextKey) {
+      setChatMessages([]);
+      setChatInput('');
+      chatContextKeyRef.current = null;
+      return;
+    }
+
+    chatContextKeyRef.current = scanContextKey;
+    setChatMessages([
+      {
+        id: `system-${scanContextKey}`,
+        role: 'system',
+        parts: [{ type: 'text', text: systemPrompt }],
+      },
+      {
+        id: `assistant-${scanContextKey}`,
+        role: 'assistant',
+        parts: [{ type: 'text', text: assistantGreeting }],
+      },
+    ] as unknown as Parameters<typeof setChatMessages>[0]);
+    setChatInput('');
+    setChatTimeout(false);
+    chatBusySinceRef.current = null;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
+
+  useEffect(() => {
+    if (!scanResult || !systemPrompt || !scanContextKey) {
+      if (chatContextKeyRef.current) {
+        chatContextKeyRef.current = null;
+        setChatMessages([]);
+        setChatInput('');
+        setChatTimeout(false);
+        chatBusySinceRef.current = null;
+      }
+      return;
+    }
+
+    if (chatContextKeyRef.current === scanContextKey) {
+      return;
+    }
+
+    resetChatToGreeting();
+  }, [resetChatToGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
+
   const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
+
+  useEffect(() => {
+    if (!chatBusy) {
+      setChatTimeout(false);
+      chatBusySinceRef.current = null;
+      return;
+    }
+
+    if (chatBusySinceRef.current === null) {
+      chatBusySinceRef.current = Date.now();
+      setChatTimeout(false);
+    }
+
+    const handle = setTimeout(() => {
+      const since = chatBusySinceRef.current;
+      const elapsedMs = typeof since === 'number' ? Date.now() - since : 0;
+      console.log('[TuckaGuide] chat busy watchdog fired', { chatStatus, elapsedMs });
+      setChatTimeout(true);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    }, 45000);
+
+    return () => {
+      clearTimeout(handle);
+    };
+  }, [chatBusy, chatStatus]);
 
   const [savedGuideByMessageId, setSavedGuideByMessageId] = useState<Record<string, boolean>>({});
 
@@ -697,25 +742,21 @@ export default function HomeScreen() {
       }
 
       try {
-        const file = new File(Paths.cache, safeName);
-        try {
-          file.create({ intermediates: true, overwrite: true });
-        } catch (createError) {
-          const createMessage = createError instanceof Error ? createError.message : String(createError);
-          console.log('[TuckaGuide] file.create failed (will continue)', { createMessage, uri: file.uri });
+        const baseDir = LegacyFileSystem.cacheDirectory ?? LegacyFileSystem.documentDirectory;
+        if (!baseDir) {
+          console.log('[TuckaGuide] no writable directory available');
+          await Share.share({ message: exportText });
+          return;
         }
 
-        try {
-          file.write(exportText, { encoding: 'utf8' });
-        } catch (writeError) {
-          const writeMessage = writeError instanceof Error ? writeError.message : String(writeError);
-          console.log('[TuckaGuide] file.write failed', { writeMessage, uri: file.uri });
-          throw writeError;
-        }
+        const fileUri = `${baseDir}${safeName}`;
+        console.log('[TuckaGuide] writing export file', { fileUri });
+
+        await LegacyFileSystem.writeAsStringAsync(fileUri, exportText, { encoding: LegacyFileSystem.EncodingType.UTF8 });
 
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
-          await Sharing.shareAsync(file.uri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
+          await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
           return;
         }
 
@@ -723,7 +764,7 @@ export default function HomeScreen() {
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         console.log('[TuckaGuide] share/download failed', { message });
-        Alert.alert('Could not export', 'Please try again.');
+        Alert.alert('Could not export', message.length > 140 ? 'Please try again.' : message);
       }
     },
     [buildGuideExportText, copyGuideText],
@@ -2238,8 +2279,26 @@ Return JSON with keys:
                 ) : null}
 
                 {chatBusy ? (
-                  <View style={[styles.chatBubble, styles.chatBubbleAssistant]}>
+                  <View style={[styles.chatBubble, styles.chatBubbleAssistant]} testID="tucka-guide-thinking">
                     <Text style={styles.chatBubbleText}>Thinking...</Text>
+                    {chatTimeout ? (
+                      <View style={styles.chatTimeoutRow} testID="tucka-guide-timeout">
+                        <Text style={styles.chatTimeoutText}>Taking longer than usual. Check your connection and try again.</Text>
+                        <View style={styles.chatTimeoutActions}>
+                          <TouchableOpacity
+                            style={styles.chatTimeoutButton}
+                            onPress={() => {
+                              console.log('[TuckaGuide] user pressed Reset chat');
+                              clearChatError();
+                              resetChatToGreeting();
+                            }}
+                            testID="tucka-guide-reset-chat"
+                          >
+                            <Text style={styles.chatTimeoutButtonText}>Reset</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
 
@@ -2978,6 +3037,39 @@ const styles = StyleSheet.create({
   },
   chatActionTextSaved: {
     color: COLORS.primary,
+  },
+  chatTimeoutRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.10)',
+    gap: 10,
+  },
+  chatTimeoutText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: 'rgba(242,245,242,0.72)',
+  },
+  chatTimeoutActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  chatTimeoutButton: {
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    justifyContent: 'center',
+  },
+  chatTimeoutButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: DARK.text,
+    letterSpacing: 0.2,
   },
   chatInputRow: {
     flexDirection: 'row',
