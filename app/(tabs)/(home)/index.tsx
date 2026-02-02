@@ -3,11 +3,7 @@ import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, ScrollView,
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
-import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as Sharing from 'expo-sharing';
 import {
   AlertTriangle,
   ArrowRight,
@@ -40,7 +36,19 @@ import {
 
 type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
 
+type ExpoSharingModule = typeof import('expo-sharing');
+
+type ExpoClipboardModule = typeof import('expo-clipboard');
+
+type ExpoImagePickerModule = typeof import('expo-image-picker');
+
+type ExpoImageManipulatorModule = typeof import('expo-image-manipulator');
+
 let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
+let sharingPromise: Promise<ExpoSharingModule | null> | null = null;
+let clipboardPromise: Promise<ExpoClipboardModule | null> | null = null;
+let imagePickerPromise: Promise<ExpoImagePickerModule | null> | null = null;
+let imageManipulatorPromise: Promise<ExpoImageManipulatorModule | null> | null = null;
 
 async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   try {
@@ -57,6 +65,82 @@ async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.log('[Home] getLegacyFileSystem unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoSharing(): Promise<ExpoSharingModule | null> {
+  try {
+    if (!sharingPromise) {
+      sharingPromise = import('expo-sharing')
+        .then((m) => m as ExpoSharingModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-sharing', { message });
+          return null;
+        });
+    }
+    return await sharingPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoSharing unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoClipboard(): Promise<ExpoClipboardModule | null> {
+  try {
+    if (!clipboardPromise) {
+      clipboardPromise = import('expo-clipboard')
+        .then((m) => m as ExpoClipboardModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-clipboard', { message });
+          return null;
+        });
+    }
+    return await clipboardPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoClipboard unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoImagePicker(): Promise<ExpoImagePickerModule | null> {
+  try {
+    if (!imagePickerPromise) {
+      imagePickerPromise = import('expo-image-picker')
+        .then((m) => m as ExpoImagePickerModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-image-picker', { message });
+          return null;
+        });
+    }
+    return await imagePickerPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoImagePicker unexpected error', { message });
+    return null;
+  }
+}
+
+async function getExpoImageManipulator(): Promise<ExpoImageManipulatorModule | null> {
+  try {
+    if (!imageManipulatorPromise) {
+      imageManipulatorPromise = import('expo-image-manipulator')
+        .then((m) => m as ExpoImageManipulatorModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load expo-image-manipulator', { message });
+          return null;
+        });
+    }
+    return await imageManipulatorPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getExpoImageManipulator unexpected error', { message });
     return null;
   }
 }
@@ -759,6 +843,11 @@ export default function HomeScreen() {
     async (assistantText: string) => {
       const exportText = buildGuideExportText(assistantText);
       try {
+        const Clipboard = await getExpoClipboard();
+        if (!Clipboard) {
+          await Share.share({ message: exportText });
+          return;
+        }
         await Clipboard.setStringAsync(exportText);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         Alert.alert('Copied', 'Tucka Guide answer copied to clipboard.');
@@ -824,10 +913,13 @@ export default function HomeScreen() {
 
         await fs.writeAsStringAsync(fileUri, exportText, { encoding: fs.EncodingType.UTF8 });
 
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
-          return;
+        const Sharing = await getExpoSharing();
+        if (Sharing) {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Share / Save' });
+            return;
+          }
         }
 
         await Share.share({ message: exportText });
@@ -1450,6 +1542,11 @@ Return JSON with keys:
             if (Platform.OS === 'web') {
               if (typeof base64 === 'string' && base64.length > 0) {
                 try {
+                  const ImageManipulator = await getExpoImageManipulator();
+                  if (!ImageManipulator) {
+                    throw new Error('ImageManipulator unavailable');
+                  }
+
                   const manipResult = await ImageManipulator.manipulateAsync(
                     primaryToUse?.uri ?? '',
                     [{ resize: { width: 1200 } }],
@@ -1510,6 +1607,11 @@ Return JSON with keys:
                     mimeType,
                     platform: Platform.OS,
                   });
+
+                  const ImageManipulator = await getExpoImageManipulator();
+                  if (!ImageManipulator) {
+                    throw new Error('ImageManipulator unavailable');
+                  }
 
                   const manipResult = await ImageManipulator.manipulateAsync(
                     from,
@@ -1617,6 +1719,11 @@ Return JSON with keys:
               if (typeof previewImageUri !== 'string' || previewImageUri.length === 0) {
                 if (typeof base64 === 'string' && base64.length > 0) {
                   try {
+                    const ImageManipulator = await getExpoImageManipulator();
+                    if (!ImageManipulator) {
+                      throw new Error('ImageManipulator unavailable');
+                    }
+
                     const manipPreview = await ImageManipulator.manipulateAsync(
                       primaryToUse?.uri ?? '',
                       [{ resize: { width: 900 } }],
@@ -1765,6 +1872,12 @@ Return JSON with keys:
     async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
       const count = mode === 'identify360' ? 3 : 1;
       const label = source === 'camera' ? 'Take photo' : 'Select photo';
+
+      const ImagePicker = await getExpoImagePicker();
+      if (!ImagePicker) {
+        Alert.alert('Unavailable', 'Photo picker is not available right now.');
+        return null;
+      }
 
       if (source === 'library') {
         if (Platform.OS !== 'web') {
