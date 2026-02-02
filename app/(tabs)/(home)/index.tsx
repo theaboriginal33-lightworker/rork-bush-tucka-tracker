@@ -464,6 +464,82 @@ export default function HomeScreen() {
     setChatError(null);
   }, []);
 
+  const buildLocalGuideResponse = useCallback(
+    (question: string): string | null => {
+      if (!scanResult) return null;
+      const q = question.toLowerCase();
+      const wantsRecipe = /recipe|jam|chutney|sauce|cook|cooking|prepare|prep/i.test(q);
+      const wantsSeason = /season|when|month|time/i.test(q);
+      const wantsSafety = /safe|edible|eat|toxic|poison|risk/i.test(q);
+      const wantsWarnings = /warning|lookalike|danger|hazard/i.test(q);
+      const wantsUses = /use|uses|serve/i.test(q);
+      const wantsCultural = /cultural|respect|protocol|country|community/i.test(q);
+
+      const lines: string[] = [];
+      const confidencePct = Math.round(scanResult.confidence * 100);
+      const gateNote = confidenceGate?.blurb ?? 'Verify locally before consuming.';
+
+      if (wantsSafety || wantsWarnings) {
+        lines.push(`Safety: ${scanResult.safety.status.toUpperCase()} (${confidencePct}% confidence).`);
+        if (scanResult.safety.summary) lines.push(scanResult.safety.summary);
+        if (scanResult.safety.keyRisks.length > 0) lines.push(`Risks: ${scanResult.safety.keyRisks.join('; ')}`);
+        if (scanResult.warnings.length > 0) lines.push(`Warnings: ${scanResult.warnings.join('; ')}`);
+      }
+
+      if (wantsSeason) {
+        if (scanResult.seasonality.bestMonths.length > 0) {
+          lines.push(`Seasonality: ${scanResult.seasonality.bestMonths.join(', ')}`);
+        } else if (scanResult.seasonality.notes) {
+          lines.push(`Seasonality: ${scanResult.seasonality.notes}`);
+        } else {
+          lines.push('Seasonality: not specified in the scan details.');
+        }
+      }
+
+      if (wantsRecipe || wantsUses) {
+        if (confidenceGate?.level !== 'confident') {
+          lines.push(`Preparation & uses: ${gateNote}`);
+        } else {
+          if (scanResult.preparation.steps.length > 0) {
+            lines.push(`Preparation: ${scanResult.preparation.steps.join('; ')}`);
+          } else {
+            lines.push('Preparation: no steps provided in the scan details.');
+          }
+          if (scanResult.suggestedUses.length > 0) {
+            lines.push(`Suggested uses: ${scanResult.suggestedUses.join('; ')}`);
+          }
+          if (/jam/i.test(q)) {
+            lines.push('Jam recipes are not included in the scan details. Use a verified local recipe if needed.');
+          }
+        }
+      }
+
+      if (wantsCultural) {
+        const cultural = refineCulturalNotes(scanResult.culturalKnowledge.notes);
+        if (cultural) lines.push(`Cultural notes: ${cultural}`);
+        if (scanResult.culturalKnowledge.respect.length > 0) {
+          lines.push(`Respect: ${scanResult.culturalKnowledge.respect.join('; ')}`);
+        }
+        lines.push(CULTURAL_FOOTER);
+      }
+
+      if (lines.length === 0) {
+        lines.push(`${scanResult.commonName}${scanResult.scientificName ? ` (${scanResult.scientificName})` : ''}`);
+        lines.push(`Confidence: ${confidencePct}%`);
+        if (confidenceGate?.level && confidenceGate.level !== 'confident') {
+          lines.push(gateNote);
+        } else if (scanResult.safety.summary) {
+          lines.push(scanResult.safety.summary);
+        }
+        lines.push('Ask about safety, preparation, seasonality, or uses.');
+      }
+
+      lines.push('Always verify locally before consuming.');
+      return lines.join('\n');
+    },
+    [confidenceGate?.blurb, confidenceGate?.level, scanResult],
+  );
+
   const sendMessage = useCallback(
     async (userText: string, options?: { retry?: boolean }) => {
       const trimmed = String(userText ?? '').trim();
@@ -619,6 +695,18 @@ export default function HomeScreen() {
 
         const isKeyProblem = /api key not valid|api_key_invalid|permission denied|invalid/i.test(rawMessage);
         const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable/i.test(rawMessage);
+        const fallbackResponse = isRateLimited ? buildLocalGuideResponse(trimmed) : null;
+        if (fallbackResponse) {
+          const assistantMsg: AgentMessage = {
+            id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            role: 'assistant',
+            parts: [{ type: 'text', text: fallbackResponse }],
+            createdAt: Date.now(),
+          };
+          setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
+          setChatError(null);
+          return;
+        }
 
         const userMessage = isKeyProblem
           ? 'Tucka Guide is not configured correctly (API key).'
@@ -633,7 +721,7 @@ export default function HomeScreen() {
         setChatStatus('idle');
       }
     },
-    [apiKey, chatMessagesRaw],
+    [apiKey, buildLocalGuideResponse, chatMessagesRaw],
   );
 
   const chatMessages = useMemo((): unknown[] => {
