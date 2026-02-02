@@ -3,7 +3,7 @@ import { Alert, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
-import * as LegacyFileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { ChevronLeft, Download, Share2, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
@@ -97,7 +97,7 @@ export default function CookGuideDetailsScreen() {
     }
 
     try {
-      const baseDir = LegacyFileSystem.cacheDirectory ?? LegacyFileSystem.documentDirectory;
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
       if (!baseDir) {
         console.log('[CookGuide] no writable directory available');
         await Share.share({ message: exportText });
@@ -107,7 +107,7 @@ export default function CookGuideDetailsScreen() {
       const fileUri = `${baseDir}${safeName}`;
       console.log('[CookGuide] writing export file', { fileUri });
 
-      await LegacyFileSystem.writeAsStringAsync(fileUri, exportText, { encoding: LegacyFileSystem.EncodingType.UTF8 });
+      await FileSystem.writeAsStringAsync(fileUri, exportText, { encoding: FileSystem.EncodingType.UTF8 });
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {

@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import * as LegacyFileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Sharing from 'expo-sharing';
 import {
@@ -741,7 +741,7 @@ export default function HomeScreen() {
       }
 
       try {
-        const baseDir = LegacyFileSystem.cacheDirectory ?? LegacyFileSystem.documentDirectory;
+        const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
         if (!baseDir) {
           console.log('[TuckaGuide] no writable directory available');
           await Share.share({ message: exportText });
@@ -751,7 +751,7 @@ export default function HomeScreen() {
         const fileUri = `${baseDir}${safeName}`;
         console.log('[TuckaGuide] writing export file', { fileUri });
 
-        await LegacyFileSystem.writeAsStringAsync(fileUri, exportText, { encoding: LegacyFileSystem.EncodingType.UTF8 });
+        await FileSystem.writeAsStringAsync(fileUri, exportText, { encoding: FileSystem.EncodingType.UTF8 });
 
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
@@ -1407,7 +1407,7 @@ Return JSON with keys:
                 console.log('[Scan] web scan has no base64; using original uri (non-persistent)', { uri: primaryToUse?.uri });
               }
             } else {
-              const rawDocDirUri = LegacyFileSystem.documentDirectory ?? LegacyFileSystem.cacheDirectory ?? null;
+              const rawDocDirUri = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? null;
               const docDirUri = rawDocDirUri ? (rawDocDirUri.endsWith('/') ? rawDocDirUri : `${rawDocDirUri}/`) : null;
               console.log('[Scan] resolved storage directory', { rawDocDirUri, docDirUri, platform: Platform.OS });
 
@@ -1415,7 +1415,7 @@ Return JSON with keys:
                 const scanDirUri = `${docDirUri}scan-journal/`;
 
                 try {
-                  await LegacyFileSystem.makeDirectoryAsync(scanDirUri, { intermediates: true });
+                  await FileSystem.makeDirectoryAsync(scanDirUri, { intermediates: true });
                   console.log('[Scan] ensured scan directory', { scanDirUri });
                 } catch (e) {
                   const message = e instanceof Error ? e.message : String(e);
@@ -1450,7 +1450,7 @@ Return JSON with keys:
                     intermediateUriScheme: (manipResult.uri ?? '').split(':')[0],
                   });
 
-                  await LegacyFileSystem.copyAsync({ from: manipResult.uri, to: dest });
+                  await FileSystem.copyAsync({ from: manipResult.uri, to: dest });
                   persistedImageUri = dest;
                   console.log('[Scan] persisted scan photo via transcode + copy', { dest });
                 };
@@ -1472,7 +1472,7 @@ Return JSON with keys:
                   if (canCopyDirectly) {
                     try {
                       console.log('[Scan] fallback copyAsync', { from, dest, platform: Platform.OS });
-                      await LegacyFileSystem.copyAsync({ from, to: dest });
+                      await FileSystem.copyAsync({ from, to: dest });
                       persistedImageUri = dest;
                       console.log('[Scan] persisted scan photo via fallback copyAsync', { dest });
                     } catch (copyErr) {
@@ -1481,7 +1481,7 @@ Return JSON with keys:
 
                       if (typeof base64 === 'string' && base64.length > 0) {
                         try {
-                          await LegacyFileSystem.writeAsStringAsync(dest, base64, { encoding: LegacyFileSystem.EncodingType.Base64 });
+                          await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
                           persistedImageUri = dest;
                           console.log('[Scan] persisted scan photo via base64 write (final fallback)', { dest, length: base64.length });
                         } catch (writeErr) {
@@ -1503,7 +1503,7 @@ Return JSON with keys:
                     }
                   } else if (typeof base64 === 'string' && base64.length > 0) {
                     try {
-                      await LegacyFileSystem.writeAsStringAsync(dest, base64, { encoding: LegacyFileSystem.EncodingType.Base64 });
+                      await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
                       persistedImageUri = dest;
                       console.log('[Scan] persisted scan photo via base64 write (non-file uri scheme)', { fromScheme, dest, length: base64.length });
                     } catch (writeErr) {
@@ -1578,7 +1578,7 @@ Return JSON with keys:
 
               if (typeof persistedImageUri === 'string' && persistedImageUri.startsWith('file://')) {
                 try {
-                  const info = await LegacyFileSystem.getInfoAsync(persistedImageUri);
+                  const info = await FileSystem.getInfoAsync(persistedImageUri);
                   const size =
                     info.exists && 'size' in info && typeof (info as unknown as { size?: number }).size === 'number' && Number.isFinite((info as unknown as { size?: number }).size)
                       ? (info as unknown as { size?: number }).size
