@@ -1,10 +1,13 @@
-// template
+import 'react-native-get-random-values';
+import 'react-native-url-polyfill/auto';
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import React from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -23,7 +26,9 @@ export default function RootLayout() {
       <ScanJournalProvider>
         <CookbookProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <RootLayoutNav />
+            <AppErrorBoundary>
+              <RootLayoutNav />
+            </AppErrorBoundary>
           </GestureHandlerRootView>
         </CookbookProvider>
       </ScanJournalProvider>
