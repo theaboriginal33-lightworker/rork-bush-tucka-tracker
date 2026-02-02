@@ -53,15 +53,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="journal"
         options={{
-          title: 'Journal',
+          title: 'Collection',
           tabBarIcon: ({ focused, size }) => (
             <NotebookPen
               color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
               size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
-              testID="tab-journal-icon"
+              testID="tab-collection-icon"
             />
           ),
-          tabBarLabel: 'Journal',
+          tabBarLabel: 'Collection',
         }}
       />
       <Tabs.Screen
