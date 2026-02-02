@@ -291,13 +291,15 @@ export default function HomeScreen() {
     return 'unknown';
   }, [confidenceGate?.level, scanResult]);
 
-  const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
+  const geminiApiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
+  const openAiKey =
+    (process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? process.env.EXPO_PUBLIC_OPENAI_KEY ?? '').trim();
   const chatContextKeyRef = useRef<string | null>(null);
   const systemPromptRef = useRef<string | null>(null);
 
   const canScan = useMemo(() => {
-    return scanImages.length > 0 && Boolean(apiKey);
-  }, [apiKey, scanImages.length]);
+    return scanImages.length > 0 && Boolean(geminiApiKey);
+  }, [geminiApiKey, scanImages.length]);
 
   const normalizeSupportText = useCallback((value?: string): string => {
     if (!value) return '';
@@ -624,9 +626,9 @@ export default function HomeScreen() {
       if (!trimmed) return;
       const isRetry = options?.retry === true;
 
-      if (!apiKey) {
+      if (!openAiKey) {
         setChatStatus('idle');
-        setChatError(new Error('Gemini API key is missing.'));
+        setChatError(new Error('OpenAI API key is missing.'));
         return;
       }
 
@@ -644,8 +646,8 @@ export default function HomeScreen() {
       }
       setChatError(null);
 
-      const model = 'gemini-1.5-flash';
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const model = 'gpt-4.1-mini';
+      const endpoint = 'https://api.openai.com/v1/chat/completions';
 
       const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
 
@@ -660,8 +662,8 @@ export default function HomeScreen() {
                 .join('')
             : '';
           return {
-            role: m.role === 'user' ? ('user' as const) : ('model' as const),
-            parts: [{ text }],
+            role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+            content: text,
           };
         });
 
@@ -669,27 +671,28 @@ export default function HomeScreen() {
         !isRetry || history.length === 0 || history[history.length - 1]?.role !== 'user';
 
       const requestBody = {
-        systemInstruction: { parts: [{ text: promptText }] },
-        contents: shouldAppendUser
-          ? [
-              ...history,
-              {
-                role: 'user' as const,
-                parts: [{ text: trimmed }],
-              },
-            ]
-          : history,
-        generationConfig: {
-          temperature: 0.35,
-          maxOutputTokens: 500,
-        },
+        model,
+        messages: [
+          { role: 'system', content: promptText },
+          ...(shouldAppendUser
+            ? [
+                ...history,
+                {
+                  role: 'user' as const,
+                  content: trimmed,
+                },
+              ]
+            : history),
+        ],
+        temperature: 0.35,
+        max_tokens: 500,
       };
 
       const parseFailureMessage = (resStatus: number, payload: unknown): string => {
-        const p = payload as { error?: { message?: unknown; status?: unknown } };
+        const p = payload as { error?: { message?: unknown; type?: unknown } };
         const apiMsg = typeof p?.error?.message === 'string' ? p.error.message : '';
-        const apiStatus = typeof p?.error?.status === 'string' ? p.error.status : '';
-        const core = apiMsg || apiStatus || `Chat request failed (${resStatus}).`;
+        const apiType = typeof p?.error?.type === 'string' ? p.error.type : '';
+        const core = apiMsg || apiType || `Chat request failed (${resStatus}).`;
         return core.trim().length > 0 ? core : `Chat request failed (${resStatus}).`;
       };
 
@@ -706,7 +709,10 @@ export default function HomeScreen() {
         try {
           const res = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${openAiKey}`,
+            },
             body: JSON.stringify(requestBody),
             signal: controller?.signal,
           });
@@ -720,12 +726,8 @@ export default function HomeScreen() {
             json = null;
           }
 
-          const data = json as GeminiApiResponse | null;
-          const parts = data?.candidates?.[0]?.content?.parts ?? [];
-          const assistantText = parts
-            .map((p) => (typeof p?.text === 'string' ? p.text : ''))
-            .join('\n')
-            .trim();
+          const data = json as { choices?: { message?: { content?: string } }[] } | null;
+          const assistantText = String(data?.choices?.[0]?.message?.content ?? '').trim();
 
           if (!res.ok || assistantText.length === 0) {
             throw new Error(parseFailureMessage(res.status, json));
@@ -771,7 +773,7 @@ export default function HomeScreen() {
         const rawMessage = e instanceof Error ? e.message : String(e);
         console.log('[TuckaGuide] sendMessage failed', { rawMessage });
 
-        const isKeyProblem = /api key not valid|api_key_invalid|permission denied|invalid/i.test(rawMessage);
+        const isKeyProblem = /api key not valid|invalid api key|api_key_invalid|permission denied|invalid/i.test(rawMessage);
         const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable/i.test(rawMessage);
         const fallbackResponse = isRateLimited ? buildLocalGuideResponse(trimmed) : null;
         if (fallbackResponse) {
@@ -799,7 +801,7 @@ export default function HomeScreen() {
         setChatStatus('idle');
       }
     },
-    [apiKey, buildLocalGuideResponse, chatMessagesRaw],
+    [buildLocalGuideResponse, chatMessagesRaw, openAiKey],
   );
 
   const chatMessages = useMemo((): unknown[] => {
@@ -1632,12 +1634,12 @@ ${scanContext}`;
     setScanError(null);
     setScanResult(null);
 
-    if (!apiKey) {
+    if (!geminiApiKey) {
       setScanError('Gemini API key is missing. Please set EXPO_PUBLIC_GEMINI_API_KEY.');
       return;
     }
 
-    console.log('[Scan] using gemini api key', { length: apiKey.length });
+    console.log('[Scan] using gemini api key', { length: geminiApiKey.length });
 
     if (imagesToUse.length === 0) {
       setScanError('No image data found. Please upload or take a photo again.');
@@ -1705,7 +1707,7 @@ Return JSON with keys:
     };
 
     const listModels = async (apiVersion: 'v1' | 'v1beta'): Promise<string[]> => {
-      const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models?key=${encodeURIComponent(apiKey)}`;
+      const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models?key=${encodeURIComponent(geminiApiKey)}`;
       console.log('[Scan] gemini listModels request', { apiVersion });
 
       setScanPhase('listing-models');
@@ -1815,7 +1817,7 @@ Return JSON with keys:
     const candidates = await buildCandidates();
 
     const postOnce = async (apiVersion: 'v1' | 'v1beta', model: string): Promise<GeminiApiResponse> => {
-      const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const endpoint = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
       console.log('[Scan] gemini request', { apiVersion, model });
 
       setScanPhase('sending');
@@ -2236,7 +2238,7 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [addEntry, apiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, scanImages]);
+  }, [addEntry, geminiApiKey, getGeminiText, journalChatHistory, mode, parseGeminiResult, scanImages]);
 
   const collectImages = useCallback(
     async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
