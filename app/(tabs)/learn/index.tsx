@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
+import React, { useCallback } from 'react';
+import { Alert, View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Filter } from 'lucide-react-native';
+import { Search, Filter, LogOut } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { useAuth } from '@/app/providers/AuthProvider';
 
 const LEARN_DATA = [
   { id: '1', name: 'Finger Lime', scientific: 'Citrus australasica', type: 'Fruit', color: '#E8F5E9', image: 'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop' },
@@ -13,6 +14,25 @@ const LEARN_DATA = [
 ];
 
 export default function LearnScreen() {
+  const { signOut, user } = useAuth();
+
+  const onPressSignOut = useCallback(() => {
+    Alert.alert('Sign out?', 'You will need to log in again to sync your data.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: () => {
+          signOut().catch((e) => {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[Learn] signOut failed', { message });
+            Alert.alert('Could not sign out', message);
+          });
+        },
+      },
+    ]);
+  }, [signOut]);
+
   const renderItem = ({ item }: { item: typeof LEARN_DATA[0] }) => (
     <TouchableOpacity style={styles.card}>
       <View style={styles.imageContainer}>
@@ -34,6 +54,11 @@ export default function LearnScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Encyclopedia</Text>
           <View style={styles.headerActions}>
+            {user ? (
+              <TouchableOpacity style={styles.iconButton} onPress={onPressSignOut} testID="learn-signout">
+                <LogOut size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity style={styles.iconButton} testID="learn-search">
               <Search size={22} color={COLORS.text} />
             </TouchableOpacity>
