@@ -24,7 +24,6 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
-import { generateText } from '@rork-ai/toolkit-sdk';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSupportDirectory, type SupportOrganization } from '@/constants/supportDirectory';
@@ -34,6 +33,8 @@ import {
   type GeminiScanResult as JournalGeminiScanResult,
   type ScanJournalChatMessage,
 } from '@/app/providers/ScanJournalProvider';
+
+type RorkToolkitModule = typeof import('@rork-ai/toolkit-sdk');
 
 type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
 
@@ -45,11 +46,31 @@ type ExpoImagePickerModule = typeof import('expo-image-picker');
 
 type ExpoImageManipulatorModule = typeof import('expo-image-manipulator');
 
+let rorkToolkitPromise: Promise<RorkToolkitModule | null> | null = null;
 let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
 let sharingPromise: Promise<ExpoSharingModule | null> | null = null;
 let clipboardPromise: Promise<ExpoClipboardModule | null> | null = null;
 let imagePickerPromise: Promise<ExpoImagePickerModule | null> | null = null;
 let imageManipulatorPromise: Promise<ExpoImageManipulatorModule | null> | null = null;
+
+async function getRorkToolkit(): Promise<RorkToolkitModule | null> {
+  try {
+    if (!rorkToolkitPromise) {
+      rorkToolkitPromise = import('@rork-ai/toolkit-sdk')
+        .then((m) => m as RorkToolkitModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load @rork-ai/toolkit-sdk', { message, platform: Platform.OS });
+          return null;
+        });
+    }
+    return await rorkToolkitPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getRorkToolkit unexpected error', { message, platform: Platform.OS });
+    return null;
+  }
+}
 
 async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   try {
@@ -660,6 +681,10 @@ export default function HomeScreen() {
       type BackendChatMessage = { role: 'user' | 'assistant'; content: string };
       const backendMessages = messages.filter((m) => m.role !== 'system') as BackendChatMessage[];
 
+      const toolkit = useRorkBackend ? await getRorkToolkit() : null;
+      const shouldUseRorkBackend = Boolean(useRorkBackend && toolkit?.generateText);
+      console.log('[TuckaGuide] backend choice', { useRorkBackend, shouldUseRorkBackend, hasToolkit: Boolean(toolkit) });
+
       const requestBody = {
         model,
         input: [
@@ -709,8 +734,8 @@ export default function HomeScreen() {
           }, timeoutMs);
         });
 
-        const requestPromise = useRorkBackend
-          ? generateText({ messages: backendMessages })
+        const requestPromise = shouldUseRorkBackend
+          ? (toolkit as RorkToolkitModule).generateText({ messages: backendMessages })
           : (async () => {
               const res = await fetch(endpoint, {
                 method: 'POST',
@@ -763,7 +788,9 @@ export default function HomeScreen() {
 
       const fallbackToRork = async (): Promise<string | null> => {
         try {
-          const response = await generateText({ messages: backendMessages });
+          const mod = toolkit ?? (await getRorkToolkit());
+          if (!mod?.generateText) return null;
+          const response = await mod.generateText({ messages: backendMessages });
           const cleaned = String(response ?? '').trim();
           return cleaned.length > 0 ? cleaned : null;
         } catch (e) {
