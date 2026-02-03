@@ -2566,23 +2566,6 @@ Return JSON with keys:
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>Good Morning,</Text>
-              <Text style={styles.title}>Bush Tucka</Text>
-            </View>
-            <TouchableOpacity style={styles.profileButton} testID="home-profile-button">
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop' }}
-                style={styles.profileImage}
-                contentFit="cover"
-                transition={120}
-                testID="home-profile-image"
-              />
-            </TouchableOpacity>
-          </View>
-
           <View style={styles.scanStage} testID="scan-stage">
             <LinearGradient
               colors={[DARK.bg, '#0B150F', '#09110C']}
