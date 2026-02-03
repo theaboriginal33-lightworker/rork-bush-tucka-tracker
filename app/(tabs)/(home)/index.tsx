@@ -804,10 +804,7 @@ export default function HomeScreen() {
         const rawMessage = e instanceof Error ? e.message : String(e);
         console.log('[TuckaGuide] sendMessage failed', { rawMessage });
 
-        const shouldFallback =
-          !useRorkBackend && /network request failed|failed to fetch|cors|timeout|typeerror/i.test(rawMessage);
-
-        if (shouldFallback) {
+        if (!useRorkBackend) {
           const fallbackText = await fallbackToRork();
           if (fallbackText) {
             const assistantMsg: AgentMessage = {
