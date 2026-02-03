@@ -12,19 +12,50 @@ type LearnPlant = {
   scientificName?: string;
   category?: string;
   heroImageUrl?: string;
-  summary?: string;
-  tags?: string[];
+  overview?: string;
+  isBushTucker?: boolean;
+  isMedicinal?: boolean;
+  safetyLevel?: string;
+  confidenceHint?: string;
+  edibleParts?: string[];
+  preparation?: string;
+  seasonality?: string;
+  warnings?: string;
+  lookalikes?: string;
+  culturalNotes?: string;
+  suggestedUses?: string;
+  prepBasics?: string[];
+  seasonalityNote?: string;
+  sourceRefs?: string[];
+  edibilityStatus?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type SupabasePlantRow = {
-  id: string | number;
+  id: string;
   slug?: string | null;
   common_name?: string | null;
   scientific_name?: string | null;
   category?: string | null;
-  hero_image_url?: string | null;
-  summary?: string | null;
-  tags?: string[] | null;
+  overview?: string | null;
+  edible_parts?: string[] | null;
+  preparation?: string | null;
+  seasonality?: string | null;
+  warnings?: string | null;
+  lookalikes?: string | null;
+  cultural_notes?: string | null;
+  suggested_uses?: string | null;
+  is_bush_tucker?: boolean | null;
+  is_medicinal?: boolean | null;
+  safety_level?: string | null;
+  confidence_hint?: string | null;
+  prep_basics?: string[] | null;
+  seasonality_note?: string | null;
+  source_refs?: string[] | null;
+  edibility_status?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 const FALLBACK_PLANTS: LearnPlant[] = [
@@ -34,10 +65,23 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Finger Lime',
     scientificName: 'Citrus australasica',
     category: 'Fruit',
+    overview: 'A citrus with caviar-like pearls used in both sweet and savoury dishes.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    confidenceHint: 'Foraging identification can be tricky — double-check key features in multiple sources.',
+    edibleParts: ['fruit'],
+    preparation: 'Use the pearls fresh as a garnish; store whole fruit refrigerated.',
+    seasonality: 'Varies by region',
+    warnings: 'Confirm ID before eating; avoid roadside/treated plants.',
+    lookalikes: 'Other small citrus; check peel texture and finger-like shape.',
+    culturalNotes: 'Respect local knowledge and permissions when foraging.',
+    suggestedUses: 'Seafood garnish, desserts, cocktails.',
+    prepBasics: ['rinse gently', 'slice lengthwise', 'squeeze pearls'],
+    sourceRefs: ['Local field guides', 'Community knowledge'],
+    edibilityStatus: 'unknown',
     heroImageUrl:
       'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop',
-    summary: 'A citrus with caviar-like pearls used in both sweet and savoury dishes.',
-    tags: ['citrus', 'garnish'],
   },
   {
     id: 'fallback-2',
@@ -45,10 +89,23 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Wattleseed',
     scientificName: 'Acacia spp.',
     category: 'Seed',
+    overview: 'Nutty, coffee-like roasted seed often used in baking and spice blends.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    confidenceHint: 'Use only known edible species and properly prepared seeds.',
+    edibleParts: ['seed'],
+    preparation: 'Dry roast then grind; use sparingly as a flavour booster.',
+    seasonality: 'Varies by region',
+    warnings: 'Some Acacia are not used as food — confirm species.',
+    lookalikes: 'Other Acacia seeds; verify pod and leaf form.',
+    culturalNotes: 'Many preparations are regional and cultural.',
+    suggestedUses: 'Baking, spice rubs, ice cream, coffee-style infusions.',
+    prepBasics: ['dry roast', 'cool', 'grind'],
+    sourceRefs: ['Local field guides', 'Community knowledge'],
+    edibilityStatus: 'unknown',
     heroImageUrl:
       'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
-    summary: 'Nutty, coffee-like roasted seed often used in baking and spice blends.',
-    tags: ['roasted', 'flour'],
   },
   {
     id: 'fallback-3',
@@ -56,10 +113,23 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Davidson Plum',
     scientificName: 'Davidsonia spp.',
     category: 'Fruit',
+    overview: 'Tart rainforest fruit great for jams, sauces and syrups.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    confidenceHint: 'Taste is very sour—use cooked or sweetened preparations.',
+    edibleParts: ['fruit'],
+    preparation: 'Cook into jams/syrups or blend into sauces; remove seeds.',
+    seasonality: 'Varies by region',
+    warnings: 'Confirm ID; avoid unripe fruit if very astringent.',
+    lookalikes: 'Other rainforest fruits; check leaf and fruit shape.',
+    culturalNotes: 'Harvest sustainably; avoid stripping trees.',
+    suggestedUses: 'Jam, chutney, syrup, sauces.',
+    prepBasics: ['wash', 'pit/seed', 'cook down'],
+    sourceRefs: ['Local field guides', 'Community knowledge'],
+    edibilityStatus: 'unknown',
     heroImageUrl:
       'https://images.unsplash.com/photo-1678165842817-062e21245781?q=80&w=2574&auto=format&fit=crop',
-    summary: 'Tart rainforest fruit great for jams, sauces and syrups.',
-    tags: ['jam', 'syrup'],
   },
   {
     id: 'fallback-4',
@@ -67,10 +137,23 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Saltbush',
     scientificName: 'Atriplex nummularia',
     category: 'Leaf',
+    overview: 'A native leaf with a clean saline finish—excellent with roasted meats.',
+    isBushTucker: true,
+    isMedicinal: true,
+    safetyLevel: 'unknown',
+    confidenceHint: 'Avoid plants exposed to salt spray/contamination; rinse well.',
+    edibleParts: ['leaves'],
+    preparation: 'Use young leaves fresh or dried; balance the salty flavour.',
+    seasonality: 'Year-round in many areas',
+    warnings: 'High salt content—use in moderation.',
+    lookalikes: 'Other Atriplex species; check leaf shape and habitat.',
+    culturalNotes: 'Traditional uses vary by Nation and region.',
+    suggestedUses: 'Roast meats, breads, veggie dishes.',
+    prepBasics: ['rinse', 'pat dry', 'use fresh or dehydrate'],
+    sourceRefs: ['Local field guides', 'Community knowledge'],
+    edibilityStatus: 'unknown',
     heroImageUrl:
       'https://images.unsplash.com/photo-1596726540679-0df8e8e7a61d?q=80&w=2787&auto=format&fit=crop',
-    summary: 'A native leaf with a clean saline finish—excellent with roasted meats.',
-    tags: ['leafy', 'salty'],
   },
   {
     id: 'fallback-5',
@@ -78,16 +161,28 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Macadamia',
     scientificName: 'Macadamia integrifolia',
     category: 'Nut',
+    overview: 'Creamy native nut used for pralines, oils, pestos and crusts.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    confidenceHint: 'Only eat properly cured/processed nuts; avoid mouldy kernels.',
+    edibleParts: ['nut'],
+    preparation: 'Crack, dry, roast lightly; store airtight to protect oils.',
+    seasonality: 'Varies by region',
+    warnings: 'Keep away from dogs (toxic to dogs).',
+    lookalikes: 'Other hard-shelled nuts; check tree and husk.',
+    culturalNotes: 'Harvest responsibly and avoid damaged nuts.',
+    suggestedUses: 'Pestos, desserts, oils, nut butters.',
+    prepBasics: ['crack', 'dry', 'roast'],
+    sourceRefs: ['Local field guides', 'Community knowledge'],
+    edibilityStatus: 'unknown',
     heroImageUrl:
       'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
-    summary: 'Creamy native nut used for pralines, oils, pestos and crusts.',
-    tags: ['nut', 'oil'],
   },
 ];
 
 function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
-  const rawId = row.id;
-  const id = typeof rawId === 'number' ? String(rawId) : String(rawId ?? `row-${index}`);
+  const id = String(row.id ?? `row-${index}`);
   const slug = String(row.slug ?? row.common_name ?? id)
     .trim()
     .toLowerCase()
@@ -100,9 +195,24 @@ function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
     commonName: String(row.common_name ?? 'Unknown plant'),
     scientificName: row.scientific_name ? String(row.scientific_name) : undefined,
     category: row.category ? String(row.category) : undefined,
-    heroImageUrl: row.hero_image_url ? String(row.hero_image_url) : undefined,
-    summary: row.summary ? String(row.summary) : undefined,
-    tags: Array.isArray(row.tags) ? row.tags.map((t) => String(t)) : undefined,
+    overview: row.overview ? String(row.overview) : undefined,
+    isBushTucker: typeof row.is_bush_tucker === 'boolean' ? row.is_bush_tucker : undefined,
+    isMedicinal: typeof row.is_medicinal === 'boolean' ? row.is_medicinal : undefined,
+    safetyLevel: row.safety_level ? String(row.safety_level) : undefined,
+    confidenceHint: row.confidence_hint ? String(row.confidence_hint) : undefined,
+    edibleParts: Array.isArray(row.edible_parts) ? row.edible_parts.map((p) => String(p)) : undefined,
+    preparation: row.preparation ? String(row.preparation) : undefined,
+    seasonality: row.seasonality ? String(row.seasonality) : undefined,
+    warnings: row.warnings ? String(row.warnings) : undefined,
+    lookalikes: row.lookalikes ? String(row.lookalikes) : undefined,
+    culturalNotes: row.cultural_notes ? String(row.cultural_notes) : undefined,
+    suggestedUses: row.suggested_uses ? String(row.suggested_uses) : undefined,
+    prepBasics: Array.isArray(row.prep_basics) ? row.prep_basics.map((p) => String(p)) : undefined,
+    seasonalityNote: row.seasonality_note ? String(row.seasonality_note) : undefined,
+    sourceRefs: Array.isArray(row.source_refs) ? row.source_refs.map((p) => String(p)) : undefined,
+    edibilityStatus: row.edibility_status ? String(row.edibility_status) : undefined,
+    createdAt: row.created_at ? String(row.created_at) : undefined,
+    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
   };
 }
 
@@ -120,8 +230,10 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
     console.log('[learn-detail] fetching plant', { idOrSlug: trimmed });
 
     const { data, error } = await supabase
-      .from('learn_plants')
-      .select('id, slug, common_name, scientific_name, category, hero_image_url, summary, tags')
+      .from('plants')
+      .select(
+        'id, slug, common_name, scientific_name, category, is_bush_tucker, is_medicinal, safety_level, confidence_hint, overview, edible_parts, preparation, seasonality, warnings, lookalikes, cultural_notes, suggested_uses, prep_basics, seasonality_note, source_refs, edibility_status, created_at, updated_at'
+      )
       .or(`id.eq.${trimmed},slug.eq.${trimmed}`)
       .limit(1)
       .maybeSingle();
@@ -157,14 +269,33 @@ export default function LearnPlantDetailScreen() {
   const plant = plantQuery.data ?? null;
 
   const hero = plant?.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
-  const tags = useMemo<string[]>(() => {
-    if (!plant?.tags) return [];
-    return plant.tags.map((t) => String(t)).filter((t) => t.trim().length > 0).slice(0, 12);
-  }, [plant?.tags]);
 
-  const renderTag = useCallback((t: string) => {
+  const chips = useMemo<string[]>(() => {
+    const out: string[] = [];
+    if (plant?.category) out.push(plant.category);
+    if (plant?.isBushTucker) out.push('Bush tucker');
+    if (plant?.isMedicinal) out.push('Medicinal');
+    if (plant?.safetyLevel) out.push(`Safety: ${plant.safetyLevel}`);
+    if (plant?.edibilityStatus) out.push(`Edibility: ${plant.edibilityStatus}`);
+    return out;
+  }, [plant?.category, plant?.edibilityStatus, plant?.isBushTucker, plant?.isMedicinal, plant?.safetyLevel]);
+
+  const edibleParts = useMemo<string[]>(() => {
+    return (plant?.edibleParts ?? []).map((t) => String(t)).filter((t) => t.trim().length > 0).slice(0, 12);
+  }, [plant?.edibleParts]);
+
+  const prepBasics = useMemo<string[]>(() => {
+    return (plant?.prepBasics ?? []).map((t) => String(t)).filter((t) => t.trim().length > 0).slice(0, 12);
+  }, [plant?.prepBasics]);
+
+  const sourceRefs = useMemo<string[]>(() => {
+    return (plant?.sourceRefs ?? []).map((t) => String(t)).filter((t) => t.trim().length > 0).slice(0, 12);
+  }, [plant?.sourceRefs]);
+
+  const renderChip = useCallback((t: string, prefix: string) => {
+    const slug = `${prefix}-${t}`.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
     return (
-      <View key={t} style={styles.tag} testID={`learn-tag-${t}`}>
+      <View key={`${prefix}-${t}`} style={styles.tag} testID={`learn-${prefix}-${slug}`}>
         <Text style={styles.tagText}>{t}</Text>
       </View>
     );
@@ -213,28 +344,92 @@ export default function LearnPlantDetailScreen() {
           </View>
         </View>
 
-        {plant.summary ? (
-          <Text style={styles.summary} testID="learn-detail-summary">
-            {plant.summary}
-          </Text>
-        ) : (
-          <Text style={styles.summaryMuted} testID="learn-detail-summary-empty">
-            No summary yet.
-          </Text>
-        )}
-
-        {tags.length > 0 ? (
-          <View style={styles.tagsRow} testID="learn-detail-tags">
-            {tags.map(renderTag)}
+        {chips.length > 0 ? (
+          <View style={styles.tagsRow} testID="learn-detail-chips">
+            {chips.map((c) => renderChip(c, 'chip'))}
           </View>
         ) : null}
 
-        <View style={styles.nextBox} testID="learn-detail-next">
-          <Text style={styles.nextTitle}>Next</Text>
-          <Text style={styles.nextText}>
-            When you share your Supabase schema, we’ll add: edible uses, seasons, safety notes, and linked recipes.
+        {plant.overview ? (
+          <Text style={styles.summary} testID="learn-detail-overview">
+            {plant.overview}
           </Text>
-        </View>
+        ) : (
+          <Text style={styles.summaryMuted} testID="learn-detail-overview-empty">
+            No overview yet.
+          </Text>
+        )}
+
+        {plant.confidenceHint ? (
+          <View style={styles.callout} testID="learn-detail-confidence">
+            <Text style={styles.calloutTitle}>Confidence hint</Text>
+            <Text style={styles.calloutText}>{plant.confidenceHint}</Text>
+          </View>
+        ) : null}
+
+        {edibleParts.length > 0 ? (
+          <View style={styles.block} testID="learn-detail-edible-parts">
+            <Text style={styles.blockTitle}>Edible parts</Text>
+            <View style={styles.tagsRow}>{edibleParts.map((t) => renderChip(t, 'edible'))}</View>
+          </View>
+        ) : null}
+
+        {plant.preparation ? (
+          <View style={styles.block} testID="learn-detail-preparation">
+            <Text style={styles.blockTitle}>Preparation</Text>
+            <Text style={styles.blockText}>{plant.preparation}</Text>
+          </View>
+        ) : null}
+
+        {prepBasics.length > 0 ? (
+          <View style={styles.block} testID="learn-detail-prep-basics">
+            <Text style={styles.blockTitle}>Prep basics</Text>
+            <View style={styles.tagsRow}>{prepBasics.map((t) => renderChip(t, 'prep'))}</View>
+          </View>
+        ) : null}
+
+        {plant.seasonality || plant.seasonalityNote ? (
+          <View style={styles.block} testID="learn-detail-seasonality">
+            <Text style={styles.blockTitle}>Seasonality</Text>
+            {plant.seasonality ? <Text style={styles.blockText}>{plant.seasonality}</Text> : null}
+            {plant.seasonalityNote ? <Text style={styles.blockTextMuted}>{plant.seasonalityNote}</Text> : null}
+          </View>
+        ) : null}
+
+        {plant.warnings ? (
+          <View style={styles.warningBox} testID="learn-detail-warnings">
+            <Text style={styles.warningTitle}>Warnings</Text>
+            <Text style={styles.warningText}>{plant.warnings}</Text>
+          </View>
+        ) : null}
+
+        {plant.lookalikes ? (
+          <View style={styles.block} testID="learn-detail-lookalikes">
+            <Text style={styles.blockTitle}>Lookalikes</Text>
+            <Text style={styles.blockText}>{plant.lookalikes}</Text>
+          </View>
+        ) : null}
+
+        {plant.culturalNotes ? (
+          <View style={styles.block} testID="learn-detail-cultural">
+            <Text style={styles.blockTitle}>Cultural notes</Text>
+            <Text style={styles.blockText}>{plant.culturalNotes}</Text>
+          </View>
+        ) : null}
+
+        {plant.suggestedUses ? (
+          <View style={styles.block} testID="learn-detail-suggested-uses">
+            <Text style={styles.blockTitle}>Suggested uses</Text>
+            <Text style={styles.blockText}>{plant.suggestedUses}</Text>
+          </View>
+        ) : null}
+
+        {sourceRefs.length > 0 ? (
+          <View style={styles.block} testID="learn-detail-sources">
+            <Text style={styles.blockTitle}>Sources</Text>
+            <View style={styles.tagsRow}>{sourceRefs.map((t) => renderChip(t, 'source'))}</View>
+          </View>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -311,6 +506,75 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     flexWrap: 'wrap',
+  },
+  callout: {
+    backgroundColor: 'rgba(46, 125, 50, 0.10)',
+    borderColor: 'rgba(46, 125, 50, 0.20)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    padding: 14,
+    gap: 6,
+  },
+  calloutTitle: {
+    color: COLORS.text,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  calloutText: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  warningBox: {
+    backgroundColor: 'rgba(255, 138, 101, 0.14)',
+    borderColor: 'rgba(255, 138, 101, 0.26)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    padding: 14,
+    gap: 6,
+  },
+  warningTitle: {
+    color: COLORS.text,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  warningText: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
+  },
+  block: {
+    backgroundColor: COLORS.card,
+    borderColor: COLORS.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    padding: 14,
+    gap: 8,
+  },
+  blockTitle: {
+    color: COLORS.text,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  blockText: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  blockTextMuted: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
   },
   metaChip: {
     backgroundColor: 'rgba(46, 125, 50, 0.16)',

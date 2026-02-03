@@ -24,9 +24,12 @@ type LearnPlant = {
   commonName: string;
   scientificName?: string;
   category?: string;
+  overview?: string;
+  isBushTucker?: boolean;
+  isMedicinal?: boolean;
+  safetyLevel?: string;
+  edibleParts?: string[];
   heroImageUrl?: string;
-  summary?: string;
-  tags?: string[];
 };
 
 const FALLBACK_PLANTS: LearnPlant[] = [
@@ -36,10 +39,13 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Finger Lime',
     scientificName: 'Citrus australasica',
     category: 'Fruit',
+    overview: 'A citrus with caviar-like pearls used in both sweet and savoury dishes.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    edibleParts: ['fruit'],
     heroImageUrl:
       'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop',
-    summary: 'A citrus with caviar-like pearls used in both sweet and savoury dishes.',
-    tags: ['citrus', 'garnish'],
   },
   {
     id: 'fallback-2',
@@ -47,10 +53,13 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Wattleseed',
     scientificName: 'Acacia spp.',
     category: 'Seed',
+    overview: 'Nutty, coffee-like roasted seed often used in baking and spice blends.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    edibleParts: ['seed'],
     heroImageUrl:
       'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
-    summary: 'Nutty, coffee-like roasted seed often used in baking and spice blends.',
-    tags: ['roasted', 'flour'],
   },
   {
     id: 'fallback-3',
@@ -58,10 +67,13 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Davidson Plum',
     scientificName: 'Davidsonia spp.',
     category: 'Fruit',
+    overview: 'Tart rainforest fruit great for jams, sauces and syrups.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    edibleParts: ['fruit'],
     heroImageUrl:
       'https://images.unsplash.com/photo-1678165842817-062e21245781?q=80&w=2574&auto=format&fit=crop',
-    summary: 'Tart rainforest fruit great for jams, sauces and syrups.',
-    tags: ['jam', 'syrup'],
   },
   {
     id: 'fallback-4',
@@ -69,10 +81,13 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Saltbush',
     scientificName: 'Atriplex nummularia',
     category: 'Leaf',
+    overview: 'A native leaf with a clean saline finish—excellent with roasted meats.',
+    isBushTucker: true,
+    isMedicinal: true,
+    safetyLevel: 'unknown',
+    edibleParts: ['leaves'],
     heroImageUrl:
       'https://images.unsplash.com/photo-1596726540679-0df8e8e7a61d?q=80&w=2787&auto=format&fit=crop',
-    summary: 'A native leaf with a clean saline finish—excellent with roasted meats.',
-    tags: ['leafy', 'salty'],
   },
   {
     id: 'fallback-5',
@@ -80,27 +95,31 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Macadamia',
     scientificName: 'Macadamia integrifolia',
     category: 'Nut',
+    overview: 'Creamy native nut used for pralines, oils, pestos and crusts.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'unknown',
+    edibleParts: ['nut'],
     heroImageUrl:
       'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
-    summary: 'Creamy native nut used for pralines, oils, pestos and crusts.',
-    tags: ['nut', 'oil'],
   },
 ];
 
 type SupabasePlantRow = {
-  id: string | number;
+  id: string;
   slug?: string | null;
   common_name?: string | null;
   scientific_name?: string | null;
   category?: string | null;
-  hero_image_url?: string | null;
-  summary?: string | null;
-  tags?: string[] | null;
+  overview?: string | null;
+  edible_parts?: string[] | null;
+  is_bush_tucker?: boolean | null;
+  is_medicinal?: boolean | null;
+  safety_level?: string | null;
 };
 
 function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
-  const rawId = row.id;
-  const id = typeof rawId === 'number' ? String(rawId) : String(rawId ?? `row-${index}`);
+  const id = String(row.id ?? `row-${index}`);
   const slug = String(row.slug ?? row.common_name ?? id)
     .trim()
     .toLowerCase()
@@ -113,9 +132,11 @@ function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
     commonName: String(row.common_name ?? 'Unknown plant'),
     scientificName: row.scientific_name ? String(row.scientific_name) : undefined,
     category: row.category ? String(row.category) : undefined,
-    heroImageUrl: row.hero_image_url ? String(row.hero_image_url) : undefined,
-    summary: row.summary ? String(row.summary) : undefined,
-    tags: Array.isArray(row.tags) ? row.tags.map((t) => String(t)) : undefined,
+    overview: row.overview ? String(row.overview) : undefined,
+    isBushTucker: typeof row.is_bush_tucker === 'boolean' ? row.is_bush_tucker : undefined,
+    isMedicinal: typeof row.is_medicinal === 'boolean' ? row.is_medicinal : undefined,
+    safetyLevel: row.safety_level ? String(row.safety_level) : undefined,
+    edibleParts: Array.isArray(row.edible_parts) ? row.edible_parts.map((p) => String(p)) : undefined,
   };
 }
 
@@ -129,9 +150,9 @@ async function fetchPlantsFromSupabase(): Promise<LearnPlant[]> {
     console.log('[learn] fetching plants from supabase');
 
     const { data, error } = await supabase
-      .from('learn_plants')
-      .select('id, slug, common_name, scientific_name, category, hero_image_url, summary, tags')
-      .order('common_name', { ascending: true });
+      .from('plants')
+      .select('id, slug, common_name, scientific_name, category, overview, edible_parts, is_bush_tucker, is_medicinal, safety_level')
+      .order('common_name', { ascending: true, nullsFirst: false });
 
     if (error) {
       console.log('[learn] supabase error; using fallback', { message: error.message });
@@ -167,7 +188,7 @@ export default function LearnScreen() {
     if (!q) return data;
 
     return data.filter((p) => {
-      const haystack = `${p.commonName} ${p.scientificName ?? ''} ${(p.tags ?? []).join(' ')}`.toLowerCase();
+      const haystack = `${p.commonName} ${p.scientificName ?? ''} ${p.category ?? ''} ${(p.edibleParts ?? []).join(' ')} ${p.isBushTucker ? 'bush tucker' : ''} ${p.isMedicinal ? 'medicinal' : ''}`.toLowerCase();
       return haystack.includes(q);
     });
   }, [plantsQuery.data, query]);
@@ -182,6 +203,7 @@ export default function LearnScreen() {
     ({ item }: { item: LearnPlant }) => {
       const hero = item.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
       const category = item.category ?? 'Plant';
+      const safety = (item.safetyLevel ?? 'unknown').toUpperCase();
 
       return (
         <Pressable
@@ -196,6 +218,11 @@ export default function LearnScreen() {
                 {category}
               </Text>
             </View>
+            <View style={styles.safetyTag}>
+              <Text style={styles.safetyText} numberOfLines={1}>
+                {safety}
+              </Text>
+            </View>
           </View>
           <View style={styles.cardContent}>
             <Text style={styles.cardTitle} numberOfLines={1}>
@@ -204,6 +231,11 @@ export default function LearnScreen() {
             <Text style={styles.cardSubtitle} numberOfLines={1}>
               {item.scientificName ?? '—'}
             </Text>
+            {item.overview ? (
+              <Text style={styles.cardSummary} numberOfLines={2}>
+                {item.overview}
+              </Text>
+            ) : null}
           </View>
         </Pressable>
       );
@@ -424,11 +456,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  safetyTag: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  safetyText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.94)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   typeText: {
     fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.text,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.94)',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -446,6 +499,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     fontStyle: 'italic',
+  },
+  cardSummary: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
   },
   stateContainer: {
     paddingHorizontal: 24,
