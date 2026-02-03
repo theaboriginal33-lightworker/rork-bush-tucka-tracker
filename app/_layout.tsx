@@ -6,6 +6,7 @@ import { Stack, router, usePathname, useSegments } from "expo-router";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
+import { LearnImageProvider } from "@/app/providers/LearnImageProvider";
 import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "@/app/providers/AuthProvider";
@@ -77,9 +78,11 @@ export default function RootLayout() {
           <AuthProvider>
             <ScanJournalProvider>
               <CookbookProvider>
-                <AuthGate>
-                  <RootLayoutNav />
-                </AuthGate>
+                <LearnImageProvider>
+                  <AuthGate>
+                    <RootLayoutNav />
+                  </AuthGate>
+                </LearnImageProvider>
               </CookbookProvider>
             </ScanJournalProvider>
           </AuthProvider>

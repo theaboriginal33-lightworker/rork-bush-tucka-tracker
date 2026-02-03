@@ -1,9 +1,12 @@
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
+import { ImagePlus, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
+import { useLearnImages } from '@/app/providers/LearnImageProvider';
 
 type LearnPlant = {
   id: string;
@@ -185,8 +188,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Bush Plum',
     scientificName: undefined,
     category: 'Fruit',
-    heroImageUrl:
-      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/xexu0k7yq9wwnmkj3afen',
+    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/5jlxv3srevkvmlnhqj5ij',
     overview:
       'Bush Plum refers to several native Australian plum species traditionally harvested by Aboriginal communities as a nutrient-dense seasonal food. Flavour ranges from tart to mildly sweet, often enjoyed fresh or dried, and sometimes preserved for later use.\n\nKnowledge and use vary by Country, language group, and season.',
     safetyLevel: 'caution',
@@ -290,6 +292,8 @@ export default function LearnPlantDetailScreen() {
   const params = useLocalSearchParams();
   const idParam = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
 
+  const { getPlantImageUrl, setPlantImageUrl, clearPlantImageUrl } = useLearnImages();
+
   const plantQuery = useQuery({
     queryKey: ['learn', 'plant', idParam],
     queryFn: () => fetchPlantByIdOrSlug(idParam),
@@ -298,7 +302,39 @@ export default function LearnPlantDetailScreen() {
 
   const plant = plantQuery.data ?? null;
 
-  const hero = plant?.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
+  const hero = getPlantImageUrl(plant?.slug ?? idParam) ?? plant?.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
+
+  const pickImageMutation = useMutation({
+    mutationFn: async () => {
+      if (!plant) throw new Error('Plant not loaded');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.9,
+        aspect: [1, 1],
+      });
+
+      if (result.canceled) {
+        console.log('[learn-detail] image pick canceled');
+        return { canceled: true as const };
+      }
+
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) throw new Error('Could not read selected image');
+
+      await setPlantImageUrl(plant.slug, uri);
+      console.log('[learn-detail] image override saved', { slug: plant.slug });
+      return { canceled: false as const, uri };
+    },
+  });
+
+  const clearImageMutation = useMutation({
+    mutationFn: async () => {
+      if (!plant) throw new Error('Plant not loaded');
+      await clearPlantImageUrl(plant.slug);
+      console.log('[learn-detail] image override cleared', { slug: plant.slug });
+    },
+  });
 
   const chips = useMemo<string[]>(() => {
     const out: string[] = [];
@@ -354,6 +390,29 @@ export default function LearnPlantDetailScreen() {
       <View style={styles.heroWrap}>
         {hero ? <Image source={{ uri: hero }} style={styles.hero} /> : <View style={styles.heroFallback} />}
         <View style={styles.heroOverlay} />
+
+        <View style={styles.heroActions} pointerEvents="box-none">
+          <Pressable
+            style={({ pressed }) => [styles.heroActionButton, pressed && styles.heroActionButtonPressed]}
+            onPress={() => pickImageMutation.mutate()}
+            disabled={pickImageMutation.isPending}
+            testID="learn-detail-change-image"
+          >
+            <ImagePlus size={16} color="rgba(255,255,255,0.92)" />
+            <Text style={styles.heroActionText}>{pickImageMutation.isPending ? 'Opening…' : 'Change'}</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.heroActionButton, pressed && styles.heroActionButtonPressed]}
+            onPress={() => clearImageMutation.mutate()}
+            disabled={clearImageMutation.isPending}
+            testID="learn-detail-clear-image"
+          >
+            <Trash2 size={16} color="rgba(255,255,255,0.92)" />
+            <Text style={styles.heroActionText}>{clearImageMutation.isPending ? 'Removing…' : 'Remove'}</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.heroTextWrap}>
           <Text style={styles.title} testID="learn-detail-title">
             {plant.commonName}
@@ -508,6 +567,34 @@ const styles = StyleSheet.create({
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.30)',
+  },
+  heroActions: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  heroActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.20)',
+  },
+  heroActionButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.98 }],
+  },
+  heroActionText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.2,
   },
   heroTextWrap: {
     position: 'absolute',

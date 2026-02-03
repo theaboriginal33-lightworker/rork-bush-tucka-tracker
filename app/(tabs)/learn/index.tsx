@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import { Filter, Search, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
+import { useLearnImages } from '@/app/providers/LearnImageProvider';
 
 type LearnPlant = {
   id: string;
@@ -115,8 +116,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: false,
     safetyLevel: 'caution',
     edibleParts: ['fruit'],
-    heroImageUrl:
-      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/xexu0k7yq9wwnmkj3afen',
+    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/5jlxv3srevkvmlnhqj5ij',
   },
 ];
 
@@ -191,6 +191,7 @@ async function fetchPlantsFromSupabase(): Promise<LearnPlant[]> {
 
 export default function LearnScreen() {
   const [query, setQuery] = useState<string>('');
+  const { getPlantImageUrl } = useLearnImages();
 
   const plantsQuery = useQuery({
     queryKey: ['learn', 'plants'],
@@ -219,7 +220,7 @@ export default function LearnScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: LearnPlant }) => {
-      const hero = item.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
+      const hero = getPlantImageUrl(item.slug) ?? item.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
       const category = item.category ?? 'Plant';
       const safety = (item.safetyLevel ?? 'unknown').toUpperCase();
 
@@ -258,7 +259,7 @@ export default function LearnScreen() {
         </Pressable>
       );
     },
-    [onOpenPlant]
+    [getPlantImageUrl, onOpenPlant]
   );
 
   const keyExtractor = useCallback((item: LearnPlant) => item.id, []);
