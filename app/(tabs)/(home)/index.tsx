@@ -613,15 +613,21 @@ export default function HomeScreen() {
 
       const runOnce = async (): Promise<string> => {
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        const timeoutId = setTimeout(() => {
-          try {
-            controller?.abort();
-          } catch {
-            
-          }
-        }, 25000);
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const timeoutMs = 25000;
 
-        try {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            try {
+              controller?.abort();
+            } catch {
+              
+            }
+            reject(new Error('Request timeout'));
+          }, timeoutMs);
+        });
+
+        const fetchPromise = (async () => {
           const res = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -649,8 +655,14 @@ export default function HomeScreen() {
           }
 
           return assistantText;
+        })();
+
+        try {
+          return await Promise.race([fetchPromise, timeoutPromise]);
         } finally {
-          clearTimeout(timeoutId);
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         }
       };
 
@@ -689,7 +701,7 @@ export default function HomeScreen() {
         console.log('[TuckaGuide] sendMessage failed', { rawMessage });
 
         const isKeyProblem = /api key not valid|invalid api key|api_key_invalid|permission denied|invalid/i.test(rawMessage);
-        const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable/i.test(rawMessage);
+        const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable|timeout/i.test(rawMessage);
 
         const userMessage = isKeyProblem
           ? 'Tucka Guide is not configured correctly (API key).'
