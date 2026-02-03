@@ -31,6 +31,10 @@ export default function AuthScreen() {
     return err.includes('invalid api key') || err.includes('api key') || err.includes('jwt') || err.includes('unauthorized');
   }, [authError]);
 
+  const shouldShowDebugBanner = useMemo(() => {
+    return __DEV__ && (!hasConfig || showKeyDebug);
+  }, [hasConfig, showKeyDebug]);
+
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -125,7 +129,7 @@ export default function AuthScreen() {
             </View>
           ) : null}
 
-          {(!hasConfig || showKeyDebug) ? (
+          {shouldShowDebugBanner ? (
             <View style={styles.debugBanner} testID="auth-debug-banner">
               <Text style={styles.debugTitle} testID="auth-debug-title">Supabase config debug</Text>
               <Text style={styles.debugBody} testID="auth-debug-body">
