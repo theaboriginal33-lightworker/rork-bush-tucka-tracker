@@ -2,25 +2,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const rawSupabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
-
 const rawAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
-const rawUrlKey = (process.env.EXPO_PUBLIC_SUPABASE_URL_KEY ?? '').trim();
 
-const rawSupabaseUrlValue = rawSupabaseUrl.length > 0 ? rawSupabaseUrl : rawUrlKey && !rawUrlKey.startsWith('eyJ') ? rawUrlKey : '';
-
-const rawSupabaseAnonKey = rawAnonKey.length > 0 ? rawAnonKey : rawUrlKey.startsWith('eyJ') ? rawUrlKey : '';
+const rawSupabaseUrlValue = rawSupabaseUrl;
+const rawSupabaseAnonKey = rawAnonKey;
 
 type SupabaseConfig = {
   url: string;
   anonKey: string;
   isValid: boolean;
   reason?: string;
-  urlSource?: 'EXPO_PUBLIC_SUPABASE_URL' | 'EXPO_PUBLIC_SUPABASE_URL_KEY' | 'missing';
-  keySource?:
-    | 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
-    | 'EXPO_PUBLIC_SUPABASE_URL_KEY'
-    | 'EXPO_PUBLIC_SUPABASE_URL_KEY_INVALID'
-    | 'missing';
+  urlSource?: 'EXPO_PUBLIC_SUPABASE_URL' | 'missing';
+  keySource?: 'EXPO_PUBLIC_SUPABASE_ANON_KEY' | 'missing';
   urlRef?: string;
   keyRef?: string;
   keyRole?: string;
@@ -97,19 +90,9 @@ function getSupabaseConfig(): SupabaseConfig {
 
   const anonKey = rawSupabaseAnonKey.trim();
 
-  const urlSource: SupabaseConfig['urlSource'] = rawSupabaseUrl
-    ? 'EXPO_PUBLIC_SUPABASE_URL'
-    : rawUrlKey && !rawUrlKey.startsWith('eyJ')
-      ? 'EXPO_PUBLIC_SUPABASE_URL_KEY'
-      : 'missing';
+  const urlSource: SupabaseConfig['urlSource'] = rawSupabaseUrl ? 'EXPO_PUBLIC_SUPABASE_URL' : 'missing';
 
-  const keySource: SupabaseConfig['keySource'] = rawAnonKey
-    ? 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
-    : rawUrlKey
-      ? rawUrlKey.startsWith('eyJ')
-        ? 'EXPO_PUBLIC_SUPABASE_URL_KEY'
-        : 'EXPO_PUBLIC_SUPABASE_URL_KEY_INVALID'
-      : 'missing';
+  const keySource: SupabaseConfig['keySource'] = rawAnonKey ? 'EXPO_PUBLIC_SUPABASE_ANON_KEY' : 'missing';
 
   const urlRef = url ? getUrlRef(url) : undefined;
   const payload = anonKey ? decodeJwtPayload(anonKey) : null;
@@ -129,15 +112,11 @@ function getSupabaseConfig(): SupabaseConfig {
       keyRole,
     };
   if (!anonKey) {
-    const extra =
-      keySource === 'EXPO_PUBLIC_SUPABASE_URL_KEY_INVALID'
-        ? ' (EXPO_PUBLIC_SUPABASE_URL_KEY is set but is not a JWT anon key)'
-        : '';
     return {
       url,
       anonKey: '',
       isValid: false,
-      reason: `Missing anon key${extra}`,
+      reason: 'Missing anon key',
       urlSource,
       keySource,
       urlRef,
@@ -226,8 +205,6 @@ if (!hasSupabaseConfig) {
     urlProvided: Boolean(rawSupabaseUrlValue.trim()),
     anonKeyProvided: Boolean(rawSupabaseAnonKey.trim()),
     rawAnonKeyProvided: Boolean(rawAnonKey),
-    rawUrlKeyProvided: Boolean(rawUrlKey),
-    urlKeyLooksLikeJwt: Boolean(rawUrlKey && rawUrlKey.startsWith('eyJ')),
     urlSource: supabaseConfig.urlSource,
     keySource: supabaseConfig.keySource,
   });
