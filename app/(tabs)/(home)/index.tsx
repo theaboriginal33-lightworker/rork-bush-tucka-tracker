@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import {
   AlertTriangle,
   ArrowRight,
@@ -42,15 +43,12 @@ type ExpoSharingModule = typeof import('expo-sharing');
 
 type ExpoClipboardModule = typeof import('expo-clipboard');
 
-type ExpoImagePickerModule = typeof import('expo-image-picker');
-
 type ExpoImageManipulatorModule = typeof import('expo-image-manipulator');
 
 let rorkToolkitPromise: Promise<RorkToolkitModule | null> | null = null;
 let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
 let sharingPromise: Promise<ExpoSharingModule | null> | null = null;
 let clipboardPromise: Promise<ExpoClipboardModule | null> | null = null;
-let imagePickerPromise: Promise<ExpoImagePickerModule | null> | null = null;
 let imageManipulatorPromise: Promise<ExpoImageManipulatorModule | null> | null = null;
 
 async function getRorkToolkit(): Promise<RorkToolkitModule | null> {
@@ -125,25 +123,6 @@ async function getExpoClipboard(): Promise<ExpoClipboardModule | null> {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.log('[Home] getExpoClipboard unexpected error', { message });
-    return null;
-  }
-}
-
-async function getExpoImagePicker(): Promise<ExpoImagePickerModule | null> {
-  try {
-    if (!imagePickerPromise) {
-      imagePickerPromise = import('expo-image-picker')
-        .then((m) => m as ExpoImagePickerModule)
-        .catch((e) => {
-          const message = e instanceof Error ? e.message : String(e);
-          console.log('[Home] failed to load expo-image-picker', { message });
-          return null;
-        });
-    }
-    return await imagePickerPromise;
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    console.log('[Home] getExpoImagePicker unexpected error', { message });
     return null;
   }
 }
@@ -2422,9 +2401,10 @@ Return JSON with keys:
       const count = mode === 'identify360' ? 3 : 1;
       const label = source === 'camera' ? 'Take photo' : 'Select photo';
 
-      const ImagePicker = await getExpoImagePicker();
-      if (!ImagePicker) {
-        Alert.alert('Unavailable', 'Photo picker is not available right now.');
+      console.log('[Scan] collectImages start', { source, mode, platform: Platform.OS });
+
+      if (source === 'camera' && Platform.OS === 'web') {
+        Alert.alert('Unavailable', 'Camera capture is not available in the web preview. Please use Select photo, or open the app on your phone via the QR code.');
         return null;
       }
 
