@@ -2,17 +2,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const rawSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const rawSupabaseAnonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
-  process.env.EXPO_PUBLIC_SUPABASE_URL_KEY ??
-  '';
+
+const rawAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+const rawUrlKey = (process.env.EXPO_PUBLIC_SUPABASE_URL_KEY ?? '').trim();
+
+const rawSupabaseAnonKey = rawAnonKey.length > 0 ? rawAnonKey : rawUrlKey.startsWith('eyJ') ? rawUrlKey : '';
 
 type SupabaseConfig = {
   url: string;
   anonKey: string;
   isValid: boolean;
   reason?: string;
-  keySource?: 'EXPO_PUBLIC_SUPABASE_ANON_KEY' | 'EXPO_PUBLIC_SUPABASE_URL_KEY' | 'missing';
+  keySource?:
+    | 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
+    | 'EXPO_PUBLIC_SUPABASE_URL_KEY'
+    | 'EXPO_PUBLIC_SUPABASE_URL_KEY_INVALID'
+    | 'missing';
   urlRef?: string;
   keyRef?: string;
   keyRole?: string;
@@ -87,10 +92,13 @@ function getSupabaseConfig(): SupabaseConfig {
   const url = normalizeSupabaseUrl(rawSupabaseUrl);
 
   const anonKey = rawSupabaseAnonKey.trim();
-  const keySource: SupabaseConfig['keySource'] = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+
+  const keySource: SupabaseConfig['keySource'] = rawAnonKey
     ? 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
-    : process.env.EXPO_PUBLIC_SUPABASE_URL_KEY
-      ? 'EXPO_PUBLIC_SUPABASE_URL_KEY'
+    : rawUrlKey
+      ? rawUrlKey.startsWith('eyJ')
+        ? 'EXPO_PUBLIC_SUPABASE_URL_KEY'
+        : 'EXPO_PUBLIC_SUPABASE_URL_KEY_INVALID'
       : 'missing';
 
   const urlRef = url ? getUrlRef(url) : undefined;
@@ -99,7 +107,22 @@ function getSupabaseConfig(): SupabaseConfig {
   const keyRole = payload?.role;
 
   if (!url) return { url: '', anonKey: '', isValid: false, reason: 'Missing URL', keySource, urlRef, keyRef, keyRole };
-  if (!anonKey) return { url, anonKey: '', isValid: false, reason: 'Missing anon key', keySource, urlRef, keyRef, keyRole };
+  if (!anonKey) {
+    const extra =
+      keySource === 'EXPO_PUBLIC_SUPABASE_URL_KEY_INVALID'
+        ? ' (EXPO_PUBLIC_SUPABASE_URL_KEY is set but is not a JWT anon key)'
+        : '';
+    return {
+      url,
+      anonKey: '',
+      isValid: false,
+      reason: `Missing anon key${extra}`,
+      keySource,
+      urlRef,
+      keyRef,
+      keyRole,
+    };
+  }
 
   const looksLikeJwt = anonKey.startsWith('eyJ') && anonKey.length > 50;
   if (!looksLikeJwt) {
@@ -176,6 +199,9 @@ if (!hasSupabaseConfig) {
     reason: supabaseConfig.reason,
     urlProvided: Boolean(rawSupabaseUrl.trim()),
     anonKeyProvided: Boolean(rawSupabaseAnonKey.trim()),
+    rawAnonKeyProvided: Boolean(rawAnonKey),
+    rawUrlKeyProvided: Boolean(rawUrlKey),
+    urlKeyLooksLikeJwt: Boolean(rawUrlKey && rawUrlKey.startsWith('eyJ')),
     keySource: supabaseConfig.keySource,
   });
 }
