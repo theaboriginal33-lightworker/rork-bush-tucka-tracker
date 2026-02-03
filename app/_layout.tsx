@@ -2,19 +2,66 @@ import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import React from "react";
+import { Stack, router, usePathname, useSegments } from "expo-router";
+import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { AuthProvider, useAuth } from "@/app/providers/AuthProvider";
+
 
 const queryClient = new QueryClient();
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { session, isReady, hasConfig } = useAuth();
+  const segments = useSegments();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const inAuthGroup = segments?.[0] === 'auth';
+    console.log('[AuthGate] check', {
+      isReady,
+      hasConfig,
+      hasSession: Boolean(session),
+      inAuthGroup,
+      pathname,
+      segments,
+    });
+
+    if (!isReady) return;
+    if (!hasConfig) return;
+
+    if (!session && !inAuthGroup) {
+      console.log('[AuthGate] redirect -> /auth');
+      try {
+        router.replace('/auth');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[AuthGate] router.replace failed', { message });
+      }
+      return;
+    }
+
+    if (session && inAuthGroup) {
+      console.log('[AuthGate] redirect -> /(tabs)');
+      try {
+        router.replace('/');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[AuthGate] router.replace failed', { message });
+      }
+    }
+  }, [isReady, hasConfig, session, segments, pathname]);
+
+  return <>{children}</>;
+}
 
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="scan/[id]" options={{ headerShown: false }} />
     </Stack>
   );
@@ -27,11 +74,15 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <AppErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <ScanJournalProvider>
-            <CookbookProvider>
-              <RootLayoutNav />
-            </CookbookProvider>
-          </ScanJournalProvider>
+          <AuthProvider>
+            <ScanJournalProvider>
+              <CookbookProvider>
+                <AuthGate>
+                  <RootLayoutNav />
+                </AuthGate>
+              </CookbookProvider>
+            </ScanJournalProvider>
+          </AuthProvider>
         </GestureHandlerRootView>
       </AppErrorBoundary>
     </QueryClientProvider>
