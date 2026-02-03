@@ -503,98 +503,6 @@ export default function HomeScreen() {
     setChatError(null);
   }, []);
 
-  const buildLocalGuideResponse = useCallback(
-    (question: string): string | null => {
-      if (!scanResult) return null;
-      if (!regionContext) {
-        return 'What state or region are you in? Is it coastal, inland, bush, rainforest, arid, tropical, or temperate?';
-      }
-      const q = question.toLowerCase();
-      const wantsRecipe = /recipe|jam|chutney|sauce|cook|cooking|prepare|prep/i.test(q);
-      const wantsSeason = /season|when|month|time/i.test(q);
-      const wantsSafety = /safe|edible|eat|toxic|poison|risk/i.test(q);
-      const wantsWarnings = /warning|lookalike|danger|hazard/i.test(q);
-      const wantsUses = /use|uses|serve/i.test(q);
-      const wantsCultural = /cultural|respect|protocol|country|community/i.test(q);
-
-      const lines: string[] = [];
-      const confidencePct = Math.round(scanResult.confidence * 100);
-      const gateNote = confidenceGate?.blurb ?? 'Verify locally before consuming.';
-      const seasonalityDetails =
-        scanResult.seasonality.bestMonths.length > 0
-          ? `Best months: ${scanResult.seasonality.bestMonths.join(', ')}`
-          : scanResult.seasonality.notes
-            ? scanResult.seasonality.notes
-            : 'Seasonality not specified in the scan details.';
-      const regionLine = regionContext
-        ? `Region + Seasonality: ${regionContext} · ${seasonalityDetails}`
-        : `Region + Seasonality: Region not provided. ${seasonalityDetails} Please share your state/region (coastal, bush, rainforest, arid, tropical, temperate).`;
-
-      const identificationLine =
-        confidenceGate?.level === 'confident'
-          ? `${scanResult.commonName}${scanResult.scientificName ? ` (${scanResult.scientificName})` : ''} — ${confidencePct}% confidence.`
-          : `${scanResult.commonName}${scanResult.scientificName ? ` (${scanResult.scientificName})` : ''} — ${confidencePct}% confidence (not enough for confident guidance).`;
-
-      lines.push(`Best Identification: ${identificationLine}`);
-      lines.push(
-        `How to Confirm Safely: I do not have detailed trait notes from the scan. Please confirm with a qualified local expert and check leaf, flower, fruit, bark, and smell in person.`,
-      );
-      lines.push(regionLine);
-
-      const cultural = refineCulturalNotes(scanResult.culturalKnowledge.notes);
-      lines.push(
-        `Traditional Context (Respectful + General): ${cultural || 'General guidance only. No restricted or sacred knowledge included.'}`,
-      );
-
-      if (wantsSafety || wantsWarnings) {
-        const safetyBits: string[] = [];
-        safetyBits.push(`${scanResult.safety.status.toUpperCase()} (${confidencePct}% confidence).`);
-        if (scanResult.safety.summary) safetyBits.push(scanResult.safety.summary);
-        if (scanResult.safety.keyRisks.length > 0) safetyBits.push(`Risks: ${scanResult.safety.keyRisks.join('; ')}`);
-        if (scanResult.warnings.length > 0) safetyBits.push(`Warnings: ${scanResult.warnings.join('; ')}`);
-        lines.push(`Lookalikes + Warnings: ${safetyBits.join(' ')}`);
-      } else if (scanResult.warnings.length > 0) {
-        lines.push(`Lookalikes + Warnings: ${scanResult.warnings.join('; ')}`);
-      } else {
-        lines.push('Lookalikes + Warnings: Not specified in the scan details.');
-      }
-
-      if (wantsUses) {
-        if (confidenceGate?.level !== 'confident') {
-          lines.push(`Uses (Food / Medicine): ${gateNote}`);
-        } else if (scanResult.suggestedUses.length > 0) {
-          lines.push(`Uses (Food / Medicine): ${scanResult.suggestedUses.join('; ')}`);
-        } else {
-          lines.push('Uses (Food / Medicine): No low-risk uses provided in the scan details.');
-        }
-      } else {
-        lines.push('Uses (Food / Medicine): Ask about food uses only. No medicinal dosages provided.');
-      }
-
-      if (wantsRecipe) {
-        if (confidenceGate?.level !== 'confident' || scanResult.safety.status !== 'safe') {
-          lines.push('Bush Tucker Recipe: This plant is not suitable for casual cooking. I won’t provide a recipe for safety reasons.');
-        } else {
-          lines.push('Bush Tucker Recipe: A safe, simple recipe is not included in the scan details. Use a verified local recipe.');
-        }
-      } else {
-        lines.push('Bush Tucker Recipe: Only provided when a plant is clearly safe and well-known as edible.');
-      }
-
-      if (wantsCultural && scanResult.culturalKnowledge.respect.length > 0) {
-        lines.push(`Traditional Context (Respectful + General): Respect: ${scanResult.culturalKnowledge.respect.join('; ')}`);
-      }
-
-      const nextStep =
-        regionContext === null
-          ? 'Next Safe Step: Tell me your state or region, and whether it is coastal, bush, rainforest, arid, tropical, or temperate.'
-          : 'Next Safe Step: Only consume if confirmed by a qualified local expert. If you have a photo, share it or rescan.';
-      lines.push(nextStep);
-      return lines.join('\n');
-    },
-    [confidenceGate?.blurb, confidenceGate?.level, regionContext, scanResult],
-  );
-
   const buildRegionClarifier = useCallback((): string => {
     return 'What state or region are you in? Is it coastal, inland, bush, rainforest, arid, tropical, or temperate?';
   }, []);
@@ -782,18 +690,6 @@ export default function HomeScreen() {
 
         const isKeyProblem = /api key not valid|invalid api key|api_key_invalid|permission denied|invalid/i.test(rawMessage);
         const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable/i.test(rawMessage);
-        const fallbackResponse = isRateLimited ? buildLocalGuideResponse(trimmed) : null;
-        if (fallbackResponse) {
-          const assistantMsg: AgentMessage = {
-            id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            role: 'assistant',
-            parts: [{ type: 'text', text: fallbackResponse }],
-            createdAt: Date.now(),
-          };
-          setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
-          setChatError(null);
-          return;
-        }
 
         const userMessage = isKeyProblem
           ? 'Tucka Guide is not configured correctly (API key).'
@@ -808,7 +704,7 @@ export default function HomeScreen() {
         setChatStatus('idle');
       }
     },
-    [buildLocalGuideResponse, chatMessagesRaw, openAiKey],
+    [chatMessagesRaw, openAiKey],
   );
 
   const chatMessages = useMemo((): unknown[] => {
@@ -925,7 +821,7 @@ export default function HomeScreen() {
 
     return `You are Tucka Guide, an advanced Australian Bush Tucker + plant knowledge companion.
 
-Your role: provide deep, practical, culturally respectful guidance about bush tucker plants across Australia. Use the scan info as the ground truth and do not guess beyond it. If a detail is missing, say so and suggest rescanning or consulting a qualified local expert.
+Your role: provide deep, practical, culturally respectful guidance about bush tucker plants across Australia. Use the scan info for identification and safety context, and you may add well-known, low-risk guidance (including simple recipes) when rules allow and it fits the user's region. If you are unsure or the plant is not clearly safe, say so and request local confirmation.
 
 REGION-AWARE (NOT REGION-LOCKED)
 - Ask for or infer the user's region (state, climate zone, coastal/inland, desert/tropical/temperate) BEFORE giving confident guidance.
