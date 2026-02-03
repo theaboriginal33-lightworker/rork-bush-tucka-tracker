@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, Mail, ShieldCheck } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { supabasePublicDebugInfo } from '@/constants/supabase';
 
 type AuthMode = 'login' | 'signup';
 
@@ -24,6 +25,11 @@ function isValidEmail(email: string): boolean {
 
 export default function AuthScreen() {
   const { signInWithPassword, signUpWithPassword, sendPasswordReset, authError, clearAuthError, hasConfig } = useAuth();
+
+  const showKeyDebug = useMemo(() => {
+    const err = authError?.toLowerCase() ?? '';
+    return err.includes('invalid api key') || err.includes('api key') || err.includes('jwt') || err.includes('unauthorized');
+  }, [authError]);
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState<string>('');
@@ -110,6 +116,21 @@ export default function AuthScreen() {
               <Text style={styles.configTitle}>Supabase not connected yet</Text>
               <Text style={styles.configBody}>
                 Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY, then reload.
+              </Text>
+            </View>
+          ) : null}
+
+          {hasConfig && showKeyDebug ? (
+            <View style={styles.debugBanner} testID="auth-debug-banner">
+              <Text style={styles.debugTitle} testID="auth-debug-title">Supabase key debug</Text>
+              <Text style={styles.debugBody} testID="auth-debug-body">
+                URL: {supabasePublicDebugInfo.url || '(missing)'}
+                {'\n'}Key source: {supabasePublicDebugInfo.keySource}
+                {'\n'}Anon key prefix: {supabasePublicDebugInfo.anonKeyPrefix || '(missing)'}
+                {'\n'}Anon key length: {supabasePublicDebugInfo.anonKeyLen}
+              </Text>
+              <Text style={styles.debugHint} testID="auth-debug-hint">
+                Make sure you pasted the project “anon public” key (not service_role) from Supabase → Project Settings → API.
               </Text>
             </View>
           ) : null}
@@ -290,6 +311,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 18,
     color: 'rgba(234,246,238,0.78)',
+  },
+  debugBanner: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(88,166,255,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(88,166,255,0.30)',
+  },
+  debugTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: '#58A6FF',
+  },
+  debugBody: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+    color: 'rgba(234,246,238,0.82)',
+  },
+  debugHint: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+    color: 'rgba(234,246,238,0.70)',
   },
   card: {
     flex: 1,

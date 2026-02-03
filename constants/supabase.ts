@@ -15,6 +15,15 @@ type SupabaseConfig = {
   keySource?: 'EXPO_PUBLIC_SUPABASE_ANON_KEY' | 'EXPO_PUBLIC_SUPABASE_URL_KEY' | 'missing';
 };
 
+export type SupabasePublicDebugInfo = {
+  hasConfig: boolean;
+  url: string;
+  keySource: SupabaseConfig['keySource'];
+  anonKeyPrefix: string;
+  anonKeyLen: number;
+  reason?: string;
+};
+
 function normalizeSupabaseUrl(input: string): string {
   const v = input.trim();
   if (!v) return '';
@@ -53,6 +62,15 @@ function getSupabaseConfig(): SupabaseConfig {
 const supabaseConfig = getSupabaseConfig();
 
 export const hasSupabaseConfig = supabaseConfig.isValid;
+
+export const supabasePublicDebugInfo: SupabasePublicDebugInfo = {
+  hasConfig: hasSupabaseConfig,
+  url: supabaseConfig.url,
+  keySource: supabaseConfig.keySource,
+  anonKeyPrefix: supabaseConfig.anonKey ? supabaseConfig.anonKey.slice(0, 8) : '',
+  anonKeyLen: supabaseConfig.anonKey.length,
+  reason: supabaseConfig.reason,
+};
 
 console.log('[supabase] init', {
   hasSupabaseConfig,
