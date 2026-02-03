@@ -1,7 +1,8 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Alert, View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Filter, LogOut } from 'lucide-react-native';
+import { Search, Filter, LogOut, UserCircle2 } from 'lucide-react-native';
+import { router } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/app/providers/AuthProvider';
 
@@ -14,7 +15,15 @@ const LEARN_DATA = [
 ];
 
 export default function LearnScreen() {
-  const { signOut, user } = useAuth();
+  const { signOut, user, hasConfig, isReady } = useAuth();
+
+  const authStatusText = useMemo(() => {
+    if (!hasConfig) return 'Supabase not configured';
+    if (!isReady) return 'Checking session…';
+    if (!user) return 'Not signed in';
+    const email = typeof user.email === 'string' ? user.email : null;
+    return email ? `Signed in as ${email}` : 'Signed in';
+  }, [hasConfig, isReady, user]);
 
   const onPressSignOut = useCallback(() => {
     Alert.alert('Sign out?', 'You will need to log in again to sync your data.', [
@@ -32,6 +41,48 @@ export default function LearnScreen() {
       },
     ]);
   }, [signOut]);
+
+  const onPressAccount = useCallback(() => {
+    console.log('[Learn] account pressed', {
+      hasConfig,
+      isReady,
+      hasUser: Boolean(user),
+      email: typeof user?.email === 'string' ? user.email : null,
+    });
+
+    if (!hasConfig) {
+      Alert.alert('Auth is disabled', 'Supabase is not configured yet, so there is no active session to sign out of.');
+      return;
+    }
+
+    if (!isReady) {
+      Alert.alert('Please wait', 'Still checking your session. Try again in a moment.');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert('Not signed in', 'Go to the Login / Sign up screen?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Go to Login',
+          onPress: () => {
+            try {
+              router.push('/auth');
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e);
+              console.log('[Learn] router.push(/auth) failed', { message });
+            }
+          },
+        },
+      ]);
+      return;
+    }
+
+    Alert.alert('Account', authStatusText, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: onPressSignOut },
+    ]);
+  }, [authStatusText, hasConfig, isReady, onPressSignOut, user]);
 
   const renderItem = ({ item }: { item: typeof LEARN_DATA[0] }) => (
     <TouchableOpacity style={styles.card}>
@@ -52,8 +103,16 @@ export default function LearnScreen() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Encyclopedia</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>Encyclopedia</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1} testID="learn-auth-status">
+              {authStatusText}
+            </Text>
+          </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.iconButton} onPress={onPressAccount} testID="learn-account">
+              <UserCircle2 size={22} color={COLORS.text} />
+            </TouchableOpacity>
             {user ? (
               <TouchableOpacity style={styles.iconButton} onPress={onPressSignOut} testID="learn-signout">
                 <LogOut size={22} color={COLORS.text} />
@@ -97,12 +156,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 16,
     marginBottom: 8,
+    gap: 16,
+  },
+  headerLeft: {
+    flex: 1,
+    minWidth: 0,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
     color: COLORS.text,
     letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
   headerActions: {
     flexDirection: 'row',
