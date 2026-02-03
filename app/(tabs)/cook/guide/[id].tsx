@@ -311,6 +311,12 @@ export default function CookGuideDetailsScreen() {
             <View style={styles.heroText}>
               <Text style={styles.heroTitle}>{entry.commonName}</Text>
               {entry.scientificName ? <Text style={styles.heroSubtitle}>{entry.scientificName}</Text> : null}
+
+              {canEditImageForEntry(entry) ? (
+                <Text style={styles.holdHint} testID="cook-guide-hold-hint">
+                  HOLD TO CHANGE IMAGE
+                </Text>
+              ) : null}
               <View style={styles.pillRow}>
                 <View style={styles.pill}>
                   <Text style={styles.pillText}>{String(entry.safetyStatus).toUpperCase()}</Text>
@@ -455,6 +461,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.textSecondary,
+  },
+  holdHint: {
+    marginTop: 10,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    color: 'rgba(255,255,255,0.58)',
   },
   pillRow: {
     flexDirection: 'row',

@@ -128,7 +128,7 @@ export default function CookScreen() {
     (item: CookRecipeEntry, hasPhoto: boolean) => {
       if (!canEditImageForEntry(item)) return;
 
-      const buttons: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [
+      const buttons: { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }[] = [
         {
           text: hasPhoto ? 'Change photo' : 'Add photo',
           onPress: () => void pickImageForEntry(item.id),
@@ -231,6 +231,12 @@ export default function CookScreen() {
               ) : null}
             </View>
           </View>
+
+          {canEditImageForEntry(item) ? (
+            <Text style={styles.holdHint} testID={`cook-item-hold-hint-${item.id}`}>
+              HOLD TO CHANGE IMAGE
+            </Text>
+          ) : null}
 
           <View style={styles.itemBody}>
             <Text style={styles.itemTitle} numberOfLines={1}>
@@ -417,9 +423,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
 
+  holdHint: {
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 2,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+    color: 'rgba(255,255,255,0.55)',
+  },
   itemBody: {
     padding: 16,
     gap: 6,
+    paddingTop: 10,
   },
   itemTitle: {
     fontSize: 18,
