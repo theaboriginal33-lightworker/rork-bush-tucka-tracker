@@ -135,6 +135,7 @@ export default function AuthScreen() {
               <Text style={styles.debugBody} testID="auth-debug-body">
                 Has config: {String(supabasePublicDebugInfo.hasConfig)}
                 {'\n'}URL: {supabasePublicDebugInfo.url || '(missing)'}
+                {'\n'}URL source: {supabasePublicDebugInfo.urlSource || '(unknown)'}
                 {'\n'}URL ref: {supabasePublicDebugInfo.urlRef || '(unknown)'}
                 {'\n'}Key source: {supabasePublicDebugInfo.keySource}
                 {'\n'}Anon key prefix: {supabasePublicDebugInfo.anonKeyPrefix || '(missing)'}

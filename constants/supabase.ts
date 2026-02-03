@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const rawSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const rawSupabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
 
 const rawAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
 const rawUrlKey = (process.env.EXPO_PUBLIC_SUPABASE_URL_KEY ?? '').trim();
+
+const rawSupabaseUrlValue = rawSupabaseUrl.length > 0 ? rawSupabaseUrl : rawUrlKey && !rawUrlKey.startsWith('eyJ') ? rawUrlKey : '';
 
 const rawSupabaseAnonKey = rawAnonKey.length > 0 ? rawAnonKey : rawUrlKey.startsWith('eyJ') ? rawUrlKey : '';
 
@@ -13,6 +15,7 @@ type SupabaseConfig = {
   anonKey: string;
   isValid: boolean;
   reason?: string;
+  urlSource?: 'EXPO_PUBLIC_SUPABASE_URL' | 'EXPO_PUBLIC_SUPABASE_URL_KEY' | 'missing';
   keySource?:
     | 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
     | 'EXPO_PUBLIC_SUPABASE_URL_KEY'
@@ -26,6 +29,7 @@ type SupabaseConfig = {
 export type SupabasePublicDebugInfo = {
   hasConfig: boolean;
   url: string;
+  urlSource?: SupabaseConfig['urlSource'];
   urlRef?: string;
   keySource: SupabaseConfig['keySource'];
   anonKeyPrefix: string;
@@ -89,9 +93,15 @@ function decodeJwtPayload(token: string): JwtPayloadLike | null {
 }
 
 function getSupabaseConfig(): SupabaseConfig {
-  const url = normalizeSupabaseUrl(rawSupabaseUrl);
+  const url = normalizeSupabaseUrl(rawSupabaseUrlValue);
 
   const anonKey = rawSupabaseAnonKey.trim();
+
+  const urlSource: SupabaseConfig['urlSource'] = rawSupabaseUrl
+    ? 'EXPO_PUBLIC_SUPABASE_URL'
+    : rawUrlKey && !rawUrlKey.startsWith('eyJ')
+      ? 'EXPO_PUBLIC_SUPABASE_URL_KEY'
+      : 'missing';
 
   const keySource: SupabaseConfig['keySource'] = rawAnonKey
     ? 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
@@ -106,7 +116,18 @@ function getSupabaseConfig(): SupabaseConfig {
   const keyRef = payload?.ref;
   const keyRole = payload?.role;
 
-  if (!url) return { url: '', anonKey: '', isValid: false, reason: 'Missing URL', keySource, urlRef, keyRef, keyRole };
+  if (!url)
+    return {
+      url: '',
+      anonKey: '',
+      isValid: false,
+      reason: 'Missing URL',
+      urlSource,
+      keySource,
+      urlRef,
+      keyRef,
+      keyRole,
+    };
   if (!anonKey) {
     const extra =
       keySource === 'EXPO_PUBLIC_SUPABASE_URL_KEY_INVALID'
@@ -117,6 +138,7 @@ function getSupabaseConfig(): SupabaseConfig {
       anonKey: '',
       isValid: false,
       reason: `Missing anon key${extra}`,
+      urlSource,
       keySource,
       urlRef,
       keyRef,
@@ -131,6 +153,7 @@ function getSupabaseConfig(): SupabaseConfig {
       anonKey,
       isValid: false,
       reason: 'Anon key does not look like a Supabase JWT (should start with "eyJ")',
+      urlSource,
       keySource,
       urlRef,
       keyRef,
@@ -144,6 +167,7 @@ function getSupabaseConfig(): SupabaseConfig {
       anonKey,
       isValid: false,
       reason: `Supabase URL project ref ("${urlRef}") does not match anon key ref ("${keyRef}")`,
+      urlSource,
       keySource,
       urlRef,
       keyRef,
@@ -151,7 +175,7 @@ function getSupabaseConfig(): SupabaseConfig {
     };
   }
 
-  return { url, anonKey, isValid: true, keySource, urlRef, keyRef, keyRole };
+  return { url, anonKey, isValid: true, urlSource, keySource, urlRef, keyRef, keyRole };
 }
 
 const supabaseConfig = getSupabaseConfig();
@@ -161,6 +185,7 @@ export const hasSupabaseConfig = supabaseConfig.isValid;
 export const supabasePublicDebugInfo: SupabasePublicDebugInfo = {
   hasConfig: hasSupabaseConfig,
   url: supabaseConfig.url,
+  urlSource: supabaseConfig.urlSource,
   urlRef: supabaseConfig.urlRef,
   keySource: supabaseConfig.keySource,
   anonKeyPrefix: supabaseConfig.anonKey ? supabaseConfig.anonKey.slice(0, 8) : '',
@@ -173,6 +198,7 @@ export const supabasePublicDebugInfo: SupabasePublicDebugInfo = {
 console.log('[supabase] init', {
   hasSupabaseConfig,
   url: supabaseConfig.url ? `${supabaseConfig.url.slice(0, 28)}...` : '(missing)',
+  urlSource: supabaseConfig.urlSource,
   urlRef: supabaseConfig.urlRef,
   anonKey: supabaseConfig.anonKey ? `${supabaseConfig.anonKey.slice(0, 8)}...` : '(missing)',
   keySource: supabaseConfig.keySource,
@@ -197,11 +223,12 @@ export const supabase: SupabaseClient = createClient(
 if (!hasSupabaseConfig) {
   console.warn('[supabase] Supabase config invalid', {
     reason: supabaseConfig.reason,
-    urlProvided: Boolean(rawSupabaseUrl.trim()),
+    urlProvided: Boolean(rawSupabaseUrlValue.trim()),
     anonKeyProvided: Boolean(rawSupabaseAnonKey.trim()),
     rawAnonKeyProvided: Boolean(rawAnonKey),
     rawUrlKeyProvided: Boolean(rawUrlKey),
     urlKeyLooksLikeJwt: Boolean(rawUrlKey && rawUrlKey.startsWith('eyJ')),
+    urlSource: supabaseConfig.urlSource,
     keySource: supabaseConfig.keySource,
   });
 }
