@@ -512,6 +512,7 @@ export default function HomeScreen() {
   const [chatStatus, setChatStatus] = useState<'idle' | 'submitted' | 'streaming'>('idle');
   const [chatError, setChatError] = useState<Error | null>(null);
   const lastUserMessageRef = useRef<string | null>(null);
+  const pendingQuestionRef = useRef<string | null>(null);
   const [regionContext, setRegionContext] = useState<string | null>(null);
 
   const clearChatError = useCallback(() => {
@@ -532,6 +533,45 @@ export default function HomeScreen() {
       return extracted ?? regionContext;
     },
     [extractRegionContext, regionContext],
+  );
+
+  const isRegionOnlyMessage = useCallback(
+    (text: string): boolean => {
+      const tokens = tokenizeSupportText(text);
+      if (tokens.length === 0) return false;
+      const regionTokens = new Set([
+        'nsw',
+        'qld',
+        'vic',
+        'sa',
+        'wa',
+        'tas',
+        'nt',
+        'act',
+        'new',
+        'south',
+        'wales',
+        'queensland',
+        'victoria',
+        'australia',
+        'western',
+        'northern',
+        'territory',
+        'coast',
+        'coastal',
+        'inland',
+        'bush',
+        'rainforest',
+        'arid',
+        'tropical',
+        'temperate',
+        'east',
+        'west',
+        'north',
+      ]);
+      return tokens.every((token) => regionTokens.has(token));
+    },
+    [tokenizeSupportText],
   );
 
   const needsRegionForQuestion = useCallback(
@@ -1424,8 +1464,18 @@ ${scanContext}`;
       return;
     }
     if (needsRegionForQuestion(trimmed, effectiveRegion)) {
+      pendingQuestionRef.current = trimmed;
       const clarifier = buildRegionClarifier();
       appendLocalMessages(trimmed, clarifier);
+      setChatInput('');
+      return;
+    }
+
+    if (effectiveRegion && pendingQuestionRef.current && isRegionOnlyMessage(trimmed)) {
+      const followUp = `Region: ${effectiveRegion}. ${pendingQuestionRef.current}`;
+      pendingQuestionRef.current = null;
+      lastUserMessageRef.current = followUp;
+      sendMessage(followUp);
       setChatInput('');
       return;
     }
@@ -1456,8 +1506,16 @@ ${scanContext}`;
       const handled = await handleSupportRequest(prompt);
       if (handled) return;
       if (needsRegionForQuestion(prompt, effectiveRegion)) {
+        pendingQuestionRef.current = prompt;
         const clarifier = buildRegionClarifier();
         appendLocalMessages(prompt, clarifier);
+        return;
+      }
+      if (effectiveRegion && pendingQuestionRef.current && isRegionOnlyMessage(prompt)) {
+        const followUp = `Region: ${effectiveRegion}. ${pendingQuestionRef.current}`;
+        pendingQuestionRef.current = null;
+        lastUserMessageRef.current = followUp;
+        sendMessage(followUp);
         return;
       }
       lastUserMessageRef.current = prompt;
