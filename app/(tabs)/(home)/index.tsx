@@ -293,7 +293,14 @@ export default function HomeScreen() {
 
   const geminiApiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
   const openAiKey =
-    (process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? process.env.EXPO_PUBLIC_OPENAI_KEY ?? '').trim();
+    (
+      process.env.EXPO_PUBLIC_OPENAI_API_KEY ??
+      process.env.EXPO_PUBLIC_OPENAI_KEY ??
+      process.env.OPENAI_API_KEY ??
+      process.env.OPENAI_KEY ??
+      ''
+    ).trim();
+  const hasOpenAiKey = openAiKey.length > 0;
   const chatContextKeyRef = useRef<string | null>(null);
   const systemPromptRef = useRef<string | null>(null);
 
@@ -547,9 +554,13 @@ export default function HomeScreen() {
       if (!trimmed) return;
       const isRetry = options?.retry === true;
 
-      if (!openAiKey) {
+      if (!hasOpenAiKey) {
         setChatStatus('idle');
-        setChatError(new Error('OpenAI API key is missing.'));
+        setChatError(
+          new Error(
+            'OpenAI API key is missing. Set EXPO_PUBLIC_OPENAI_API_KEY in Rork and reload the app.',
+          ),
+        );
         return;
       }
 
@@ -726,7 +737,7 @@ export default function HomeScreen() {
         const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable|timeout/i.test(rawMessage);
 
         const userMessage = isKeyProblem
-          ? 'Tucka Guide is not configured correctly (API key).'
+          ? 'OpenAI API key was rejected. Confirm EXPO_PUBLIC_OPENAI_API_KEY is correct and reload the app.'
           : isRateLimited
             ? 'Tucka Guide is busy right now. Please try again in a moment.'
             : rawMessage.trim().length > 0
@@ -738,7 +749,7 @@ export default function HomeScreen() {
         setChatStatus('idle');
       }
     },
-    [chatMessagesRaw, openAiKey],
+    [chatMessagesRaw, hasOpenAiKey, openAiKey],
   );
 
   const chatMessages = useMemo((): unknown[] => {
