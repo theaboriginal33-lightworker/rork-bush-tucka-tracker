@@ -1,10 +1,8 @@
-import React, { useCallback, useMemo } from 'react';
-import { Alert, View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Filter, LogOut, UserCircle2 } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { Search, Filter } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
-import { useAuth } from '@/app/providers/AuthProvider';
 
 const LEARN_DATA = [
   { id: '1', name: 'Finger Lime', scientific: 'Citrus australasica', type: 'Fruit', color: '#E8F5E9', image: 'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop' },
@@ -15,75 +13,6 @@ const LEARN_DATA = [
 ];
 
 export default function LearnScreen() {
-  const { signOut, user, hasConfig, isReady } = useAuth();
-
-  const authStatusText = useMemo(() => {
-    if (!hasConfig) return 'Supabase not configured';
-    if (!isReady) return 'Checking session…';
-    if (!user) return 'Not signed in';
-    const email = typeof user.email === 'string' ? user.email : null;
-    return email ? `Signed in as ${email}` : 'Signed in';
-  }, [hasConfig, isReady, user]);
-
-  const onPressSignOut = useCallback(() => {
-    Alert.alert('Sign out?', 'You will need to log in again to sync your data.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: () => {
-          signOut().catch((e) => {
-            const message = e instanceof Error ? e.message : String(e);
-            console.log('[Learn] signOut failed', { message });
-            Alert.alert('Could not sign out', message);
-          });
-        },
-      },
-    ]);
-  }, [signOut]);
-
-  const onPressAccount = useCallback(() => {
-    console.log('[Learn] account pressed', {
-      hasConfig,
-      isReady,
-      hasUser: Boolean(user),
-      email: typeof user?.email === 'string' ? user.email : null,
-    });
-
-    if (!hasConfig) {
-      Alert.alert('Auth is disabled', 'Supabase is not configured yet, so there is no active session to sign out of.');
-      return;
-    }
-
-    if (!isReady) {
-      Alert.alert('Please wait', 'Still checking your session. Try again in a moment.');
-      return;
-    }
-
-    if (!user) {
-      Alert.alert('Not signed in', 'Go to the Login / Sign up screen?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Go to Login',
-          onPress: () => {
-            try {
-              router.push('/auth');
-            } catch (e) {
-              const message = e instanceof Error ? e.message : String(e);
-              console.log('[Learn] router.push(/auth) failed', { message });
-            }
-          },
-        },
-      ]);
-      return;
-    }
-
-    Alert.alert('Account', authStatusText, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: onPressSignOut },
-    ]);
-  }, [authStatusText, hasConfig, isReady, onPressSignOut, user]);
-
   const renderItem = ({ item }: { item: typeof LEARN_DATA[0] }) => (
     <TouchableOpacity style={styles.card}>
       <View style={styles.imageContainer}>
@@ -105,19 +34,11 @@ export default function LearnScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.headerTitle}>Encyclopedia</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1} testID="learn-auth-status">
-              {authStatusText}
+            <Text style={styles.headerSubtitle} numberOfLines={1} testID="learn-header-subtitle">
+              Discover native ingredients and techniques.
             </Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.iconButton} onPress={onPressAccount} testID="learn-account">
-              <UserCircle2 size={22} color={COLORS.text} />
-            </TouchableOpacity>
-            {user ? (
-              <TouchableOpacity style={styles.iconButton} onPress={onPressSignOut} testID="learn-signout">
-                <LogOut size={22} color={COLORS.text} />
-              </TouchableOpacity>
-            ) : null}
             <TouchableOpacity style={styles.iconButton} testID="learn-search">
               <Search size={22} color={COLORS.text} />
             </TouchableOpacity>
