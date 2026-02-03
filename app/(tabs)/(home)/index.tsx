@@ -1431,6 +1431,11 @@ ${scanContext}`;
     [normalizeSupportText],
   );
 
+  const getRegionTokens = useCallback((): string[] => {
+    if (!regionContext) return [];
+    return tokenizeSupportText(regionContext);
+  }, [regionContext, tokenizeSupportText]);
+
   const appendLocalMessages = useCallback(
     (userText: string, assistantText: string) => {
       setChatMessages((prev) => {
@@ -1460,20 +1465,26 @@ ${scanContext}`;
         return false;
       }
 
+      const regionTokens = getRegionTokens();
       const searchTokens = getSearchTokens(tokens);
       if (searchTokens.length === 0) {
-        appendLocalMessages(
-          text,
-          'Please share your town/state or the organisation name so I can provide the right local contact details.',
-        );
-        return true;
+        if (regionTokens.length === 0) {
+          appendLocalMessages(
+            text,
+            'Please share your town/state or the organisation name so I can provide the right local contact details.',
+          );
+          return true;
+        }
       }
 
-      const matches = findSupportEntries(directory, searchTokens);
+      const directMatches = searchTokens.length > 0 ? findSupportEntries(directory, searchTokens) : [];
+      const regionMatches = directMatches.length === 0 && regionTokens.length > 0 ? findSupportEntries(directory, regionTokens) : [];
+      const matches = directMatches.length > 0 ? directMatches : regionMatches;
       if (matches.length === 0) {
+        const regionHint = regionContext ? ` (region detected: ${regionContext})` : '';
         appendLocalMessages(
           text,
-          'I do not have a matching local contact yet. Tell me your town/state or the organisation name so I can look it up.',
+          `I do not have a matching local contact yet${regionHint}. Tell me your town/state or the organisation name so I can look it up, or add contacts to the local directory.`,
         );
         return true;
       }
@@ -1484,7 +1495,7 @@ ${scanContext}`;
       appendLocalMessages(text, `${response}\n\n${followUp}`);
       return true;
     },
-    [appendLocalMessages, findSupportEntries, formatSupportEntry, getSearchTokens, hasSupportIntent, tokenizeSupportText],
+    [appendLocalMessages, findSupportEntries, formatSupportEntry, getRegionTokens, getSearchTokens, hasSupportIntent, regionContext, tokenizeSupportText],
   );
 
   const onSendChat = useCallback(async () => {
