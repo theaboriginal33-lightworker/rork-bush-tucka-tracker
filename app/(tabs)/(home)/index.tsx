@@ -662,7 +662,19 @@ export default function HomeScreen() {
 
       const toolkit = useRorkBackend ? await getRorkToolkit() : null;
       const shouldUseRorkBackend = Boolean(useRorkBackend && toolkit?.generateText);
-      console.log('[TuckaGuide] backend choice', { useRorkBackend, shouldUseRorkBackend, hasToolkit: Boolean(toolkit) });
+      console.log('[TuckaGuide] backend choice', {
+        useRorkBackend,
+        shouldUseRorkBackend,
+        hasToolkit: Boolean(toolkit),
+        hasGenerateText: Boolean(toolkit?.generateText),
+        platform: Platform.OS,
+      });
+
+      if (useRorkBackend && !toolkit?.generateText) {
+        setChatStatus('idle');
+        setChatError(new Error('AI chat is unavailable right now. Please reload and try again.'));
+        return;
+      }
 
       const requestBody = {
         model,
@@ -2941,13 +2953,13 @@ Return JSON with keys:
                         ? 'Tucka Guide is busy right now. Retrying…'
                         : chatError.message}
                     </Text>
-                    {!isBusyChatError(chatError) ? (
+                    {!isBusyChatError(chatError) && __DEV__ ? (
                       <Text style={styles.chatErrorHint}>
                         {useRorkBackend
-                          ? 'Using Rork AI backend (web-safe).'
+                          ? 'Debug: Using Rork AI backend.'
                           : hasOpenAiKey
-                            ? 'OpenAI key detected.'
-                            : 'OpenAI key not detected in app config.'}
+                            ? 'Debug: OpenAI key present.'
+                            : 'Debug: OpenAI key missing.'}
                       </Text>
                     ) : null}
                     <TouchableOpacity
