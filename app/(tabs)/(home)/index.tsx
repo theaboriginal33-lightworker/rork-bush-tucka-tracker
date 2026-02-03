@@ -758,6 +758,18 @@ export default function HomeScreen() {
         }
       };
 
+      const fallbackToRork = async (): Promise<string | null> => {
+        try {
+          const response = await generateText({ messages });
+          const cleaned = String(response ?? '').trim();
+          return cleaned.length > 0 ? cleaned : null;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[TuckaGuide] fallback generateText failed', { message });
+          return null;
+        }
+      };
+
       try {
         setChatStatus('submitted');
 
@@ -791,6 +803,24 @@ export default function HomeScreen() {
       } catch (e) {
         const rawMessage = e instanceof Error ? e.message : String(e);
         console.log('[TuckaGuide] sendMessage failed', { rawMessage });
+
+        const shouldFallback =
+          !useRorkBackend && /network request failed|failed to fetch|cors|timeout|typeerror/i.test(rawMessage);
+
+        if (shouldFallback) {
+          const fallbackText = await fallbackToRork();
+          if (fallbackText) {
+            const assistantMsg: AgentMessage = {
+              id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              role: 'assistant',
+              parts: [{ type: 'text', text: fallbackText }],
+              createdAt: Date.now(),
+            };
+            setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
+            setChatError(null);
+            return;
+          }
+        }
 
         const isMissingKey = /provide an api key|no api key|api key missing|missing api key/i.test(rawMessage);
         const isInvalidKey = /invalid api key|api_key_invalid|incorrect api key|invalid_api_key/i.test(rawMessage);
