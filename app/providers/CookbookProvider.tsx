@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
+import { Platform } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ScanJournalEntry } from '@/app/providers/ScanJournalProvider';
 import { useScanJournal } from '@/app/providers/ScanJournalProvider';
@@ -28,7 +29,40 @@ export type CookRecipeEntry = {
   guideText?: string;
 };
 
+export type CookbookImageInput = {
+  uri: string;
+  base64?: string;
+  mimeType?: string;
+};
+
+type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
+
+let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
+
+async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
+  if (Platform.OS === 'web') return null;
+
+  try {
+    if (!legacyFsPromise) {
+      legacyFsPromise = import('expo-file-system/legacy')
+        .then((m) => m as LegacyFileSystemModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Cookbook] failed to load expo-file-system/legacy', { message });
+          return null;
+        });
+    }
+
+    return await legacyFsPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Cookbook] getLegacyFileSystem unexpected error', { message });
+    return null;
+  }
+}
+
 const MANUAL_STORAGE_KEY = 'bush-tucka.cookbook.manual.v1';
+const IMAGE_OVERRIDE_KEY = 'bush-tucka.cookbook.imageOverrides.v1';
 
 function normalizeCookEntryFromScan(scanEntry: ScanJournalEntry): CookRecipeEntry {
   const scan = scanEntry.scan;
@@ -107,6 +141,10 @@ type CookbookContextValue = {
     suggestedUses?: string[];
   }) => Promise<CookRecipeEntry>;
 
+  setEntryImage: (id: string, image: CookbookImageInput) => Promise<void>;
+  clearEntryImage: (id: string) => Promise<void>;
+  canEditImageForEntry: (entry: CookRecipeEntry | undefined) => boolean;
+
   removeEntry: (id: string) => Promise<void>;
   clearAllManual: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -118,6 +156,9 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
   const [manualEntries, setManualEntries] = useState<CookRecipeEntry[]>([]);
   const [manualIsLoading, setManualIsLoading] = useState<boolean>(true);
   const [manualErrorMessage, setManualErrorMessage] = useState<string | null>(null);
+
+  const [imageOverrides, setImageOverrides] = useState<Record<string, string | null>>({});
+  const [imageOverridesIsLoading, setImageOverridesIsLoading] = useState<boolean>(true);
 
   const loadManual = useCallback(async () => {
     console.log('[Cookbook] loading manual entries');
@@ -151,9 +192,31 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     }
   }, []);
 
+  const loadImageOverrides = useCallback(async () => {
+    console.log('[Cookbook] loading image overrides');
+    setImageOverridesIsLoading(true);
+    try {
+      const raw = await AsyncStorage.getItem(IMAGE_OVERRIDE_KEY);
+      const parsed = safeParseJson<Record<string, string | null>>(raw) ?? {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        setImageOverrides(parsed);
+        console.log('[Cookbook] loaded image overrides', { count: Object.keys(parsed).length });
+      } else {
+        setImageOverrides({});
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[Cookbook] loadImageOverrides failed', { message });
+      setImageOverrides({});
+    } finally {
+      setImageOverridesIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadManual();
-  }, [loadManual]);
+    void loadImageOverrides();
+  }, [loadImageOverrides, loadManual]);
 
   const persistManual = useCallback(async (next: CookRecipeEntry[]) => {
     try {
@@ -166,32 +229,159 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     }
   }, []);
 
+  const applyImageOverride = useCallback(
+    (entry: CookRecipeEntry): CookRecipeEntry => {
+      const override = imageOverrides[entry.id];
+      if (override === undefined) return entry;
+      if (override === null) return { ...entry, imageUri: undefined };
+      return { ...entry, imageUri: override };
+    },
+    [imageOverrides],
+  );
+
+  const canEditImageForEntry = useCallback((entry: CookRecipeEntry | undefined): boolean => {
+    if (!entry) return false;
+    return entry.source === 'collection' || entry.source === 'tucka-guide';
+  }, []);
+
+  const ensureImageDir = useCallback(async (): Promise<string | null> => {
+    if (Platform.OS === 'web') return null;
+
+    const fs = await getLegacyFileSystem();
+    const baseDir = fs?.documentDirectory ?? fs?.cacheDirectory;
+    if (!fs || !baseDir) {
+      console.log('[Cookbook] ensureImageDir no fs/baseDir', { hasFs: Boolean(fs), baseDir });
+      return null;
+    }
+
+    const dir = `${baseDir}cook-images/`;
+
+    try {
+      const info = await fs.getInfoAsync(dir);
+      if (!info.exists) {
+        await fs.makeDirectoryAsync(dir, { intermediates: true });
+        console.log('[Cookbook] created image directory', { dir });
+      }
+      return dir;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[Cookbook] ensureImageDir failed', { message, dir });
+      return null;
+    }
+  }, []);
+
+  const persistImageOverrides = useCallback(async (next: Record<string, string | null>) => {
+    try {
+      await AsyncStorage.setItem(IMAGE_OVERRIDE_KEY, JSON.stringify(next));
+      console.log('[Cookbook] persisted image overrides', { count: Object.keys(next).length });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[Cookbook] persistImageOverrides failed', { message });
+      setManualErrorMessage('Could not save your recipe photo.');
+    }
+  }, []);
+
+  const setEntryImage = useCallback(
+    async (id: string, image: CookbookImageInput) => {
+      console.log('[Cookbook] setEntryImage requested', { id, uriScheme: image.uri.split(':')[0] ?? 'none', hasBase64: Boolean(image.base64) });
+
+      let storedUri = image.uri;
+
+      if (Platform.OS === 'web') {
+        if (image.base64 && image.base64.trim().length > 0) {
+          const mime = image.mimeType && image.mimeType.trim().length > 0 ? image.mimeType.trim() : 'image/jpeg';
+          storedUri = `data:${mime};base64,${image.base64.trim()}`;
+        }
+      } else {
+        const fs = await getLegacyFileSystem();
+        const dir = await ensureImageDir();
+        if (fs && dir) {
+          const fileUri = `${dir}${encodeURIComponent(id)}.jpg`;
+          try {
+            const from = image.uri;
+            if (from.startsWith('file://')) {
+              await fs.copyAsync({ from, to: fileUri });
+              storedUri = fileUri;
+              console.log('[Cookbook] copied image into app storage', { id, fileUri });
+            } else if (image.base64 && image.base64.trim().length > 0) {
+              await fs.writeAsStringAsync(fileUri, image.base64.trim(), { encoding: fs.EncodingType.Base64 });
+              storedUri = fileUri;
+              console.log('[Cookbook] wrote base64 image into app storage', { id, fileUri });
+            }
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[Cookbook] setEntryImage file persistence failed; falling back to original uri', { id, message });
+            storedUri = image.uri;
+          }
+        }
+      }
+
+      setImageOverrides((prev) => {
+        const next = { ...(prev ?? {}), [id]: storedUri };
+        void persistImageOverrides(next);
+        return next;
+      });
+    },
+    [ensureImageDir, persistImageOverrides],
+  );
+
+  const clearEntryImage = useCallback(
+    async (id: string) => {
+      console.log('[Cookbook] clearEntryImage requested', { id });
+
+      const existing = imageOverrides[id];
+
+      setImageOverrides((prev) => {
+        const base = prev ?? {};
+        const next: Record<string, string | null> = { ...base, [id]: null };
+        void persistImageOverrides(next);
+        return next;
+      });
+
+      if (Platform.OS !== 'web' && existing && existing.startsWith('file://')) {
+        try {
+          const fs = await getLegacyFileSystem();
+          if (fs) {
+            await fs.deleteAsync(existing, { idempotent: true });
+            console.log('[Cookbook] deleted image file', { id, existing });
+          }
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Cookbook] delete image file failed', { id, message, existing });
+        }
+      }
+    },
+    [imageOverrides, persistImageOverrides],
+  );
+
   const derivedFromCollection = useMemo<CookRecipeEntry[]>(() => {
     const cooked = scanEntries
       .filter((e) => {
         const confidence = Number.isFinite(e.scan?.confidence) ? (e.scan.confidence as number) : 0;
         return e.scan?.safety?.status === 'safe' && confidence >= 0.75;
       })
-      .map((e) => normalizeCookEntryFromScan(e))
+      .map((e) => applyImageOverride(normalizeCookEntryFromScan(e)))
       .sort((a, b) => b.createdAt - a.createdAt);
 
     console.log('[Cookbook] derived entries from collection', { scanCount: scanEntries.length, cookCount: cooked.length });
     return cooked;
-  }, [scanEntries]);
+  }, [applyImageOverride, scanEntries]);
+
+  const manualWithOverrides = useMemo<CookRecipeEntry[]>(() => manualEntries.map((e) => applyImageOverride(e)), [applyImageOverride, manualEntries]);
 
   const entries = useMemo<CookRecipeEntry[]>(() => {
-    const all = [...manualEntries, ...derivedFromCollection];
+    const all = [...manualWithOverrides, ...derivedFromCollection];
     all.sort((a, b) => b.createdAt - a.createdAt);
     return all;
-  }, [derivedFromCollection, manualEntries]);
+  }, [derivedFromCollection, manualWithOverrides]);
 
-  const isLoading = scanIsLoading || manualIsLoading;
+  const isLoading = scanIsLoading || manualIsLoading || imageOverridesIsLoading;
   const errorMessage = scanErrorMessage ?? manualErrorMessage;
 
   const refresh = useCallback(async () => {
     console.log('[Cookbook] refresh requested');
-    await loadManual();
-  }, [loadManual]);
+    await Promise.all([loadManual(), loadImageOverrides()]);
+  }, [loadImageOverrides, loadManual]);
 
   const getEntryById = useCallback((id: string) => entries.find((e) => e.id === id), [entries]);
 
@@ -278,11 +468,14 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
       getEntryById,
       getEntryByScanId,
       saveGuideEntry,
+      setEntryImage,
+      clearEntryImage,
+      canEditImageForEntry,
       removeEntry,
       clearAllManual,
       refresh,
     }),
-    [clearAllManual, entries, errorMessage, getEntryById, getEntryByScanId, isLoading, refresh, removeEntry, saveGuideEntry],
+    [canEditImageForEntry, clearAllManual, clearEntryImage, entries, errorMessage, getEntryById, getEntryByScanId, isLoading, refresh, removeEntry, saveGuideEntry, setEntryImage],
   );
 
   return value;

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookmarkPlus, Search } from 'lucide-react-native';
@@ -36,7 +37,7 @@ function safeImageUri(uri: string | undefined): string | null {
 }
 
 export default function CookScreen() {
-  const { entries, isLoading, errorMessage } = useCookbook();
+  const { entries, isLoading, errorMessage, setEntryImage, clearEntryImage, canEditImageForEntry } = useCookbook();
 
   const [query, setQuery] = useState<string>('');
   const filtered = useMemo(() => {
@@ -58,6 +59,93 @@ export default function CookScreen() {
     return `${entries.length} saved ${entries.length === 1 ? 'ingredient' : 'ingredients'}`;
   }, [entries, errorMessage, isLoading]);
 
+  const [busyImageId, setBusyImageId] = useState<string | null>(null);
+
+  const pickImageForEntry = useCallback(
+    async (entryId: string) => {
+      try {
+        setBusyImageId(entryId);
+        console.log('[Cook] pickImageForEntry start', { entryId });
+
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          quality: 0.9,
+          base64: Platform.OS === 'web',
+        });
+
+        if (res.canceled) {
+          console.log('[Cook] pickImageForEntry canceled', { entryId });
+          return;
+        }
+
+        const asset = res.assets?.[0];
+        if (!asset?.uri) {
+          console.log('[Cook] pickImageForEntry missing uri', { entryId, assets: res.assets?.length ?? 0 });
+          return;
+        }
+
+        await setEntryImage(entryId, {
+          uri: asset.uri,
+          base64: asset.base64 ?? undefined,
+          mimeType: (asset as unknown as { mimeType?: string })?.mimeType,
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[Cook] pickImageForEntry failed', { message });
+        Alert.alert('Could not update photo', 'Please try again.');
+      } finally {
+        setBusyImageId(null);
+      }
+    },
+    [setEntryImage],
+  );
+
+  const confirmRemoveImageForEntry = useCallback(
+    (entryId: string) => {
+      Alert.alert('Remove photo?', 'This will remove the custom photo for this recipe.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setBusyImageId(entryId);
+            clearEntryImage(entryId)
+              .catch((e) => {
+                const message = e instanceof Error ? e.message : String(e);
+                console.log('[Cook] clearEntryImage failed', { message });
+                Alert.alert('Could not remove photo', 'Please try again.');
+              })
+              .finally(() => setBusyImageId(null));
+          },
+        },
+      ]);
+    },
+    [clearEntryImage],
+  );
+
+  const openImageActions = useCallback(
+    (item: CookRecipeEntry, hasPhoto: boolean) => {
+      if (!canEditImageForEntry(item)) return;
+
+      const buttons: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [
+        {
+          text: hasPhoto ? 'Change photo' : 'Add photo',
+          onPress: () => void pickImageForEntry(item.id),
+        },
+      ];
+
+      if (hasPhoto) {
+        buttons.push({ text: 'Remove photo', style: 'destructive', onPress: () => confirmRemoveImageForEntry(item.id) });
+      }
+
+      buttons.push({ text: 'Cancel', style: 'cancel' });
+
+      Alert.alert('Recipe photo', 'Choose an action', buttons);
+    },
+    [canEditImageForEntry, confirmRemoveImageForEntry, pickImageForEntry],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: CookRecipeEntry }) => {
       const safetyDot = item.safetyStatus === 'safe' ? COLORS.success : COLORS.warning;
@@ -67,10 +155,12 @@ export default function CookScreen() {
       const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
       const rawScheme = (item.imageUri ?? '').split(':')[0] || 'none';
       const isLocal = resolvedScheme === 'file' || resolvedScheme === 'data';
+      const hasPhoto = Boolean(resolvedUri);
+      const isBusy = busyImageId === item.id;
 
       return (
         <TouchableOpacity
-          style={styles.itemCard}
+          style={[styles.itemCard, isBusy && styles.itemCardBusy]}
           onPress={() => {
             if (item.source === 'collection' && item.scanEntryId) {
               router.push(`/scan/${encodeURIComponent(item.scanEntryId)}`);
@@ -78,6 +168,12 @@ export default function CookScreen() {
             }
             router.push(`/cook/guide/${encodeURIComponent(item.id)}`);
           }}
+          onLongPress={() => {
+            if (!canEditImageForEntry(item)) return;
+            openImageActions(item, hasPhoto);
+          }}
+          delayLongPress={280}
+          disabled={isBusy}
           testID={`cook-item-${item.id}`}
         >
           <View style={styles.itemImageWrap}>
@@ -158,7 +254,7 @@ export default function CookScreen() {
         </TouchableOpacity>
       );
     },
-    [],
+    [busyImageId, canEditImageForEntry, openImageActions],
   );
 
   return (
@@ -276,6 +372,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 22,
     elevation: 7,
+  },
+  itemCardBusy: {
+    opacity: 0.75,
   },
   itemImageWrap: {
     height: 160,

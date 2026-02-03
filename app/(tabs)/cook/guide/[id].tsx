@@ -1,10 +1,11 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
-import { ChevronLeft, Download, Share2, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, Download, ImageUp, Share2, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 
@@ -63,12 +64,77 @@ export default function CookGuideDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const entryId = typeof id === 'string' ? id : '';
 
-  const { getEntryById, removeEntry } = useCookbook();
+  const { getEntryById, removeEntry, setEntryImage, clearEntryImage, canEditImageForEntry } = useCookbook();
   const entry = getEntryById(entryId);
 
   const imageUri = useMemo(() => {
     return safeImageUri(entry?.imageUri) ?? null;
   }, [entry?.imageUri]);
+
+  const [isImageBusy, setIsImageBusy] = useState<boolean>(false);
+
+  const onPickImage = useCallback(async () => {
+    if (!entry) return;
+    if (!canEditImageForEntry(entry)) return;
+
+    try {
+      setIsImageBusy(true);
+      console.log('[CookGuide] onPickImage start', { id: entry.id });
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.9,
+        base64: Platform.OS === 'web',
+      });
+
+      if (res.canceled) {
+        console.log('[CookGuide] image pick canceled', { id: entry.id });
+        return;
+      }
+
+      const asset = res.assets?.[0];
+      if (!asset?.uri) {
+        console.log('[CookGuide] image pick missing asset uri', { id: entry.id, assets: res.assets?.length ?? 0 });
+        return;
+      }
+
+      await setEntryImage(entry.id, {
+        uri: asset.uri,
+        base64: asset.base64 ?? undefined,
+        mimeType: (asset as unknown as { mimeType?: string })?.mimeType,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[CookGuide] onPickImage failed', { message });
+      Alert.alert('Could not update photo', 'Please try again.');
+    } finally {
+      setIsImageBusy(false);
+    }
+  }, [canEditImageForEntry, entry, setEntryImage]);
+
+  const onRemoveImage = useCallback(async () => {
+    if (!entry) return;
+    if (!canEditImageForEntry(entry)) return;
+
+    Alert.alert('Remove photo?', 'This will remove the custom photo for this recipe.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          setIsImageBusy(true);
+          clearEntryImage(entry.id)
+            .catch((e) => {
+              const message = e instanceof Error ? e.message : String(e);
+              console.log('[CookGuide] clearEntryImage failed', { message });
+              Alert.alert('Could not remove photo', 'Please try again.');
+            })
+            .finally(() => setIsImageBusy(false));
+        },
+      },
+    ]);
+  }, [canEditImageForEntry, clearEntryImage, entry]);
 
   const exportText = useMemo(() => {
     const lines: string[] = [];
@@ -216,6 +282,30 @@ export default function CookGuideDetailsScreen() {
                 testID="cook-guide-image"
               />
               <View style={styles.heroOverlay} />
+
+              {canEditImageForEntry(entry) ? (
+                <View style={styles.imageActions} testID="cook-guide-image-actions">
+                  <TouchableOpacity
+                    style={[styles.imageActionButton, isImageBusy && styles.imageActionButtonDisabled]}
+                    onPress={onPickImage}
+                    disabled={isImageBusy}
+                    testID="cook-guide-image-upload"
+                  >
+                    <ImageUp size={18} color={COLORS.text} />
+                  </TouchableOpacity>
+
+                  {imageUri ? (
+                    <TouchableOpacity
+                      style={[styles.imageActionButton, styles.imageActionDanger, isImageBusy && styles.imageActionButtonDisabled]}
+                      onPress={onRemoveImage}
+                      disabled={isImageBusy}
+                      testID="cook-guide-image-remove"
+                    >
+                      <X size={18} color={COLORS.text} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.heroText}>
@@ -317,6 +407,7 @@ const styles = StyleSheet.create({
   },
   heroImageWrap: {
     height: 190,
+    position: 'relative',
   },
   heroImage: {
     width: '100%',
@@ -325,6 +416,30 @@ const styles = StyleSheet.create({
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(7,17,11,0.25)',
+  },
+  imageActions: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  imageActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: 'rgba(7,17,11,0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageActionButtonDisabled: {
+    opacity: 0.6,
+  },
+  imageActionDanger: {
+    backgroundColor: 'rgba(255,92,92,0.20)',
+    borderColor: 'rgba(255,92,92,0.35)',
   },
   heroText: {
     padding: 16,
