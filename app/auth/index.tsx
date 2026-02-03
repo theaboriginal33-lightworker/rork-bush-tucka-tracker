@@ -62,6 +62,10 @@ export default function AuthScreen() {
         await signUpWithPassword({ email, password });
         Alert.alert('Almost there', 'If email confirmation is enabled, check your inbox to confirm your account.');
       }
+    } catch (e) {
+      console.log('[auth-screen] submit error caught', {
+        message: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setIsBusy(false);
     }
@@ -125,12 +129,16 @@ export default function AuthScreen() {
               <Text style={styles.debugTitle} testID="auth-debug-title">Supabase key debug</Text>
               <Text style={styles.debugBody} testID="auth-debug-body">
                 URL: {supabasePublicDebugInfo.url || '(missing)'}
+                {'\n'}URL ref: {supabasePublicDebugInfo.urlRef || '(unknown)'}
                 {'\n'}Key source: {supabasePublicDebugInfo.keySource}
                 {'\n'}Anon key prefix: {supabasePublicDebugInfo.anonKeyPrefix || '(missing)'}
                 {'\n'}Anon key length: {supabasePublicDebugInfo.anonKeyLen}
+                {'\n'}Key ref: {supabasePublicDebugInfo.keyRef || '(unknown)'}
+                {'\n'}Key role: {supabasePublicDebugInfo.keyRole || '(unknown)'}
+                {supabasePublicDebugInfo.reason ? `\nReason: ${supabasePublicDebugInfo.reason}` : ''}
               </Text>
               <Text style={styles.debugHint} testID="auth-debug-hint">
-                Make sure you pasted the project “anon public” key (not service_role) from Supabase → Project Settings → API.
+                If URL ref and Key ref don’t match, you pasted a key from a different Supabase project. Use Supabase → Project Settings → API → “anon public”.
               </Text>
             </View>
           ) : null}
