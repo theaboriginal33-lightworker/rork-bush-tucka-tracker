@@ -657,6 +657,9 @@ export default function HomeScreen() {
           : history),
       ];
 
+      type BackendChatMessage = { role: 'user' | 'assistant'; content: string };
+      const backendMessages = messages.filter((m) => m.role !== 'system') as BackendChatMessage[];
+
       const requestBody = {
         model,
         input: [
@@ -707,7 +710,7 @@ export default function HomeScreen() {
         });
 
         const requestPromise = useRorkBackend
-          ? generateText({ messages })
+          ? generateText({ messages: backendMessages })
           : (async () => {
               const res = await fetch(endpoint, {
                 method: 'POST',
@@ -760,7 +763,7 @@ export default function HomeScreen() {
 
       const fallbackToRork = async (): Promise<string | null> => {
         try {
-          const response = await generateText({ messages });
+          const response = await generateText({ messages: backendMessages });
           const cleaned = String(response ?? '').trim();
           return cleaned.length > 0 ? cleaned : null;
         } catch (e) {
@@ -792,10 +795,15 @@ export default function HomeScreen() {
           }
         }
 
+        const finalAssistantText = String(assistantText ?? '').trim();
+        if (finalAssistantText.length === 0) {
+          throw new Error('Empty response');
+        }
+
         const assistantMsg: AgentMessage = {
           id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           role: 'assistant',
-          parts: [{ type: 'text', text: assistantText }],
+          parts: [{ type: 'text', text: finalAssistantText }],
           createdAt: Date.now(),
         };
 
@@ -1319,6 +1327,66 @@ ${scanContext}`;
     [buildGuideExportText, copyGuideText],
   );
 
+  const extractGuideTitle = useCallback(
+    (assistantText: string): string => {
+      const fallback = scanResult?.commonName?.trim() ? `${scanResult.commonName} – Guide` : 'Tucka Guide – Saved';
+      const raw = String(assistantText ?? '');
+
+      const cleaned = raw
+        .replace(/\r\n/g, '\n')
+        .replace(/\t/g, ' ')
+        .trim();
+
+      if (!cleaned) return fallback;
+
+      const lines = cleaned
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+
+      const takeFromLine = (line: string): string => {
+        const l0 = line
+          .replace(/^```[a-zA-Z0-9_-]*\s*/i, '')
+          .replace(/^#+\s*/, '')
+          .replace(/^\*\*\s*/, '')
+          .replace(/\s*\*\*$/, '')
+          .trim();
+
+        const stripped = l0
+          .replace(/^recipe\s*(name|title)?\s*[:\-]\s*/i, '')
+          .replace(/^title\s*[:\-]\s*/i, '')
+          .replace(/^name\s*[:\-]\s*/i, '')
+          .trim();
+
+        return stripped;
+      };
+
+      const candidatePatterns: RegExp[] = [
+        /^#+\s*recipe\s*(name|title)?\s*[:\-]/i,
+        /^recipe\s*(name|title)?\s*[:\-]/i,
+        /^title\s*[:\-]/i,
+        /^name\s*[:\-]/i,
+      ];
+
+      const bestExplicit = lines.find((l) => candidatePatterns.some((p) => p.test(l)));
+      const picked = takeFromLine(bestExplicit ?? (lines[0] ?? ''));
+
+      const finalTitle = picked.length > 0 ? picked : fallback;
+      const maxLen = 64;
+      const normalized = finalTitle.replace(/\s+/g, ' ').trim();
+      const cropped = normalized.length > maxLen ? `${normalized.slice(0, maxLen - 1).trim()}…` : normalized;
+
+      console.log('[TuckaGuide] extractGuideTitle', {
+        fallback,
+        picked: bestExplicit ?? lines[0] ?? null,
+        finalTitle: cropped,
+      });
+
+      return cropped;
+    },
+    [scanResult?.commonName],
+  );
+
   const saveGuideToCook = useCallback(
     async (assistantText: string, messageId: string) => {
       if (!scanResult) return;
@@ -1328,9 +1396,9 @@ ${scanContext}`;
       }
 
       try {
-        const titleBase = scanResult.commonName?.trim() ? `${scanResult.commonName} – Guide` : 'Tucka Guide – Saved';
+        const title = extractGuideTitle(assistantText);
         const saved = await saveGuideEntry({
-          title: titleBase,
+          title,
           guideText: assistantText,
           commonName: scanResult.commonName,
           scientificName: scanResult.scientificName,
@@ -1351,7 +1419,7 @@ ${scanContext}`;
         Alert.alert('Could not save', 'Please try again.');
       }
     },
-    [primaryImageDisplayUri, saveGuideEntry, savedGuideByMessageId, scanResult],
+    [extractGuideTitle, primaryImageDisplayUri, saveGuideEntry, savedGuideByMessageId, scanResult],
   );
 
   const journalChatHistory = useMemo((): ScanJournalChatMessage[] => {
