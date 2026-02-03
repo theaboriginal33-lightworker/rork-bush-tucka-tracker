@@ -631,7 +631,8 @@ export default function HomeScreen() {
         const apiMsg = typeof p?.error?.message === 'string' ? p.error.message : '';
         const apiType = typeof p?.error?.type === 'string' ? p.error.type : '';
         const core = apiMsg || apiType || `Chat request failed (${resStatus}).`;
-        return core.trim().length > 0 ? core : `Chat request failed (${resStatus}).`;
+        const cleaned = core.trim().length > 0 ? core : `Chat request failed (${resStatus}).`;
+        return `OpenAI error ${resStatus}: ${cleaned}`;
       };
 
       const runOnce = async (): Promise<string> => {
@@ -733,16 +734,22 @@ export default function HomeScreen() {
         const rawMessage = e instanceof Error ? e.message : String(e);
         console.log('[TuckaGuide] sendMessage failed', { rawMessage });
 
-        const isKeyProblem = /api key not valid|invalid api key|api_key_invalid|permission denied|invalid/i.test(rawMessage);
+        const isMissingKey = /provide an api key|no api key|api key missing|missing api key/i.test(rawMessage);
+        const isInvalidKey = /invalid api key|api_key_invalid|incorrect api key|invalid_api_key/i.test(rawMessage);
+        const isModelAccess = /model.*(not found|does not exist|not available|access)/i.test(rawMessage);
         const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable|timeout/i.test(rawMessage);
 
-        const userMessage = isKeyProblem
-          ? 'OpenAI API key was rejected. Confirm EXPO_PUBLIC_OPENAI_API_KEY is correct and reload the app.'
-          : isRateLimited
-            ? 'Tucka Guide is busy right now. Please try again in a moment.'
-            : rawMessage.trim().length > 0
-              ? rawMessage
-              : 'Could not send message. Please try again.';
+        const userMessage = isMissingKey
+          ? 'OpenAI API key is missing. Set EXPO_PUBLIC_OPENAI_API_KEY in Rork and reload the app.'
+          : isInvalidKey
+            ? 'OpenAI API key was rejected. Confirm the key is correct and has access to gpt-4.1-mini.'
+            : isModelAccess
+              ? 'OpenAI model access error. This key may not have access to gpt-4.1-mini.'
+              : isRateLimited
+                ? 'Tucka Guide is busy right now. Please try again in a moment.'
+                : rawMessage.trim().length > 0
+                  ? rawMessage
+                  : 'Could not send message. Please try again.';
 
         setChatError(new Error(userMessage));
       } finally {
@@ -2745,6 +2752,11 @@ Return JSON with keys:
                         ? 'Tucka Guide is busy right now. Retrying…'
                         : chatError.message}
                     </Text>
+                    {!isBusyChatError(chatError) ? (
+                      <Text style={styles.chatErrorHint}>
+                        {hasOpenAiKey ? 'OpenAI key detected.' : 'OpenAI key not detected in app config.'}
+                      </Text>
+                    ) : null}
                     <TouchableOpacity
                       style={styles.chatErrorDismiss}
                       onPress={isBusyChatError(chatError) ? retryChatNow : clearChatError}
@@ -3488,6 +3500,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 16,
+  },
+  chatErrorHint: {
+    flexBasis: '100%',
+    color: '#7F1D1D',
+    fontSize: 11,
+    fontWeight: '600',
+    lineHeight: 14,
+    marginTop: 6,
   },
   chatErrorDismiss: {
     paddingHorizontal: 8,
