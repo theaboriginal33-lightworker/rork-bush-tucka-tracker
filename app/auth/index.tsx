@@ -120,15 +120,17 @@ export default function AuthScreen() {
               <Text style={styles.configTitle}>Supabase not connected yet</Text>
               <Text style={styles.configBody}>
                 Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY, then reload.
+                {supabasePublicDebugInfo.reason ? `\n\nDetected issue: ${supabasePublicDebugInfo.reason}` : ''}
               </Text>
             </View>
           ) : null}
 
-          {hasConfig && showKeyDebug ? (
+          {(!hasConfig || showKeyDebug) ? (
             <View style={styles.debugBanner} testID="auth-debug-banner">
-              <Text style={styles.debugTitle} testID="auth-debug-title">Supabase key debug</Text>
+              <Text style={styles.debugTitle} testID="auth-debug-title">Supabase config debug</Text>
               <Text style={styles.debugBody} testID="auth-debug-body">
-                URL: {supabasePublicDebugInfo.url || '(missing)'}
+                Has config: {String(supabasePublicDebugInfo.hasConfig)}
+                {'\n'}URL: {supabasePublicDebugInfo.url || '(missing)'}
                 {'\n'}URL ref: {supabasePublicDebugInfo.urlRef || '(unknown)'}
                 {'\n'}Key source: {supabasePublicDebugInfo.keySource}
                 {'\n'}Anon key prefix: {supabasePublicDebugInfo.anonKeyPrefix || '(missing)'}
@@ -138,7 +140,7 @@ export default function AuthScreen() {
                 {supabasePublicDebugInfo.reason ? `\nReason: ${supabasePublicDebugInfo.reason}` : ''}
               </Text>
               <Text style={styles.debugHint} testID="auth-debug-hint">
-                If URL ref and Key ref don’t match, you pasted a key from a different Supabase project. Use Supabase → Project Settings → API → “anon public”.
+                Use Supabase → Project Settings → API → “anon public”. Then restart the dev server (reload isn’t always enough for env vars).
               </Text>
             </View>
           ) : null}
