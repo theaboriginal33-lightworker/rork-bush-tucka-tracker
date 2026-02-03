@@ -63,6 +63,7 @@ async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
 
 const MANUAL_STORAGE_KEY = 'bush-tucka.cookbook.manual.v1';
 const IMAGE_OVERRIDE_KEY = 'bush-tucka.cookbook.imageOverrides.v1';
+const TITLE_OVERRIDE_KEY = 'bush-tucka.cookbook.titleOverrides.v1';
 
 function normalizeCookEntryFromScan(scanEntry: ScanJournalEntry): CookRecipeEntry {
   const scan = scanEntry.scan;
@@ -144,6 +145,8 @@ type CookbookContextValue = {
   setEntryImage: (id: string, image: CookbookImageInput) => Promise<void>;
   clearEntryImage: (id: string) => Promise<void>;
   canEditImageForEntry: (entry: CookRecipeEntry | undefined) => boolean;
+  updateEntryTitle: (id: string, title: string) => Promise<void>;
+  canEditTitleForEntry: (entry: CookRecipeEntry | undefined) => boolean;
 
   removeEntry: (id: string) => Promise<void>;
   clearAllManual: () => Promise<void>;
@@ -159,6 +162,8 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
 
   const [imageOverrides, setImageOverrides] = useState<Record<string, string | null>>({});
   const [imageOverridesIsLoading, setImageOverridesIsLoading] = useState<boolean>(true);
+  const [titleOverrides, setTitleOverrides] = useState<Record<string, string | null>>({});
+  const [titleOverridesIsLoading, setTitleOverridesIsLoading] = useState<boolean>(true);
 
   const loadManual = useCallback(async () => {
     console.log('[Cookbook] loading manual entries');
@@ -213,10 +218,32 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     }
   }, []);
 
+  const loadTitleOverrides = useCallback(async () => {
+    console.log('[Cookbook] loading title overrides');
+    setTitleOverridesIsLoading(true);
+    try {
+      const raw = await AsyncStorage.getItem(TITLE_OVERRIDE_KEY);
+      const parsed = safeParseJson<Record<string, string | null>>(raw) ?? {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        setTitleOverrides(parsed);
+        console.log('[Cookbook] loaded title overrides', { count: Object.keys(parsed).length });
+      } else {
+        setTitleOverrides({});
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[Cookbook] loadTitleOverrides failed', { message });
+      setTitleOverrides({});
+    } finally {
+      setTitleOverridesIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadManual();
     void loadImageOverrides();
-  }, [loadImageOverrides, loadManual]);
+    void loadTitleOverrides();
+  }, [loadImageOverrides, loadManual, loadTitleOverrides]);
 
   const persistManual = useCallback(async (next: CookRecipeEntry[]) => {
     try {
@@ -239,7 +266,30 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     [imageOverrides],
   );
 
+  const applyTitleOverride = useCallback(
+    (entry: CookRecipeEntry): CookRecipeEntry => {
+      const override = titleOverrides[entry.id];
+      if (typeof override !== 'string') return entry;
+      const trimmed = override.trim();
+      if (!trimmed) return entry;
+      return { ...entry, title: trimmed };
+    },
+    [titleOverrides],
+  );
+
+  const applyOverrides = useCallback(
+    (entry: CookRecipeEntry): CookRecipeEntry => {
+      return applyTitleOverride(applyImageOverride(entry));
+    },
+    [applyImageOverride, applyTitleOverride],
+  );
+
   const canEditImageForEntry = useCallback((entry: CookRecipeEntry | undefined): boolean => {
+    if (!entry) return false;
+    return entry.source === 'collection' || entry.source === 'tucka-guide';
+  }, []);
+
+  const canEditTitleForEntry = useCallback((entry: CookRecipeEntry | undefined): boolean => {
     if (!entry) return false;
     return entry.source === 'collection' || entry.source === 'tucka-guide';
   }, []);
@@ -278,6 +328,17 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
       const message = e instanceof Error ? e.message : String(e);
       console.log('[Cookbook] persistImageOverrides failed', { message });
       setManualErrorMessage('Could not save your recipe photo.');
+    }
+  }, []);
+
+  const persistTitleOverrides = useCallback(async (next: Record<string, string | null>) => {
+    try {
+      await AsyncStorage.setItem(TITLE_OVERRIDE_KEY, JSON.stringify(next));
+      console.log('[Cookbook] persisted title overrides', { count: Object.keys(next).length });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[Cookbook] persistTitleOverrides failed', { message });
+      setManualErrorMessage('Could not save your recipe title.');
     }
   }, []);
 
@@ -354,20 +415,52 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     [imageOverrides, persistImageOverrides],
   );
 
+  const updateEntryTitle = useCallback(
+    async (id: string, title: string) => {
+      const trimmed = String(title ?? '').trim();
+      if (!trimmed) {
+        throw new Error('Title cannot be empty.');
+      }
+
+      let updatedManual = false;
+      setManualEntries((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const next = base.map((entry) => {
+          if (entry.id !== id) return entry;
+          updatedManual = true;
+          return { ...entry, title: trimmed };
+        });
+        if (updatedManual) {
+          void persistManual(next);
+        }
+        return next;
+      });
+
+      if (!updatedManual) {
+        setTitleOverrides((prev) => {
+          const next = { ...(prev ?? {}), [id]: trimmed };
+          void persistTitleOverrides(next);
+          return next;
+        });
+      }
+    },
+    [persistManual, persistTitleOverrides],
+  );
+
   const derivedFromCollection = useMemo<CookRecipeEntry[]>(() => {
     const cooked = scanEntries
       .filter((e) => {
         const confidence = Number.isFinite(e.scan?.confidence) ? (e.scan.confidence as number) : 0;
         return e.scan?.safety?.status === 'safe' && confidence >= 0.75;
       })
-      .map((e) => applyImageOverride(normalizeCookEntryFromScan(e)))
+      .map((e) => applyOverrides(normalizeCookEntryFromScan(e)))
       .sort((a, b) => b.createdAt - a.createdAt);
 
     console.log('[Cookbook] derived entries from collection', { scanCount: scanEntries.length, cookCount: cooked.length });
     return cooked;
-  }, [applyImageOverride, scanEntries]);
+  }, [applyOverrides, scanEntries]);
 
-  const manualWithOverrides = useMemo<CookRecipeEntry[]>(() => manualEntries.map((e) => applyImageOverride(e)), [applyImageOverride, manualEntries]);
+  const manualWithOverrides = useMemo<CookRecipeEntry[]>(() => manualEntries.map((e) => applyOverrides(e)), [applyOverrides, manualEntries]);
 
   const entries = useMemo<CookRecipeEntry[]>(() => {
     const all = [...manualWithOverrides, ...derivedFromCollection];
@@ -375,7 +468,7 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     return all;
   }, [derivedFromCollection, manualWithOverrides]);
 
-  const isLoading = scanIsLoading || manualIsLoading || imageOverridesIsLoading;
+  const isLoading = scanIsLoading || manualIsLoading || imageOverridesIsLoading || titleOverridesIsLoading;
   const errorMessage = scanErrorMessage ?? manualErrorMessage;
 
   const refresh = useCallback(async () => {
@@ -471,11 +564,28 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
       setEntryImage,
       clearEntryImage,
       canEditImageForEntry,
+      updateEntryTitle,
+      canEditTitleForEntry,
       removeEntry,
       clearAllManual,
       refresh,
     }),
-    [canEditImageForEntry, clearAllManual, clearEntryImage, entries, errorMessage, getEntryById, getEntryByScanId, isLoading, refresh, removeEntry, saveGuideEntry, setEntryImage],
+    [
+      canEditImageForEntry,
+      canEditTitleForEntry,
+      clearAllManual,
+      clearEntryImage,
+      entries,
+      errorMessage,
+      getEntryById,
+      getEntryByScanId,
+      isLoading,
+      refresh,
+      removeEntry,
+      saveGuideEntry,
+      setEntryImage,
+      updateEntryTitle,
+    ],
   );
 
   return value;

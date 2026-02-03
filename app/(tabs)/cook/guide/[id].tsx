@@ -1,11 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
-import { ChevronLeft, Download, ImageUp, Share2, Trash2, X } from 'lucide-react-native';
+import { ChevronLeft, Download, Edit3, ImageUp, Share2, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 
@@ -64,7 +64,8 @@ export default function CookGuideDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const entryId = typeof id === 'string' ? id : '';
 
-  const { getEntryById, removeEntry, setEntryImage, clearEntryImage, canEditImageForEntry } = useCookbook();
+  const { getEntryById, removeEntry, setEntryImage, clearEntryImage, canEditImageForEntry, updateEntryTitle, canEditTitleForEntry } =
+    useCookbook();
   const entry = getEntryById(entryId);
 
   const imageUri = useMemo(() => {
@@ -72,6 +73,40 @@ export default function CookGuideDetailsScreen() {
   }, [entry?.imageUri]);
 
   const [isImageBusy, setIsImageBusy] = useState<boolean>(false);
+  const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
+  const [titleDraft, setTitleDraft] = useState<string>(entry?.title ?? '');
+
+  useEffect(() => {
+    setTitleDraft(entry?.title ?? '');
+    setIsEditingTitle(false);
+  }, [entry?.title]);
+
+  const onStartEditTitle = useCallback(() => {
+    if (!entry || !canEditTitleForEntry(entry)) return;
+    setTitleDraft(entry.title);
+    setIsEditingTitle(true);
+  }, [canEditTitleForEntry, entry]);
+
+  const onCancelEditTitle = useCallback(() => {
+    setTitleDraft(entry?.title ?? '');
+    setIsEditingTitle(false);
+  }, [entry?.title]);
+
+  const onSaveTitle = useCallback(async () => {
+    if (!entry) return;
+    const trimmed = titleDraft.trim();
+    if (!trimmed) {
+      Alert.alert('Title required', 'Please enter a title.');
+      return;
+    }
+    try {
+      await updateEntryTitle(entry.id, trimmed);
+      setIsEditingTitle(false);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      Alert.alert('Could not update title', message.length > 140 ? 'Please try again.' : message);
+    }
+  }, [entry, titleDraft, updateEntryTitle]);
 
   const onPickImage = useCallback(async () => {
     if (!entry) return;
@@ -263,9 +298,16 @@ export default function CookGuideDetailsScreen() {
           <Text style={styles.topTitle} numberOfLines={1}>
             {entry.title}
           </Text>
-          <TouchableOpacity style={styles.iconButton} onPress={onDelete} testID="cook-guide-delete">
-            <Trash2 size={18} color={COLORS.error} />
-          </TouchableOpacity>
+          <View style={styles.topActions}>
+            {canEditTitleForEntry(entry) ? (
+              <TouchableOpacity style={styles.iconButton} onPress={onStartEditTitle} testID="cook-guide-edit-title">
+                <Edit3 size={18} color={COLORS.text} />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity style={styles.iconButton} onPress={onDelete} testID="cook-guide-delete">
+              <Trash2 size={18} color={COLORS.error} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} testID="cook-guide-scroll">
@@ -309,7 +351,28 @@ export default function CookGuideDetailsScreen() {
             </View>
 
             <View style={styles.heroText}>
-              <Text style={styles.heroTitle}>{entry.commonName}</Text>
+              {isEditingTitle ? (
+                <View style={styles.titleEditWrap} testID="cook-guide-title-edit">
+                  <TextInput
+                    value={titleDraft}
+                    onChangeText={setTitleDraft}
+                    placeholder="Recipe title"
+                    placeholderTextColor={COLORS.textSecondary}
+                    style={styles.titleInput}
+                  />
+                  <View style={styles.titleEditActions}>
+                    <TouchableOpacity style={styles.titleButton} onPress={onSaveTitle} testID="cook-guide-title-save">
+                      <Text style={styles.titleButtonText}>Save</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.titleButtonGhost} onPress={onCancelEditTitle} testID="cook-guide-title-cancel">
+                      <Text style={styles.titleButtonGhostText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.heroTitle}>{entry.title}</Text>
+              )}
+              <Text style={styles.heroSubtitle}>{entry.commonName}</Text>
               {entry.scientificName ? <Text style={styles.heroSubtitle}>{entry.scientificName}</Text> : null}
 
               {canEditImageForEntry(entry) ? (
@@ -390,6 +453,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     textAlign: 'center',
   },
+  topActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   iconButton: {
     width: 44,
     height: 44,
@@ -455,6 +522,51 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: COLORS.text,
     letterSpacing: -0.4,
+  },
+  titleEditWrap: {
+    gap: 10,
+    marginBottom: 6,
+  },
+  titleInput: {
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  titleEditActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  titleButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+  titleButtonText: {
+    color: COLORS.background,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  titleButtonGhost: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  titleButtonGhostText: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   heroSubtitle: {
     marginTop: 4,
