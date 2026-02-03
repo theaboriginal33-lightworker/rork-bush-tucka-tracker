@@ -725,47 +725,75 @@ export default function HomeScreen() {
           }, timeoutMs);
         });
 
-        const requestPromise = shouldUseRorkBackend
-          ? (toolkit as RorkToolkitModule).generateText({ messages: backendMessages })
-          : (async () => {
-              const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${openAiKey}`,
-                },
-                body: JSON.stringify(requestBody),
-                signal: controller?.signal,
-              });
+        const runOpenAiDirect = async (): Promise<string> => {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${openAiKey}`,
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller?.signal,
+          });
 
-              let json: unknown = null;
-              try {
-                json = (await res.json()) as unknown;
-              } catch (e) {
-                const message = e instanceof Error ? e.message : String(e);
-                console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
-                json = null;
+          let json: unknown = null;
+          try {
+            json = (await res.json()) as unknown;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
+            json = null;
+          }
+
+          const data = json as {
+            output_text?: string;
+            output?: { content?: { type?: string; text?: string }[] }[];
+          } | null;
+          const outputText =
+            typeof data?.output_text === 'string'
+              ? data.output_text
+              : data?.output?.[0]?.content
+                  ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
+                  .join('')
+                  .trim();
+          const assistantText = String(outputText ?? '').trim();
+
+          if (!res.ok || assistantText.length === 0) {
+            throw new Error(parseFailureMessage(res.status, json));
+          }
+
+          return assistantText;
+        };
+
+        const runRorkToolkit = async (): Promise<string> => {
+          const response = await (toolkit as RorkToolkitModule).generateText({ messages: backendMessages });
+          return String(response ?? '').trim();
+        };
+
+        const requestPromise = (async () => {
+          if (shouldUseRorkBackend) {
+            try {
+              const res = await runRorkToolkit();
+              if (res.length > 0) return res;
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e);
+              const isOpenAiDetected = /openai\s+key\s+detected/i.test(message);
+              console.log('[TuckaGuide] toolkit generateText failed', { message, isOpenAiDetected });
+              if (!isOpenAiDetected) {
+                throw e;
               }
-
-              const data = json as {
-                output_text?: string;
-                output?: { content?: { type?: string; text?: string }[] }[];
-              } | null;
-              const outputText =
-                typeof data?.output_text === 'string'
-                  ? data.output_text
-                  : data?.output?.[0]?.content
-                      ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
-                      .join('')
-                      .trim();
-              const assistantText = String(outputText ?? '').trim();
-
-              if (!res.ok || assistantText.length === 0) {
-                throw new Error(parseFailureMessage(res.status, json));
+              if (!hasOpenAiKey) {
+                throw e;
               }
+              console.log('[TuckaGuide] Falling back to direct OpenAI after toolkit rejection');
+            }
+          }
 
-              return assistantText;
-            })();
+          if (!hasOpenAiKey) {
+            throw new Error('OpenAI API key is missing.');
+          }
+          return await runOpenAiDirect();
+        })();
 
         try {
           const result = await Promise.race([requestPromise, timeoutPromise]);
