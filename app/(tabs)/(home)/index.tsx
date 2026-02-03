@@ -562,7 +562,7 @@ export default function HomeScreen() {
       setChatError(null);
 
       const model = 'gpt-4.1-mini';
-      const endpoint = 'https://api.openai.com/v1/chat/completions';
+      const endpoint = 'https://api.openai.com/v1/responses';
 
       const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
 
@@ -587,20 +587,26 @@ export default function HomeScreen() {
 
       const requestBody = {
         model,
-        messages: [
-          { role: 'system', content: promptText },
+        input: [
+          { role: 'system', content: [{ type: 'input_text', text: promptText }] },
           ...(shouldAppendUser
             ? [
-                ...history,
+                ...history.map((m) => ({
+                  role: m.role,
+                  content: [{ type: 'input_text', text: m.content ?? '' }],
+                })),
                 {
                   role: 'user' as const,
-                  content: trimmed,
+                  content: [{ type: 'input_text', text: trimmed }],
                 },
               ]
-            : history),
+            : history.map((m) => ({
+                role: m.role,
+                content: [{ type: 'input_text', text: m.content ?? '' }],
+              }))),
         ],
         temperature: 0.35,
-        max_tokens: 500,
+        max_output_tokens: 500,
       };
 
       const parseFailureMessage = (resStatus: number, payload: unknown): string => {
@@ -647,8 +653,18 @@ export default function HomeScreen() {
             json = null;
           }
 
-          const data = json as { choices?: { message?: { content?: string } }[] } | null;
-          const assistantText = String(data?.choices?.[0]?.message?.content ?? '').trim();
+          const data = json as {
+            output_text?: string;
+            output?: { content?: { type?: string; text?: string }[] }[];
+          } | null;
+          const outputText =
+            typeof data?.output_text === 'string'
+              ? data.output_text
+              : data?.output?.[0]?.content
+                  ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
+                  .join('')
+                  .trim();
+          const assistantText = String(outputText ?? '').trim();
 
           if (!res.ok || assistantText.length === 0) {
             throw new Error(parseFailureMessage(res.status, json));
@@ -1058,8 +1074,10 @@ ${scanContext}`;
       const elapsedMs = typeof since === 'number' ? Date.now() - since : 0;
       console.log('[TuckaGuide] chat busy watchdog fired', { chatStatus, elapsedMs });
       setChatTimeout(true);
+      setChatStatus('idle');
+      setChatError(new Error('Tucka Guide timed out. Please try again.'));
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-    }, 45000);
+    }, 30000);
 
     return () => {
       clearTimeout(handle);
