@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import * as Sharing from 'expo-sharing';
-import * as Print from 'expo-print';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -9,6 +7,50 @@ import type * as LocationType from 'expo-location';
 import { ChevronLeft, CookingPot, Download, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
+
+type ExpoSharingModule = typeof import('expo-sharing');
+type ExpoPrintModule = typeof import('expo-print');
+
+let sharingPromise: Promise<ExpoSharingModule | null> | null = null;
+let printPromise: Promise<ExpoPrintModule | null> | null = null;
+
+async function loadExpoSharing(): Promise<ExpoSharingModule | null> {
+  try {
+    if (!sharingPromise) {
+      sharingPromise = import('expo-sharing')
+        .then((m) => m as ExpoSharingModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanDetails] failed to load expo-sharing', { message });
+          return null;
+        });
+    }
+    return await sharingPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[ScanDetails] loadExpoSharing unexpected error', { message });
+    return null;
+  }
+}
+
+async function loadExpoPrint(): Promise<ExpoPrintModule | null> {
+  try {
+    if (!printPromise) {
+      printPromise = import('expo-print')
+        .then((m) => m as ExpoPrintModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanDetails] failed to load expo-print', { message });
+          return null;
+        });
+    }
+    return await printPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[ScanDetails] loadExpoPrint unexpected error', { message });
+    return null;
+  }
+}
 
 type ExpoFileSystemModule = typeof import('expo-file-system');
 
@@ -409,7 +451,9 @@ export default function ScanDetailsScreen() {
 
       if (Platform.OS === 'web') {
         try {
-          const result = await Print.printToFileAsync({ html, base64: false });
+          const print = await loadExpoPrint();
+          if (!print) throw new Error('Printing not available');
+          const result = await print.printToFileAsync({ html, base64: false });
           console.log('[ScanDetails] exportPdf web printToFileAsync result', { uri: result.uri });
 
           if (typeof document !== 'undefined') {
@@ -432,16 +476,23 @@ export default function ScanDetailsScreen() {
           console.log('[ScanDetails] exportPdf web printToFileAsync failed', { message });
         }
 
-        await Print.printAsync({ html });
+        {
+          const print = await loadExpoPrint();
+          if (!print) throw new Error('Printing not available');
+          await print.printAsync({ html });
+        }
         return;
       }
 
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const print = await loadExpoPrint();
+      if (!print) throw new Error('Printing not available');
+      const { uri } = await print.printToFileAsync({ html, base64: false });
       console.log('[ScanDetails] exportPdf file ready', { uri });
 
-      const canShare = await Sharing.isAvailableAsync();
+      const sharing = await loadExpoSharing();
+      const canShare = (await sharing?.isAvailableAsync()) ?? false;
       if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
+        await sharing?.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
         return;
       }
 
@@ -495,7 +546,8 @@ export default function ScanDetailsScreen() {
     }
 
     try {
-      const available = await Sharing.isAvailableAsync();
+      const sharing = await loadExpoSharing();
+      const available = (await sharing?.isAvailableAsync()) ?? false;
       if (!available) {
         Alert.alert('Sharing not available', 'Your device does not support sharing files.');
         return;
@@ -521,7 +573,7 @@ export default function ScanDetailsScreen() {
 
       if (imageUri.startsWith('file://')) {
         console.log('[ScanDetails] sharePhoto: shareAsync(local file)', { uri: imageUri, platform: Platform.OS });
-        await Sharing.shareAsync(imageUri, {
+        await sharing?.shareAsync(imageUri, {
           dialogTitle: `Share ${entry.title}`,
           mimeType: 'image/jpeg',
           UTI: 'public.jpeg',
@@ -534,7 +586,7 @@ export default function ScanDetailsScreen() {
         await fs.copyAsync({ from: imageUri, to: dest });
 
         console.log('[ScanDetails] sharePhoto: shareAsync(copied content uri)', { uri: dest });
-        await Sharing.shareAsync(dest, {
+        await sharing?.shareAsync(dest, {
           dialogTitle: `Share ${entry.title}`,
           mimeType: 'image/jpeg',
           UTI: 'public.jpeg',
@@ -546,7 +598,7 @@ export default function ScanDetailsScreen() {
       const download = await fs.downloadAsync(imageUri, dest);
 
       console.log('[ScanDetails] sharePhoto: shareAsync(downloaded)', { uri: download.uri });
-      await Sharing.shareAsync(download.uri, {
+      await sharing?.shareAsync(download.uri, {
         dialogTitle: `Share ${entry.title}`,
         mimeType: 'image/jpeg',
         UTI: 'public.jpeg',
