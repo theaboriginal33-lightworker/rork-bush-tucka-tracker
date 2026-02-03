@@ -1123,6 +1123,9 @@ ${scanContext}`;
       setChatMessages([]);
       setChatInput('');
       chatContextKeyRef.current = null;
+      pendingQuestionRef.current = null;
+      lastUserMessageRef.current = null;
+      setRegionContext(null);
       return;
     }
 
@@ -1142,6 +1145,9 @@ ${scanContext}`;
     setChatInput('');
     setChatTimeout(false);
     chatBusySinceRef.current = null;
+    pendingQuestionRef.current = null;
+    lastUserMessageRef.current = null;
+    setRegionContext(null);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [assistantGreeting, scanContextKey, scanResult, setChatMessages, systemPrompt]);
 
@@ -2834,8 +2840,14 @@ Return JSON with keys:
           {/* AI Companion */}
           <View style={styles.chatCard} testID="ai-chat-card">
             <View style={styles.chatHeader}>
-              <MessageCircle size={18} color={COLORS.primary} />
-              <Text style={styles.chatTitle}>Tucka Guide</Text>
+              <View style={styles.chatHeaderLeft}>
+                <MessageCircle size={18} color={COLORS.primary} />
+                <Text style={styles.chatTitle}>Tucka Guide</Text>
+              </View>
+              <TouchableOpacity style={styles.chatHeaderButton} onPress={resetChatToGreeting} testID="tucka-guide-reset">
+                <RefreshCcw size={14} color={COLORS.text} />
+                <Text style={styles.chatHeaderButtonText}>Reset</Text>
+              </TouchableOpacity>
             </View>
             {!scanResult ? (
               <Text style={styles.chatEmptyText}>
@@ -3570,14 +3582,35 @@ const styles = StyleSheet.create({
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 6,
+  },
+  chatHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   chatTitle: {
     fontSize: 14,
     fontWeight: '900',
     color: DARK.text,
     letterSpacing: 0.3,
+  },
+  chatHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  chatHeaderButtonText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: DARK.text,
   },
   chatSubtitle: {
     fontSize: 12,
