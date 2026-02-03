@@ -506,6 +506,9 @@ export default function HomeScreen() {
   const buildLocalGuideResponse = useCallback(
     (question: string): string | null => {
       if (!scanResult) return null;
+      if (!regionContext) {
+        return 'What state or region are you in? Is it coastal, inland, bush, rainforest, arid, tropical, or temperate?';
+      }
       const q = question.toLowerCase();
       const wantsRecipe = /recipe|jam|chutney|sauce|cook|cooking|prepare|prep/i.test(q);
       const wantsSeason = /season|when|month|time/i.test(q);
@@ -591,6 +594,10 @@ export default function HomeScreen() {
     },
     [confidenceGate?.blurb, confidenceGate?.level, regionContext, scanResult],
   );
+
+  const buildRegionClarifier = useCallback((): string => {
+    return 'What state or region are you in? Is it coastal, inland, bush, rainforest, arid, tropical, or temperate?';
+  }, []);
 
   const updateRegionFromText = useCallback(
     (text: string): string | null => {
@@ -1449,7 +1456,7 @@ ${scanContext}`;
       return;
     }
     if (needsRegionForQuestion(trimmed, effectiveRegion)) {
-      const clarifier = buildLocalGuideResponse(trimmed) ?? 'What state or region are you in?';
+      const clarifier = buildRegionClarifier();
       appendLocalMessages(trimmed, clarifier);
       setChatInput('');
       return;
@@ -1467,7 +1474,7 @@ ${scanContext}`;
     sendMessage,
     updateRegionFromText,
     needsRegionForQuestion,
-    buildLocalGuideResponse,
+    buildRegionClarifier,
     appendLocalMessages,
   ]);
 
@@ -1481,7 +1488,7 @@ ${scanContext}`;
       const handled = await handleSupportRequest(prompt);
       if (handled) return;
       if (needsRegionForQuestion(prompt, effectiveRegion)) {
-        const clarifier = buildLocalGuideResponse(prompt) ?? 'What state or region are you in?';
+        const clarifier = buildRegionClarifier();
         appendLocalMessages(prompt, clarifier);
         return;
       }
@@ -1496,7 +1503,7 @@ ${scanContext}`;
       sendMessage,
       updateRegionFromText,
       needsRegionForQuestion,
-      buildLocalGuideResponse,
+      buildRegionClarifier,
       appendLocalMessages,
     ],
   );
