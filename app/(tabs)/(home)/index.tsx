@@ -465,7 +465,13 @@ export default function HomeScreen() {
       if (/\bact\b|australian capital territory/.test(normalized)) regionMatches.push('ACT');
 
       const habitatMatches: string[] = [];
-      if (/\bcoastal\b/.test(normalized)) habitatMatches.push('coastal');
+      const coastRegionMatch = normalized.match(/\b(east|west|north|south)\s+coast\b/);
+      if (coastRegionMatch?.[1]) {
+        regionMatches.push(`${coastRegionMatch[1]} coast`);
+        habitatMatches.push('coastal');
+      } else if (/\bcoast(al)?\b/.test(normalized)) {
+        habitatMatches.push('coastal');
+      }
       if (/\binland\b/.test(normalized)) habitatMatches.push('inland');
       if (/\barid\b/.test(normalized)) habitatMatches.push('arid');
       if (/\bdesert\b/.test(normalized)) habitatMatches.push('desert');
