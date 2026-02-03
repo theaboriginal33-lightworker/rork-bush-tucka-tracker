@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { generateText } from '@rork-ai/toolkit-sdk';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSupportDirectory, type SupportOrganization } from '@/constants/supportDirectory';
@@ -301,6 +302,7 @@ export default function HomeScreen() {
       ''
     ).trim();
   const hasOpenAiKey = openAiKey.length > 0;
+  const useRorkBackend = Platform.OS === 'web' || !hasOpenAiKey;
   const chatContextKeyRef = useRef<string | null>(null);
   const systemPromptRef = useRef<string | null>(null);
 
@@ -554,7 +556,7 @@ export default function HomeScreen() {
       if (!trimmed) return;
       const isRetry = options?.retry === true;
 
-      if (!hasOpenAiKey) {
+      if (!hasOpenAiKey && !useRorkBackend) {
         setChatStatus('idle');
         setChatError(
           new Error(
@@ -601,6 +603,19 @@ export default function HomeScreen() {
 
       const shouldAppendUser =
         !isRetry || history.length === 0 || history[history.length - 1]?.role !== 'user';
+
+      const messages = [
+        { role: 'system' as const, content: promptText },
+        ...(shouldAppendUser
+          ? [
+              ...history,
+              {
+                role: 'user' as const,
+                content: trimmed,
+              },
+            ]
+          : history),
+      ];
 
       const requestBody = {
         model,
@@ -651,48 +666,51 @@ export default function HomeScreen() {
           }, timeoutMs);
         });
 
-        const fetchPromise = (async () => {
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${openAiKey}`,
-            },
-            body: JSON.stringify(requestBody),
-            signal: controller?.signal,
-          });
+        const requestPromise = useRorkBackend
+          ? generateText({ messages })
+          : (async () => {
+              const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${openAiKey}`,
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller?.signal,
+              });
 
-          let json: unknown = null;
-          try {
-            json = (await res.json()) as unknown;
-          } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
-            console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
-            json = null;
-          }
+              let json: unknown = null;
+              try {
+                json = (await res.json()) as unknown;
+              } catch (e) {
+                const message = e instanceof Error ? e.message : String(e);
+                console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
+                json = null;
+              }
 
-          const data = json as {
-            output_text?: string;
-            output?: { content?: { type?: string; text?: string }[] }[];
-          } | null;
-          const outputText =
-            typeof data?.output_text === 'string'
-              ? data.output_text
-              : data?.output?.[0]?.content
-                  ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
-                  .join('')
-                  .trim();
-          const assistantText = String(outputText ?? '').trim();
+              const data = json as {
+                output_text?: string;
+                output?: { content?: { type?: string; text?: string }[] }[];
+              } | null;
+              const outputText =
+                typeof data?.output_text === 'string'
+                  ? data.output_text
+                  : data?.output?.[0]?.content
+                      ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
+                      .join('')
+                      .trim();
+              const assistantText = String(outputText ?? '').trim();
 
-          if (!res.ok || assistantText.length === 0) {
-            throw new Error(parseFailureMessage(res.status, json));
-          }
+              if (!res.ok || assistantText.length === 0) {
+                throw new Error(parseFailureMessage(res.status, json));
+              }
 
-          return assistantText;
-        })();
+              return assistantText;
+            })();
 
         try {
-          return await Promise.race([fetchPromise, timeoutPromise]);
+          const result = await Promise.race([requestPromise, timeoutPromise]);
+          return String(result ?? '').trim();
         } finally {
           if (timeoutId) {
             clearTimeout(timeoutId);
@@ -756,7 +774,7 @@ export default function HomeScreen() {
         setChatStatus('idle');
       }
     },
-    [chatMessagesRaw, hasOpenAiKey, openAiKey],
+    [chatMessagesRaw, hasOpenAiKey, openAiKey, useRorkBackend],
   );
 
   const chatMessages = useMemo((): unknown[] => {
@@ -2754,7 +2772,11 @@ Return JSON with keys:
                     </Text>
                     {!isBusyChatError(chatError) ? (
                       <Text style={styles.chatErrorHint}>
-                        {hasOpenAiKey ? 'OpenAI key detected.' : 'OpenAI key not detected in app config.'}
+                        {useRorkBackend
+                          ? 'Using Rork AI backend (web-safe).'
+                          : hasOpenAiKey
+                            ? 'OpenAI key detected.'
+                            : 'OpenAI key not detected in app config.'}
                       </Text>
                     ) : null}
                     <TouchableOpacity
