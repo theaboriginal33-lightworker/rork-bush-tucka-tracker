@@ -103,6 +103,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
   },
+  {
+    id: 'bush-plum',
+    slug: 'bush-plum',
+    commonName: 'Bush Plum',
+    scientificName: 'Traditional Native Food • Seasonal Fruit',
+    category: 'Fruit',
+    overview:
+      'Bush Plum refers to several native Australian plum species traditionally harvested by Aboriginal communities as a nutrient-dense seasonal food.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'caution',
+    edibleParts: ['fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/xexu0k7yq9wwnmkj3afen',
+  },
 ];
 
 type SupabasePlantRow = {
@@ -183,7 +198,10 @@ export default function LearnScreen() {
   });
 
   const plants = useMemo<LearnPlant[]>(() => {
-    const data = plantsQuery.data ?? FALLBACK_PLANTS;
+    const dataRaw = plantsQuery.data ?? FALLBACK_PLANTS;
+    const hasBushPlum = dataRaw.some((p) => p.slug === 'bush-plum' || p.id === 'bush-plum');
+    const data = hasBushPlum ? dataRaw : [...dataRaw, FALLBACK_PLANTS.find((p) => p.slug === 'bush-plum')!];
+
     const q = query.trim().toLowerCase();
     if (!q) return data;
 

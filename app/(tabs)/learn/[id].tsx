@@ -179,6 +179,36 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
   },
+  {
+    id: 'bush-plum',
+    slug: 'bush-plum',
+    commonName: 'Bush Plum',
+    scientificName: undefined,
+    category: 'Fruit',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/xexu0k7yq9wwnmkj3afen',
+    overview:
+      'Bush Plum refers to several native Australian plum species traditionally harvested by Aboriginal communities as a nutrient-dense seasonal food. Flavour ranges from tart to mildly sweet, often enjoyed fresh or dried, and sometimes preserved for later use.\n\nKnowledge and use vary by Country, language group, and season.',
+    safetyLevel: 'caution',
+    confidenceHint: 'Only consume positively identified bush plums. Some lookalike species may be inedible or unsafe. Never eat if unsure — consult local knowledge holders.',
+    seasonality: 'Late Summer → Autumn',
+    seasonalityNote:
+      'Timing varies by region, rainfall, and species. Bush plums often appear after seasonal rains and are an important indicator of changing Country.',
+    preparation:
+      'Harvest ripe fruit only. Wash gently in clean water. Eat fresh or sun-dry for storage. Can be lightly cooked or preserved. Drying was traditionally used to extend availability beyond the harvest season.',
+    suggestedUses:
+      'Fresh snack • Dried fruit • Infused in water or teas • Jams & preserves • Modern bush-inspired desserts.\n\nRecipes should always respect safety, season, and cultural context.',
+    culturalNotes:
+      'Traditionally gathered by women and families in many regions. Shared during seasonal movement across Country. Harvesting followed principles of respect, timing, and regeneration.\n\nAlways seek permission before harvesting on Country that is not your own. Cultural knowledge shared here is general and non-restricted.\n\nRespect & sustainability: Take only what is needed, leave fruit to regenerate, respect land access laws, and learn from local Indigenous voices.',
+    warnings:
+      'Status: Caution. Only consume positively identified bush plums. Some lookalike species may be inedible or unsafe. Never eat if unsure — consult local knowledge holders.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest ripe fruit only', 'wash gently', 'eat fresh or sun-dry', 'lightly cook or preserve'],
+    sourceRefs: ['Local Indigenous voices', 'Community knowledge', 'Field guides (species varies by region)'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'caution',
+  },
 ];
 
 function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
