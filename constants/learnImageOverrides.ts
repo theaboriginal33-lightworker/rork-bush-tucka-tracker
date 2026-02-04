@@ -9,4 +9,6 @@ export const LEARN_HERO_IMAGE_OVERRIDES: Record<string, string> = {
     'https://wsrv.nl/?url=https%3A%2F%2Fdrive.google.com%2Fuc%3Fexport%3Ddownload%26id%3D1CzCjcvF9sX9TGn_YhDzFqfIB1yWytEWZ&output=jpg&n=-1',
   'desert-lime':
     'https://wsrv.nl/?url=https%3A%2F%2Fdrive.google.com%2Fuc%3Fexport%3Ddownload%26id%3D1P_Gy2Kiry_8XpNFwUMmHdEkEuwikGKnI&output=jpg&n=-1',
+  macadamia:
+    'https://wsrv.nl/?url=https%3A%2F%2Fdrive.google.com%2Fuc%3Fexport%3Ddownload%26id%3D1aAPgqb9cq2khfXVzAb6tAOd5UPyoPb6k&output=jpg&n=-1',
 };

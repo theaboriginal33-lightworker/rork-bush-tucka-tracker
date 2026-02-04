@@ -185,6 +185,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     safetyLevel: 'unknown',
     edibleParts: ['nut'],
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES.macadamia ??
       'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
   },
   {
