@@ -155,6 +155,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     safetyLevel: 'unknown',
     edibleParts: ['fruit'],
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES['davidson-plum'] ??
       'https://images.unsplash.com/photo-1678165842817-062e21245781?q=80&w=2574&auto=format&fit=crop',
   },
   {

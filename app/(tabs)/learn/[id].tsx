@@ -387,6 +387,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     scientificName: 'Davidsonia spp.',
     category: 'Fruit',
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES['davidson-plum'] ??
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/k95ccbdmm9553oq2sjwcr',
     overview:
       'Davidson Plum is a native rainforest fruit traditionally found along the east coast of Australia. Known for its deep purple flesh and sharp, tart flavour, it is rarely eaten raw but highly valued once prepared.\n\nThis fruit is widely used in contemporary bush foods, blending traditional knowledge with modern culinary practice.',
