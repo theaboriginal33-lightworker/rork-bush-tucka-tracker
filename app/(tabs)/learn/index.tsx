@@ -517,29 +517,41 @@ export default function LearnScreen() {
     });
   }, [plantsQuery.data, query]);
 
-  const onOpenPlant = useCallback((plant: LearnPlant) => {
-    const idRaw = String(plant.id ?? '').trim();
-    const slugRaw = String(plant.slug ?? '').trim();
-
-    const idForRoute = slugRaw.length > 0 ? slugRaw : idRaw;
-    console.log('[learn] open plant', {
-      idForRoute,
-      id: plant.id,
-      slug: plant.slug,
-      hasSupabaseConfig,
-    });
-
-    if (!idForRoute) {
-      Alert.alert('Could not open plant', 'Missing plant id.');
-      return;
-    }
-
-    const encoded = encodeURIComponent(idForRoute);
-    const safeId = encoded.replaceAll('%2F', '-');
-    const href = { pathname: '/learn/[id]', params: { id: safeId } } as const;
-    console.log('[learn] navigate ->', { href, idForRoute, encoded, safeId });
-    router.push(href);
+  const normalizeSlugish = useCallback((input: string): string => {
+    return String(input ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9\-]/g, '');
   }, []);
+
+  const onOpenPlant = useCallback(
+    (plant: LearnPlant) => {
+      const idRaw = String(plant.id ?? '').trim();
+      const slugRaw = String(plant.slug ?? '').trim();
+
+      const idForRouteRaw = slugRaw.length > 0 ? slugRaw : idRaw;
+      const idForRoute = normalizeSlugish(idForRouteRaw);
+
+      console.log('[learn] open plant', {
+        idForRouteRaw,
+        idForRoute,
+        id: plant.id,
+        slug: plant.slug,
+        hasSupabaseConfig,
+      });
+
+      if (!idForRoute) {
+        Alert.alert('Could not open plant', 'Missing plant id.');
+        return;
+      }
+
+      const href = { pathname: '/learn/[id]', params: { id: idForRoute } } as const;
+      console.log('[learn] navigate ->', { href });
+      router.push(href);
+    },
+    [normalizeSlugish]
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: LearnPlant }) => {

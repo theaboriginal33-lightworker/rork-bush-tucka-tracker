@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LearnRemoteImage } from '@/components/LearnRemoteImage';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, Trash2 } from 'lucide-react-native';
@@ -908,7 +908,17 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
 
 export default function LearnPlantDetailScreen() {
   const params = useLocalSearchParams();
+  const pathname = usePathname();
   const idParamRaw = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
+
+  const safeDecode = (value: string): string => {
+    const v = String(value ?? '');
+    try {
+      return decodeURIComponent(v);
+    } catch {
+      return v;
+    }
+  };
 
   const sanitizeParam = (raw: string): string => {
     const trimmed = String(raw ?? '').trim();
@@ -924,18 +934,31 @@ export default function LearnPlantDetailScreen() {
 
     const lastSegment = segments.length > 0 ? (segments[segments.length - 1] ?? '') : '';
 
-    try {
-      return decodeURIComponent(lastSegment).trim();
-    } catch {
-      return lastSegment.trim();
-    }
+    const once = safeDecode(lastSegment).trim();
+    const twice = safeDecode(once).trim();
+    return twice;
   };
 
-  const idParam = sanitizeParam(String(idParamRaw ?? ''));
+  const deriveFromPathname = (rawPath: string): string => {
+    const p = String(rawPath ?? '').split('?')[0]?.split('#')[0] ?? '';
+    const segs = p
+      .split('/')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const last = segs.length > 0 ? (segs[segs.length - 1] ?? '') : '';
+    return sanitizeParam(last);
+  };
+
+  const idParamFromParams = sanitizeParam(String(idParamRaw ?? ''));
+  const idParamFromPath = deriveFromPathname(pathname);
+  const idParam = idParamFromParams || idParamFromPath;
   const idParamNormalized = normalizeSlugish(idParam);
   console.log('[learn-detail] route param', {
     raw: idParamRaw,
-    sanitized: idParam,
+    pathname,
+    fromParams: idParamFromParams,
+    fromPath: idParamFromPath,
+    chosen: idParam,
     normalized: idParamNormalized,
     allParams: params,
   });
@@ -944,8 +967,8 @@ export default function LearnPlantDetailScreen() {
 
   const plantQuery = useQuery({
     queryKey: ['learn', 'plant', idParam, idParamNormalized],
-    queryFn: () => fetchPlantByIdOrSlug(idParam),
-    enabled: idParam.length > 0,
+    queryFn: () => fetchPlantByIdOrSlug(idParamNormalized || idParam),
+    enabled: (idParamNormalized || idParam).length > 0,
   });
 
   const plant = plantQuery.data ?? null;
