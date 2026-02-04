@@ -3018,7 +3018,7 @@ Return JSON with keys:
                   Ask questions about the scanned plant. Answers are grounded in the scan details.
                 </Text>
 
-                {chatError ? (
+                {chatError && !/^debug:/i.test(chatError.message ?? '') ? (
                   <View style={styles.chatErrorRow}>
                     <AlertTriangle size={16} color="#B91C1C" />
                     <Text style={styles.chatErrorText}>

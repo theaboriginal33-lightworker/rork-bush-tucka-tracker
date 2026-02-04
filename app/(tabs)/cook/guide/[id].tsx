@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { ChevronLeft, Edit3, FileDown, ImageUp, Share2, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { buildShareUrl } from '@/constants/shareLinks';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 
 type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
@@ -209,10 +210,16 @@ export default function CookGuideDetailsScreen() {
       entry.suggestedUses.slice(0, 12).forEach((u) => lines.push(`• ${u}`));
       lines.push('');
     }
+    const url = entry?.id ? buildShareUrl({ path: `/cook/guide/${entry.id}` }) : '';
+    if (url) {
+      lines.push('');
+      lines.push(`Open: ${url}`);
+    }
+
     lines.push('—');
     lines.push('Always verify locally before consuming.');
     return lines.join('\n');
-  }, [entry?.commonName, entry?.confidence, entry?.createdAt, entry?.guideText, entry?.safetyStatus, entry?.scientificName, entry?.suggestedUses]);
+  }, [entry?.commonName, entry?.confidence, entry?.createdAt, entry?.guideText, entry?.id, entry?.safetyStatus, entry?.scientificName, entry?.suggestedUses]);
 
   const buildPdfHtml = useCallback((): string => {
     if (!entry) return '';

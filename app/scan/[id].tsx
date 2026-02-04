@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import type * as LocationType from 'expo-location';
 import { ChevronLeft, CookingPot, Download, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { buildShareUrl } from '@/constants/shareLinks';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
 
 type ExpoSharingModule = typeof import('expo-sharing');
@@ -309,6 +310,9 @@ export default function ScanDetailsScreen() {
     lines.push(`Confidence: ${Math.round(entry.scan.confidence * 100)}%`);
     if (entry.locationName) lines.push(`Location: ${entry.locationName}`);
     if (entry.notes) lines.push(`Notes: ${entry.notes}`);
+
+    const url = buildShareUrl({ path: `/scan/${entry.id}` });
+    if (url) lines.push(`\nOpen: ${url}`);
 
     return lines.filter((l) => l.trim().length > 0).join('\n');
   }, [entry]);
