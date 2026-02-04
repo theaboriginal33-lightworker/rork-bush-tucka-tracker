@@ -97,6 +97,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/btyrnxjhwk5xvf16buiiv',
   },
   {
+    id: 'mountain-pepper',
+    slug: 'mountain-pepper',
+    commonName: 'Mountain Pepper',
+    scientificName: 'Native Pepperberry • Potent Bush Spice',
+    category: 'Spice / Leaf / Berry',
+    overview:
+      "Mountain Pepper is a native Australian plant traditionally found in cool, highland and temperate rainforest regions, particularly in south-eastern Australia and Tasmania. Both the leaves and berries are valued for their strong, peppery heat and aromatic complexity.\n\nIt is one of Australia’s most potent native spices and is used sparingly with respect.",
+    isBushTucker: true,
+    isMedicinal: true,
+    safetyLevel: 'caution',
+    edibleParts: ['leaves', 'berries'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/q8ou304h1cawpspih96i3',
+  },
+  {
     id: 'fallback-2',
     slug: 'wattleseed',
     commonName: 'Wattleseed',
@@ -424,7 +439,11 @@ export default function LearnScreen() {
     const hasEmuApple = dataRaw.some((p) => p.slug === 'emu-apple' || p.id === 'emu-apple');
     const hasKurrajong = dataRaw.some((p) => p.slug === 'kurrajong' || p.id === 'kurrajong');
     const hasNativePepperberry = dataRaw.some(
-      (p) => p.slug === 'native-pepperberry' || p.id === 'native-pepperberry' || p.slug === 'mountain-pepper'
+      (p) =>
+        p.slug === 'native-pepperberry' ||
+        p.id === 'native-pepperberry' ||
+        p.slug === 'mountain-pepper' ||
+        p.id === 'mountain-pepper'
     );
 
     let data = dataRaw;
@@ -453,7 +472,9 @@ export default function LearnScreen() {
       data = fallback ? [...data, fallback] : data;
     }
     if (!hasNativePepperberry) {
-      const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'native-pepperberry');
+      const fallback =
+        FALLBACK_PLANTS.find((p) => p.slug === 'mountain-pepper') ??
+        FALLBACK_PLANTS.find((p) => p.slug === 'native-pepperberry');
       data = fallback ? [...data, fallback] : data;
     }
 

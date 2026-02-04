@@ -196,6 +196,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'caution',
   },
   {
+    id: 'mountain-pepper',
+    slug: 'mountain-pepper',
+    commonName: 'Mountain Pepper',
+    scientificName: 'Native Pepperberry • Potent Bush Spice',
+    category: 'Spice / Leaf / Berry',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/q8ou304h1cawpspih96i3',
+    overview:
+      "Mountain Pepper is a native Australian plant traditionally found in cool, highland and temperate rainforest regions, particularly in south-eastern Australia and Tasmania. Both the leaves and berries are valued for their strong, peppery heat and aromatic complexity.\n\nIt is one of Australia’s most potent native spices and is used sparingly with respect.",
+    safetyLevel: 'caution',
+    confidenceHint:
+      'Safe in small culinary amounts only. Very strong flavour — use sparingly. Not recommended in large quantities. Avoid medicinal dosing without expert guidance.',
+    seasonality: 'Leaves: most of the year • Berries: Late Summer → Autumn',
+    seasonalityNote: 'Berries darken as they ripen and are usually dried before use.',
+    preparation:
+      'Leaves: harvest mature leaves, wash and dry, use fresh or dried, crush lightly.\n\nBerries: harvest ripe berries, dry thoroughly, then grind or crush — drying enhances flavour and shelf life.',
+    suggestedUses:
+      'Meat rubs • Savoury sauces • Vegetable dishes • Bush spice blends • Infused oils\n\nOften used as a black pepper substitute — but much stronger.',
+    culturalNotes:
+      'Traditionally used as both food and medicine, harvested carefully in cool forest systems. Knowledge emphasises restraint and respect; leaves are often used more gently than berries.\n\nMountain Pepper teaches power through balance.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: CAUTION — STRONG & CONCENTRATED\n\n• Safe in small culinary amounts only\n• Very strong flavour — use sparingly\n• Not recommended in large quantities\n• Avoid medicinal dosing without expert guidance',
+    lookalikes:
+      'Some shrubs with aromatic leaves can look similar. Confirm ID using multiple features (leaf shape, habitat, berries/flowers) and local guidance before use.',
+    edibleParts: ['leaves', 'berries'],
+    prepBasics: ['use sparingly', 'dry leaves (optional)', 'dry berries thoroughly', 'grind/crush before use'],
+    tags: ['Spice', 'Caution', 'Preparation: Dry / Grind', 'Flavour: Hot / Peppery', 'Environment: Cool Temperate / Highland'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    isBushTucker: true,
+    isMedicinal: true,
+    edibilityStatus: 'caution',
+  },
+  {
     id: 'fallback-2',
     slug: 'wattleseed',
     commonName: 'Wattleseed',
