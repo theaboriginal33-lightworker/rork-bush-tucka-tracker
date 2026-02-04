@@ -112,6 +112,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/q8ou304h1cawpspih96i3',
   },
   {
+    id: 'native-caper-bush',
+    slug: 'native-caper-bush',
+    commonName: 'Native Caper Bush',
+    scientificName: 'Native Shrub • Flower Bud & Fruit',
+    category: 'Shrub / Condiment',
+    overview:
+      'Native Caper Bush refers to several native Capparis species found across arid, semi-arid, and coastal regions of Australia. Traditionally, different parts of the plant — including flower buds and ripe fruit — have been used as food after correct preparation.\n\nFlavour is sharp, tangy, and savoury, similar to Mediterranean capers but uniquely adapted to Australian conditions.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'caution',
+    edibleParts: ['flower buds', 'fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/inpehr5gvdisuvxibesep',
+  },
+  {
     id: 'fallback-2',
     slug: 'wattleseed',
     commonName: 'Wattleseed',
