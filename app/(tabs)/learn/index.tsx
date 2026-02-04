@@ -150,6 +150,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://images.unsplash.com/photo-1580915411954-282cb1c96b3b?q=80&w=2787&auto=format&fit=crop',
   },
+  {
+    id: 'emu-apple',
+    slug: 'emu-apple',
+    commonName: 'Emu Apple',
+    scientificName: 'Native Shrub Fruit • Seasonal Berry',
+    category: 'Fruit',
+    overview:
+      'Emu Apple is a native fruit traditionally found in southern and south-eastern Australia, growing on low shrubs and ground-hugging plants. Its name comes from the way emus feed on the fruit and disperse the seeds, playing an important role in regeneration.\n\nFlavour is mild, fresh, and lightly sweet, with a crisp texture.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'safe',
+    edibleParts: ['fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/mnjeackl074xi8muhu5k9',
+  },
 ];
 
 type SupabasePlantRow = {
@@ -285,6 +300,7 @@ export default function LearnScreen() {
     const hasBushTomato = dataRaw.some((p) => p.slug === 'bush-tomato' || p.id === 'bush-tomato');
     const hasDesertLime = dataRaw.some((p) => p.slug === 'desert-lime' || p.id === 'desert-lime');
     const hasDorrigoPepper = dataRaw.some((p) => p.slug === 'dorrigo-pepper' || p.id === 'dorrigo-pepper');
+    const hasEmuApple = dataRaw.some((p) => p.slug === 'emu-apple' || p.id === 'emu-apple');
 
     let data = dataRaw;
     if (!hasBushTomato) {
@@ -301,6 +317,10 @@ export default function LearnScreen() {
     }
     if (!hasDorrigoPepper) {
       const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'dorrigo-pepper');
+      data = fallback ? [...data, fallback] : data;
+    }
+    if (!hasEmuApple) {
+      const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'emu-apple');
       data = fallback ? [...data, fallback] : data;
     }
 

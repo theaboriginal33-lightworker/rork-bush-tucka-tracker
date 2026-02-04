@@ -319,6 +319,40 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: true,
     edibilityStatus: 'caution',
   },
+  {
+    id: 'emu-apple',
+    slug: 'emu-apple',
+    commonName: 'Emu Apple',
+    scientificName: 'Native Shrub Fruit • Seasonal Berry',
+    category: 'Fruit',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/mnjeackl074xi8muhu5k9',
+    overview:
+      'Emu Apple is a native fruit traditionally found in southern and south-eastern Australia, growing on low shrubs and ground-hugging plants. Its name comes from the way emus feed on the fruit and disperse the seeds, playing an important role in regeneration.\n\nFlavour is mild, fresh, and lightly sweet, with a crisp texture.',
+    safetyLevel: 'safe',
+    confidenceHint:
+      'Safe to consume when ripe. Suitable raw or prepared. Always confirm identification before eating and consume in moderation.',
+    seasonality: 'Spring → Early Summer',
+    seasonalityNote:
+      'Fruit ripens after flowering and is often gathered as part of seasonal movement across Country.',
+    preparation:
+      'Harvest ripe fruit only. Wash gently. Eat fresh or lightly process. Remove seed if desired. Often enjoyed raw to highlight freshness.',
+    suggestedUses:
+      'Fresh eating • Salads • Light preserves • Desserts • Garnishes.\n\nBest used in simple dishes to honour its subtle flavour.',
+    culturalNotes:
+      'Named for the emu’s role in seed dispersal. Traditionally harvested in small quantities and often shared within family groups, reflecting interconnection between animal, plant, and land.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE\n\n• Safe to consume when ripe\n• Suitable raw or prepared\n• Always confirm identification before eating\n• Generally well tolerated when eaten in moderation',
+    lookalikes:
+      'Some low-growing native berries and shrub fruits can be confusing. Confirm identification using multiple features and local guidance before eating.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest ripe fruit only', 'wash gently', 'eat fresh or lightly process', 'remove seed if desired'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    tags: ['Fruit', 'Safe', 'Preparation: Minimal', 'Flavour: Mild / Fresh', 'Environment: Coastal / Woodland'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'safe',
+  },
 ];
 
 function normalizeSlugish(input: string): string {
