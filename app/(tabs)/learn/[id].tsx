@@ -394,6 +394,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: false,
     edibilityStatus: 'caution',
   },
+  {
+    id: 'kakadu-plum',
+    slug: 'kakadu-plum',
+    commonName: 'Kakadu Plum',
+    scientificName: 'Northern Native Fruit • Superfruit',
+    category: 'Fruit',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/844nkttl25k3vrhrq4v8x',
+    overview:
+      'Kakadu Plum is a native fruit traditionally found across Northern Australia, growing on small to medium-sized trees in open woodland and savanna Country. It is renowned globally for having one of the highest natural Vitamin C contents of any fruit.\n\nFor Aboriginal communities, Kakadu Plum has long been valued as a seasonal food and wellbeing plant, harvested with care and deep environmental knowledge.',
+    safetyLevel: 'safe',
+    confidenceHint:
+      'Safe to consume when ripe. Naturally acidic. Best used fresh or processed; generally safe for most people when consumed in moderation.',
+    seasonality: 'Late Wet Season → Early Dry Season',
+    seasonalityNote: 'Fruit ripens following seasonal rains, signalling a shift in Country.',
+    preparation:
+      'Harvest ripe fruit (often when fallen). Wash thoroughly. Use fresh or dry for storage. Process gently to preserve nutrients — drying and freezing are common modern methods to extend use.',
+    suggestedUses:
+      'Jams & preserves • Sauces & syrups • Powders & smoothies • Beverages • Desserts.\n\nOften used in small quantities due to strong acidity and nutrient density.',
+    culturalNotes:
+      'Traditionally harvested by hand during seasonal abundance. Knowledge is passed through careful observation of timing and ripeness. Fruit is often shared, dried, or traded, with practices that respect regeneration and Country.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE\n\n• Safe to consume when ripe\n• Naturally acidic\n• Best eaten fresh or processed\n• Generally safe for most people when consumed in moderation',
+    lookalikes:
+      'Some small green bush fruits can look similar at a glance. Confirm identification using multiple features (leaf, bark, habitat, fruit shape/stone) and local guidance before eating.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest ripe fruit only', 'wash thoroughly', 'use fresh or dry', 'process gently', 'use small quantities'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    tags: ['Fruit', 'Safe', 'Preparation: Minimal', 'Flavour: Sour / Acidic', 'Environment: Tropical / Savanna'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'safe',
+  },
 ];
 
 function normalizeSlugish(input: string): string {

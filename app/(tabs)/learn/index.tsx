@@ -181,6 +181,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/wniclm256l583hw566ce1',
   },
+  {
+    id: 'kakadu-plum',
+    slug: 'kakadu-plum',
+    commonName: 'Kakadu Plum',
+    scientificName: 'Northern Native Fruit • Superfruit',
+    category: 'Fruit',
+    overview:
+      'Kakadu Plum is a native fruit traditionally found across Northern Australia, growing on small to medium-sized trees in open woodland and savanna Country. It is renowned globally for having one of the highest natural Vitamin C contents of any fruit.\n\nFor Aboriginal communities, Kakadu Plum has long been valued as a seasonal food and wellbeing plant, harvested with care and deep environmental knowledge.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'safe',
+    edibleParts: ['fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/844nkttl25k3vrhrq4v8x',
+  },
 ];
 
 type SupabasePlantRow = {
