@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
+import { LearnRemoteImage } from '@/components/LearnRemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
@@ -232,17 +232,17 @@ export default function LearnScreen() {
         >
           <View style={styles.imageContainer}>
             {hero ? (
-              <ExpoImage
-                source={{ uri: hero }}
+              <LearnRemoteImage
+                uri={hero}
                 style={styles.cardImage}
                 contentFit="cover"
-                transition={140}
                 cachePolicy="disk"
+                transition={140}
                 onLoad={() => {
                   console.log('[learn] card image loaded', { slug: item.slug, uri: hero });
                 }}
-                onError={(e) => {
-                  console.log('[learn] card image load failed', { slug: item.slug, uri: hero, error: e?.error });
+                onError={(error) => {
+                  console.log('[learn] card image load failed', { slug: item.slug, uri: hero, error });
                 }}
                 testID={`learn-card-image-${item.slug}`}
               />

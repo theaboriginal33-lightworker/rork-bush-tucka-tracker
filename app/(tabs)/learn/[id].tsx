@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
+import { LearnRemoteImage } from '@/components/LearnRemoteImage';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
@@ -390,8 +390,8 @@ export default function LearnPlantDetailScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="learn-detail-scroll">
       <View style={styles.heroWrap}>
         {hero ? (
-          <ExpoImage
-            source={{ uri: hero }}
+          <LearnRemoteImage
+            uri={hero}
             style={styles.hero}
             contentFit="cover"
             transition={180}
@@ -399,8 +399,8 @@ export default function LearnPlantDetailScreen() {
             onLoad={() => {
               console.log('[learn-detail] hero loaded', { idParam, uri: hero });
             }}
-            onError={(e) => {
-              console.log('[learn-detail] hero load failed', { idParam, uri: hero, error: e?.error });
+            onError={(error) => {
+              console.log('[learn-detail] hero load failed', { idParam, uri: hero, error });
             }}
             testID="learn-detail-hero-image"
           />
