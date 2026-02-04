@@ -286,6 +286,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: false,
     edibilityStatus: 'safe',
   },
+  {
+    id: 'dorrigo-pepper',
+    slug: 'dorrigo-pepper',
+    commonName: 'Dorrigo Pepper',
+    scientificName: 'Rainforest Pepper • Native Spice',
+    category: 'Spice / Leaf',
+    heroImageUrl:
+      'https://images.unsplash.com/photo-1524593119773-cc06f1d9e2a8?q=80&w=2787&auto=format&fit=crop',
+    overview:
+      'Dorrigo Pepper is a native rainforest plant known for its aromatic leaves and spicy berries. Closely related to native pepperberries, it delivers a warm, peppery heat with subtle floral notes, making it a prized ingredient in both traditional use and modern native cuisine.\n\nIt thrives in cool, moist rainforest environments, reflecting balance, shade, and layered flavour.',
+    safetyLevel: 'caution',
+    confidenceHint:
+      'Safe in small culinary quantities. Strong flavour — use sparingly. Avoid excessive consumption. Not recommended in large amounts for children or during pregnancy.',
+    seasonality: 'Leaves: most of the year • Berries: Late Summer → Autumn',
+    seasonalityNote: 'Seasonality varies by rainfall and elevation.',
+    preparation:
+      'Leaves: harvest mature leaves, wash and dry, use fresh or dried, crush or infuse.\n\nBerries: harvest ripe berries, dry slowly, grind or crush before use.',
+    suggestedUses:
+      'Seasoning for meats & vegetables • Pepper substitute • Sauces & rubs • Infused oils • Bush spice blends.\n\nLeaves are often milder and more aromatic than berries.',
+    lookalikes:
+      'Native pepperberry relatives and other rainforest aromatics can look similar. Confirm ID using multiple traits (leaf aroma when crushed, berry appearance, habitat) and local guidance before use.',
+    culturalNotes:
+      'Used traditionally as a flavouring and medicinal plant, harvested carefully in rainforest systems. Knowledge is shared through observation and respect for seasonal cycles; leaves are often preferred for everyday use.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: CAUTION\n\n• Safe in small culinary quantities\n• Strong flavour — use sparingly\n• Avoid excessive consumption\n• Not recommended in large amounts for children or during pregnancy',
+    edibleParts: ['leaves', 'berries'],
+    prepBasics: ['harvest lightly', 'wash & dry', 'crush/infuse leaves', 'dry berries slowly', 'grind before use'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    tags: ['Rainforest Pepper', 'Caution', 'Preparation: Dry / Infuse', 'Flavour: Peppery / Warm', 'Environment: Rainforest'],
+    isBushTucker: true,
+    isMedicinal: true,
+    edibilityStatus: 'caution',
+  },
 ];
 
 function normalizeSlugish(input: string): string {

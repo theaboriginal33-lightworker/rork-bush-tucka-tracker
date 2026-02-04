@@ -284,6 +284,7 @@ export default function LearnScreen() {
     const hasBushPlum = dataRaw.some((p) => p.slug === 'bush-plum' || p.id === 'bush-plum');
     const hasBushTomato = dataRaw.some((p) => p.slug === 'bush-tomato' || p.id === 'bush-tomato');
     const hasDesertLime = dataRaw.some((p) => p.slug === 'desert-lime' || p.id === 'desert-lime');
+    const hasDorrigoPepper = dataRaw.some((p) => p.slug === 'dorrigo-pepper' || p.id === 'dorrigo-pepper');
 
     let data = dataRaw;
     if (!hasBushTomato) {
@@ -296,6 +297,10 @@ export default function LearnScreen() {
     }
     if (!hasDesertLime) {
       const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'desert-lime');
+      data = fallback ? [...data, fallback] : data;
+    }
+    if (!hasDorrigoPepper) {
+      const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'dorrigo-pepper');
       data = fallback ? [...data, fallback] : data;
     }
 
