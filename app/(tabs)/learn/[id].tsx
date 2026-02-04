@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
@@ -388,7 +389,24 @@ export default function LearnPlantDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="learn-detail-scroll">
       <View style={styles.heroWrap}>
-        {hero ? <Image source={{ uri: hero }} style={styles.hero} /> : <View style={styles.heroFallback} />}
+        {hero ? (
+          <ExpoImage
+            source={{ uri: hero }}
+            style={styles.hero}
+            contentFit="cover"
+            transition={180}
+            cachePolicy="disk"
+            onLoad={() => {
+              console.log('[learn-detail] hero loaded', { idParam, uri: hero });
+            }}
+            onError={(e) => {
+              console.log('[learn-detail] hero load failed', { idParam, uri: hero, error: e?.error });
+            }}
+            testID="learn-detail-hero-image"
+          />
+        ) : (
+          <View style={styles.heroFallback} />
+        )}
         <View style={styles.heroOverlay} />
 
         <View style={styles.heroActions} pointerEvents="box-none">

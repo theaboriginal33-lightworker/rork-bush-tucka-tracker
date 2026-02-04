@@ -116,7 +116,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: false,
     safetyLevel: 'caution',
     edibleParts: ['fruit'],
-    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/w3iju5cnatf0o4neeveqf',
+    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/97s78gf8aoub5c285davi',
   },
 ];
 
@@ -237,6 +237,10 @@ export default function LearnScreen() {
                 style={styles.cardImage}
                 contentFit="cover"
                 transition={140}
+                cachePolicy="disk"
+                onLoad={() => {
+                  console.log('[learn] card image loaded', { slug: item.slug, uri: hero });
+                }}
                 onError={(e) => {
                   console.log('[learn] card image load failed', { slug: item.slug, uri: hero, error: e?.error });
                 }}
