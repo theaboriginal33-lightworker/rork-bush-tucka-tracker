@@ -494,6 +494,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'caution',
   },
   {
+    id: 'lilly-pilly',
+    slug: 'lilly-pilly',
+    commonName: 'Lilly Pilly',
+    scientificName: 'Native Berry • Rainforest & Coastal Fruit',
+    category: 'Berry',
+    heroImageUrl:
+      'https://images.unsplash.com/photo-1705360156521-40c178a4fa92?fm=jpg&q=60&w=2000&auto=format&fit=crop',
+    overview:
+      'Lilly Pilly refers to several native Syzygium species traditionally found along Australia’s east coast, from rainforest margins to coastal woodlands. The berries range in colour from pink to deep purple and vary in flavour from mildly sweet to tart.\n\nLong valued as a seasonal bush food, Lilly Pilly is now also common in urban landscapes — though not all varieties are palatable.',
+    safetyLevel: 'caution',
+    confidenceHint:
+      'Species varies. Many are edible, but some ornamental varieties are bitter or unpleasant. Only consume fruit from known edible species.',
+    seasonality: 'Spring → Summer',
+    seasonalityNote: 'Fruit ripens as weather warms, often signalling seasonal abundance.',
+    preparation:
+      'Harvest ripe fruit only. Wash thoroughly. Remove seed if desired. Use fresh or cooked — cooking often improves flavour and softness.',
+    suggestedUses:
+      'Jams & preserves • Sauces & chutneys • Baking & desserts • Fresh snacking (selected species) • Syrups & cordials\n\nOften paired with spice or citrus to balance tartness.',
+    culturalNotes:
+      'Traditionally harvested seasonally and shared fresh or preserved. Knowledge of edible species is local and passed through observation.\n\nLilly Pilly teaches us that names can be shared, but knowledge is specific.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: CAUTION — SPECIES VARIES\n\n• Many Lilly Pilly species are edible\n• Flavour and texture vary widely\n• Some ornamental varieties are bitter or unpleasant\n• Only consume fruit from known edible species',
+    lookalikes:
+      'Many Lilly Pilly species look similar, and some ornamental plantings can be unpleasant to eat. Confirm species using multiple features (leaf, fruit, habitat) and local guidance before eating.',
+    edibleParts: ['berry', 'fruit'],
+    prepBasics: ['harvest ripe fruit only', 'wash thoroughly', 'remove seed (optional)', 'use fresh or cook'],
+    tags: ['Berry', 'Caution', 'Preparation: Minimal / Cooked', 'Flavour: Sweet–Tart', 'Environment: Rainforest / Coastal'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'caution',
+  },
+  {
     id: 'kakadu-plum',
     slug: 'kakadu-plum',
     commonName: 'Kakadu Plum',
