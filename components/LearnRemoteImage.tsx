@@ -22,8 +22,10 @@ function isAttachmentLikeUri(uri: string): boolean {
 function proxyToJpeg(uri: string): string {
   const trimmed = uri.trim();
   const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  return `https://images.weserv.nl/?url=${encodeURIComponent(withScheme)}&output=jpg&n=-1`;
+  const withoutScheme = withScheme.replace(/^https?:\/\//i, '');
+  return `https://images.weserv.nl/?url=${encodeURIComponent(withoutScheme)}&output=jpg&n=-1`;
 }
+
 
 type LearnRemoteImageProps = {
   uri: string;
@@ -86,6 +88,7 @@ export function LearnRemoteImage({
   }, [attachmentProxyUri, currentUri, effectivePreferAttachmentProxy, normalizedUri]);
 
   const resolvedUri = useMemo(() => String(currentUri ?? '').trim(), [currentUri]);
+  const renderUri = resolvedUri;
 
   useEffect(() => {
     if (!resolvedUri) return;
@@ -109,16 +112,33 @@ export function LearnRemoteImage({
     return () => clearTimeout(t);
   }, [attachmentProxyUri, isLoading, normalizedUri, onError, resolvedUri]);
 
+
   const containerStyle = useMemo<StyleProp<ViewStyle>>(() => {
-    const base: ViewStyle = { position: 'relative' };
+    const base: ViewStyle = {
+      position: 'relative',
+      minWidth: 1,
+      minHeight: 1,
+      backgroundColor: 'rgba(255,255,255,0.02)',
+    };
     return [base, style as StyleProp<ViewStyle>];
   }, [style]);
 
   const imageFillStyle = useMemo<StyleProp<ImageStyle>>(() => {
+    if (Platform.OS === 'web') {
+      const s: ImageStyle = {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+      };
+      return s;
+    }
+
     return StyleSheet.absoluteFillObject as ImageStyle;
   }, []);
 
-  if (!resolvedUri) {
+  if (!renderUri) {
     return (
       <View style={containerStyle} testID={testID}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -131,18 +151,19 @@ export function LearnRemoteImage({
   const fallback = (
     <View style={containerStyle} testID={testID ? `${testID}-rn-wrap` : undefined}>
       <RNImage
-        source={{ uri: resolvedUri }}
+        source={{ uri: renderUri }}
         style={imageFillStyle}
         resizeMode={contentFit === 'contain' ? 'contain' : 'cover'}
         onLoad={() => {
-          console.log('[LearnRemoteImage] RNImage loaded', { uri: resolvedUri, platform: Platform.OS });
+          console.log('[LearnRemoteImage] RNImage loaded', { uri: renderUri, platform: Platform.OS, resolvedUri });
           setIsLoading(false);
           onLoad?.();
         }}
         onError={(e) => {
           const err = (e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error;
           console.log('[LearnRemoteImage] RNImage error', {
-            uri: resolvedUri,
+            uri: renderUri,
+            resolvedUri,
             platform: Platform.OS,
             error: err,
             original: normalizedUri,
@@ -186,21 +207,22 @@ export function LearnRemoteImage({
   return (
     <View style={containerStyle} testID={testID ? `${testID}-expo-wrap` : undefined}>
       <ExpoImage
-        key={resolvedUri}
-        source={{ uri: resolvedUri }}
+        key={renderUri}
+        source={{ uri: renderUri }}
         style={imageFillStyle}
         contentFit={contentFit}
         transition={transition}
         cachePolicy={cachePolicy}
         onLoad={() => {
-          console.log('[LearnRemoteImage] ExpoImage loaded', { uri: resolvedUri, platform: Platform.OS });
+          console.log('[LearnRemoteImage] ExpoImage loaded', { uri: renderUri, platform: Platform.OS, resolvedUri });
           setIsLoading(false);
           onLoad?.();
         }}
         onError={(e) => {
           const err = (e as unknown as { error?: string } | null | undefined)?.error;
           console.log('[LearnRemoteImage] ExpoImage error', {
-            uri: resolvedUri,
+            uri: renderUri,
+            resolvedUri,
             platform: Platform.OS,
             error: err,
             original: normalizedUri,
@@ -217,7 +239,7 @@ export function LearnRemoteImage({
             return;
           }
 
-          console.log('[LearnRemoteImage] ExpoImage error -> fallback RNImage', { uri: resolvedUri, platform: Platform.OS });
+          console.log('[LearnRemoteImage] ExpoImage error -> fallback RNImage', { uri: renderUri, platform: Platform.OS, resolvedUri });
           setIsLoading(false);
           setHasError(true);
           onError?.(err);
@@ -232,7 +254,14 @@ export function LearnRemoteImage({
       ) : null}
 
       {loadTimedOut ? (
-        <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.08)', paddingHorizontal: 10 }]} pointerEvents="none">
+        <View
+          style={[
+            styles.loadingOverlay,
+            { backgroundColor: 'rgba(0,0,0,0.24)', paddingHorizontal: 10 },
+          ]}
+          pointerEvents="none"
+          testID={testID ? `${testID}-timeout` : undefined}
+        >
           <Text style={styles.timeoutText} numberOfLines={2}>
             Image timed out
           </Text>
