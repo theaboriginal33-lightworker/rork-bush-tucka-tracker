@@ -287,6 +287,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9t5m36gwnpzgw20tb1rte',
   },
   {
+    id: 'muntries',
+    slug: 'muntries',
+    commonName: 'Muntries',
+    scientificName: 'Native Berry • Crisp Groundcover Fruit',
+    category: 'Berry',
+    overview:
+      'Muntries are a native Australian berry traditionally found across southern Australia, growing close to the ground on creeping shrubs. The berries range from green to red and are known for their crisp texture and apple-like flavour with gentle sweetness.\n\nThey have long been enjoyed as a fresh, seasonal food, particularly valued for their refreshing quality.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'safe',
+    edibleParts: ['berry', 'fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/4wyowwuva5315m2h56ip3',
+  },
+  {
     id: 'native-pepperberry',
     slug: 'native-pepperberry',
     commonName: 'Native Pepperberry',

@@ -494,6 +494,38 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'safe',
   },
   {
+    id: 'muntries',
+    slug: 'muntries',
+    commonName: 'Muntries',
+    scientificName: 'Native Berry • Crisp Groundcover Fruit',
+    category: 'Berry',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/4wyowwuva5315m2h56ip3',
+    overview:
+      'Muntries are a native Australian berry traditionally found across southern Australia, growing close to the ground on creeping shrubs. The berries range from green to red and are known for their crisp texture and apple-like flavour with gentle sweetness.\n\nThey have long been enjoyed as a fresh, seasonal food, particularly valued for their refreshing quality.',
+    safetyLevel: 'safe',
+    confidenceHint: 'Safe to consume when ripe. Suitable raw or prepared. Always confirm identification.',
+    seasonality: 'Spring → Early Summer',
+    seasonalityNote: 'Fruit ripens after flowering, often following cooler months.',
+    preparation:
+      'Harvest ripe berries gently. Wash lightly if needed. Eat fresh or lightly prepare. Use soon after harvest — Muntries are delicate and best used fresh.',
+    suggestedUses:
+      'Fresh snacking • Salads • Desserts • Light preserves • Garnishes\n\nTheir crispness makes them ideal for fresh and lightly prepared dishes.',
+    culturalNotes:
+      'Traditionally gathered by families while moving across Country, often eaten fresh at harvest sites. Knowledge is shared through seasonal practice, reflecting a close relationship with ground-level plants.\n\nMuntries teach attentiveness — nourishment can be found close to the earth.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE\n\n• Safe to consume when ripe\n• Suitable raw or prepared\n• Always confirm identification\n• Generally low risk and well tolerated',
+    lookalikes:
+      'Small groundcover berries can be confused with other creeping shrubs. Confirm identification using multiple features (leaf shape, growth habit, fruit form, habitat) and local guidance before eating.',
+    edibleParts: ['berry', 'fruit'],
+    prepBasics: ['harvest ripe berries gently', 'wash lightly', 'eat fresh', 'use soon after harvest', 'avoid trampling groundcover'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    tags: ['Berry', 'Safe', 'Preparation: Minimal', 'Flavour: Crisp / Sweet', 'Environment: Southern Woodland / Coastal'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'safe',
+  },
+  {
     id: 'illawarra-plum',
     slug: 'illawarra-plum',
     commonName: 'Illawarra Plum',
