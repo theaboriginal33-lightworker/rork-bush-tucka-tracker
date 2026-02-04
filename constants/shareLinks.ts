@@ -45,26 +45,30 @@ export function buildShareUrl({ path, queryParams }: ShareLinkOptions): string {
   try {
     const webOrigin = getWebOrigin() ?? FALLBACK_WEB_ORIGIN;
 
-    if (Platform.OS === 'web' || webOrigin) {
-      const url = new URL(webOrigin);
-      url.pathname = normalizedPath;
-      for (const [k, v] of Object.entries(cleanedParams)) {
-        url.searchParams.set(k, v);
-      }
-      const out = url.toString();
-      console.log('[ShareLinks] buildShareUrl(web)', { normalizedPath, out, webOrigin });
-      return out;
+    const url = new URL(webOrigin);
+    url.pathname = normalizedPath;
+    for (const [k, v] of Object.entries(cleanedParams)) {
+      url.searchParams.set(k, v);
     }
 
-    const out = Linking.createURL(
-      normalizedPath,
-      Object.keys(cleanedParams).length > 0 ? { queryParams: cleanedParams } : undefined,
-    );
-    console.log('[ShareLinks] buildShareUrl(native)', { normalizedPath, out });
+    const out = url.toString();
+    console.log('[ShareLinks] buildShareUrl(https)', { normalizedPath, out, webOrigin, platform: Platform.OS });
     return out;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.log('[ShareLinks] buildShareUrl failed', { normalizedPath, message });
-    return normalizedPath;
+
+    try {
+      const out = Linking.createURL(
+        normalizedPath,
+        Object.keys(cleanedParams).length > 0 ? { queryParams: cleanedParams } : undefined,
+      );
+      console.log('[ShareLinks] buildShareUrl fallback deep link', { normalizedPath, out, platform: Platform.OS });
+      return out;
+    } catch (e2) {
+      const message2 = e2 instanceof Error ? e2.message : String(e2);
+      console.log('[ShareLinks] buildShareUrl deep link failed', { normalizedPath, message2 });
+      return normalizedPath;
+    }
   }
 }
