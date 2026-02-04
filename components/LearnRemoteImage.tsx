@@ -23,7 +23,7 @@ function proxyToJpeg(uri: string): string {
   const trimmed = uri.trim();
   const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   const withoutScheme = withScheme.replace(/^https?:\/\//i, '');
-  return `https://images.weserv.nl/?url=${encodeURIComponent(withoutScheme)}&output=jpg&n=-1`;
+  return `https://wsrv.nl/?url=${encodeURIComponent(withoutScheme)}&output=jpg&n=-1`;
 }
 
 
@@ -197,8 +197,6 @@ export function LearnRemoteImage({
       ) : null}
     </View>
   );
-
-  if (Platform.OS === 'web') return fallback;
 
   if (hasError) return fallback;
 
