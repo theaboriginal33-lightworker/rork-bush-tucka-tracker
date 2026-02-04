@@ -827,6 +827,11 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
   if (!trimmed) return null;
 
   const key = normalizeSlugish(trimmed);
+  console.log('[learn-detail] fetchPlantByIdOrSlug', {
+    raw: trimmed,
+    normalized: key,
+    hasSupabaseConfig,
+  });
 
   const localExact =
     FALLBACK_PLANTS.find((p) => normalizeSlugish(p.slug) === key || normalizeSlugish(p.id) === key) ?? null;
@@ -938,9 +943,9 @@ export default function LearnPlantDetailScreen() {
   const { getPlantImageUrl, setPlantImageUrl, clearPlantImageUrl } = useLearnImages();
 
   const plantQuery = useQuery({
-    queryKey: ['learn', 'plant', idParamNormalized],
-    queryFn: () => fetchPlantByIdOrSlug(idParamNormalized),
-    enabled: idParamNormalized.length > 0,
+    queryKey: ['learn', 'plant', idParam, idParamNormalized],
+    queryFn: () => fetchPlantByIdOrSlug(idParam),
+    enabled: idParam.length > 0,
   });
 
   const plant = plantQuery.data ?? null;
