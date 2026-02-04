@@ -524,7 +524,14 @@ export default function LearnScreen() {
     const idForRoute = slugRaw.length > 0 ? slugRaw : idRaw;
     console.log('[learn] open plant', { idForRoute, id: plant.id, slug: plant.slug, hasSupabaseConfig });
 
-    router.push({ pathname: '/learn/[id]', params: { id: idForRoute } });
+    if (!idForRoute) {
+      Alert.alert('Could not open plant', 'Missing plant id.');
+      return;
+    }
+
+    const href = { pathname: '/learn/[id]', params: { id: idForRoute } } as const;
+    console.log('[learn] navigate ->', href);
+    router.push(href);
   }, []);
 
   const renderItem = useCallback(

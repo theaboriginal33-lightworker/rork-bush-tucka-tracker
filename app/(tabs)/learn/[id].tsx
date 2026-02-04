@@ -911,12 +911,18 @@ export default function LearnPlantDetailScreen() {
 
     const noFragment = trimmed.split('#')[0] ?? '';
     const noQuery = noFragment.split('?')[0] ?? '';
-    const firstSegment = noQuery.split('/')[0] ?? '';
+
+    const segments = noQuery
+      .split('/')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const lastSegment = segments.length > 0 ? (segments[segments.length - 1] ?? '') : '';
 
     try {
-      return decodeURIComponent(firstSegment).trim();
+      return decodeURIComponent(lastSegment).trim();
     } catch {
-      return firstSegment.trim();
+      return lastSegment.trim();
     }
   };
 
