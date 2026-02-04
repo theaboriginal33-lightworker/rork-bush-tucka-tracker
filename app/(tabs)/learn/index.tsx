@@ -317,7 +317,7 @@ export default function LearnScreen() {
     const idRaw = String(plant.id ?? '').trim();
     const slugRaw = String(plant.slug ?? '').trim();
 
-    const idForRoute = idRaw.length > 0 ? idRaw : slugRaw;
+    const idForRoute = slugRaw.length > 0 ? slugRaw : idRaw;
     console.log('[learn] open plant', { idForRoute, id: plant.id, slug: plant.slug, hasSupabaseConfig });
 
     router.push({ pathname: '/learn/[id]', params: { id: idForRoute } });
