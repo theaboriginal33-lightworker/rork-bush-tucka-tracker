@@ -257,13 +257,77 @@ export function LearnRemoteImage({
     </View>
   );
 
+  if (Platform.OS === 'web') {
+    return (
+      <View style={containerStyle} testID={testID ? `${testID}-web-wrap` : undefined}>
+        <RNImage
+          key={`${attemptIndex}-${renderUri}`}
+          source={{ uri: renderUri }}
+          style={imageFillStyle}
+          resizeMode={contentFit === 'contain' ? 'contain' : 'cover'}
+          onLoad={() => {
+            console.log('[LearnRemoteImage] web RNImage loaded', {
+              uri: renderUri,
+              platform: Platform.OS,
+              attemptIndex,
+              candidatesCount: candidates.length,
+            });
+            setIsLoading(false);
+            onLoad?.();
+          }}
+          onError={(e) => {
+            const err = (e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error;
+            console.log('[LearnRemoteImage] web RNImage error', {
+              uri: renderUri,
+              platform: Platform.OS,
+              attemptIndex,
+              candidatesCount: candidates.length,
+              error: err,
+              original: normalizedUri,
+              attachmentProxyUri,
+            });
+
+            if (attemptIndex + 1 < candidates.length) {
+              const next = candidates[attemptIndex + 1];
+              console.log('[LearnRemoteImage] web RNImage -> next candidate', {
+                from: renderUri,
+                to: next,
+                platform: Platform.OS,
+              });
+              setAttemptIndex((i) => i + 1);
+              setIsLoading(true);
+              setLoadTimedOut(false);
+              loadStartRef.current = Date.now();
+              return;
+            }
+
+            setIsLoading(false);
+            setHasError(true);
+            onError?.(err);
+          }}
+          testID={testID ? `${testID}-web-rn` : undefined}
+        />
+
+        {isLoading ? (
+          <View
+            style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.06)' }]}
+            pointerEvents="none"
+            testID={testID ? `${testID}-loading` : undefined}
+          >
+            <ActivityIndicator />
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   if (hasError) return fallback;
 
   return (
     <View style={containerStyle} testID={testID ? `${testID}-expo-wrap` : undefined}>
       <ExpoImage
         key={`${attemptIndex}-${renderUri}`}
-        source={Platform.OS === 'web' ? renderUri : { uri: renderUri }}
+        source={{ uri: renderUri }}
         style={imageFillStyle}
         contentFit={contentFit}
         transition={transition}
@@ -316,7 +380,11 @@ export function LearnRemoteImage({
       />
 
       {isLoading ? (
-        <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.06)' }]} pointerEvents="none" testID={testID ? `${testID}-loading` : undefined}>
+        <View
+          style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.06)' }]}
+          pointerEvents="none"
+          testID={testID ? `${testID}-loading` : undefined}
+        >
           <ActivityIndicator />
         </View>
       ) : null}
