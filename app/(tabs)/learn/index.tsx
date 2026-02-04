@@ -241,6 +241,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/844nkttl25k3vrhrq4v8x',
   },
+  {
+    id: 'lilly-pilly',
+    slug: 'lilly-pilly',
+    commonName: 'Lilly Pilly',
+    scientificName: 'Native Berry • Rainforest & Coastal Fruit',
+    category: 'Berry',
+    overview:
+      'Lilly Pilly refers to several native Syzygium species traditionally found along Australia’s east coast, from rainforest margins to coastal woodlands. The berries range in colour from pink to deep purple and vary in flavour from mildly sweet to tart.\n\nLong valued as a seasonal bush food, Lilly Pilly is now also common in urban landscapes — though not all varieties are palatable.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'caution',
+    edibleParts: ['berry', 'fruit'],
+    heroImageUrl:
+      'https://images.unsplash.com/photo-1705360156521-40c178a4fa92?fm=jpg&q=60&w=2000&auto=format&fit=crop',
+  },
 ];
 
 type SupabasePlantRow = {
