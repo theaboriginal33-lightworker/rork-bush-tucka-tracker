@@ -289,7 +289,8 @@ export default function LearnScreen() {
   }, [plantsQuery.data, query]);
 
   const onOpenPlant = useCallback((plant: LearnPlant) => {
-    const idForRoute = String(plant.id ?? '').trim() || String(plant.slug ?? '').trim();
+    const slugForRoute = String(plant.slug ?? '').trim();
+    const idForRoute = slugForRoute.length > 0 ? slugForRoute : String(plant.id ?? '').trim();
     console.log('[learn] open plant', { idForRoute, id: plant.id, slug: plant.slug });
     router.push({ pathname: '/learn/[id]', params: { id: idForRoute } });
   }, []);
