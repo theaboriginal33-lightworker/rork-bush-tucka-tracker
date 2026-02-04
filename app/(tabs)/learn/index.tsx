@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -12,12 +13,13 @@ import {
 } from 'react-native';
 import { LearnRemoteImage } from '@/components/LearnRemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Filter, Search, X } from 'lucide-react-native';
+import { Filter, ImagePlus, Search, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
 import { useLearnImages } from '@/app/providers/LearnImageProvider';
+import * as ImagePicker from 'expo-image-picker';
 
 type LearnPlant = {
   id: string;
@@ -191,7 +193,56 @@ async function fetchPlantsFromSupabase(): Promise<LearnPlant[]> {
 
 export default function LearnScreen() {
   const [query, setQuery] = useState<string>('');
-  const { getPlantImageUrl } = useLearnImages();
+  const { getPlantImageUrl, setPlantImageUrl, clearPlantImageUrl } = useLearnImages();
+
+  const pickImageMutation = useMutation({
+    mutationFn: async (vars: { slug: string }) => {
+      const slug = String(vars.slug ?? '').trim();
+      if (!slug) throw new Error('Missing plant id');
+
+      if (Platform.OS !== 'web') {
+        const existingPerm = await ImagePicker.getMediaLibraryPermissionsAsync();
+        if (!existingPerm.granted) {
+          const requested = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!requested.granted) {
+            console.log('[learn] media library permission denied');
+            throw new Error('Photos permission is required to change the image.');
+          }
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.9,
+        aspect: [1, 1],
+      });
+
+      if (result.canceled) {
+        console.log('[learn] image pick canceled', { slug });
+        return { canceled: true as const };
+      }
+
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) throw new Error('Could not read selected image');
+
+      await setPlantImageUrl(slug, uri);
+      console.log('[learn] image override saved', { slug });
+      return { canceled: false as const, uri };
+    },
+  });
+
+  const clearImageMutation = useMutation({
+    mutationFn: async (vars: { slug: string }) => {
+      const slug = String(vars.slug ?? '').trim();
+      if (!slug) throw new Error('Missing plant id');
+      await clearPlantImageUrl(slug);
+      console.log('[learn] image override cleared', { slug });
+    },
+  });
+
+  const { mutate: pickImageMutate, isPending: isPickingImage } = pickImageMutation;
+  const { mutate: clearImageMutate, isPending: isClearingImage } = clearImageMutation;
 
   const plantsQuery = useQuery({
     queryKey: ['learn', 'plants'],
@@ -220,7 +271,9 @@ export default function LearnScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: LearnPlant }) => {
-      const hero = getPlantImageUrl(item.slug) ?? item.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
+      const slug = item.slug;
+      const override = getPlantImageUrl(slug);
+      const hero = override ?? item.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
       const category = item.category ?? 'Plant';
       const safety = (item.safetyLevel ?? 'unknown').toUpperCase();
 
@@ -249,6 +302,64 @@ export default function LearnScreen() {
             ) : (
               <View style={styles.imageFallback} />
             )}
+
+            <View style={styles.cardImageActions} pointerEvents="box-none">
+              <Pressable
+                style={({ pressed }) => [styles.cardImageButton, pressed && styles.cardImageButtonPressed]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  pickImageMutate(
+                    { slug },
+                    {
+                      onError: (err) => {
+                        const message = err instanceof Error ? err.message : String(err);
+                        Alert.alert('Could not change photo', message);
+                      },
+                    }
+                  );
+                }}
+                disabled={isPickingImage}
+                testID={`learn-card-change-image-${slug}`}
+              >
+                <ImagePlus size={16} color={'rgba(255,255,255,0.92)'} />
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardImageButton,
+                  override ? null : styles.cardImageButtonDisabled,
+                  pressed && override ? styles.cardImageButtonPressed : null,
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  if (!override) return;
+
+                  Alert.alert('Remove photo?', 'This will restore the default image for this plant.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Remove',
+                      style: 'destructive',
+                      onPress: () => {
+                        clearImageMutate(
+                          { slug },
+                          {
+                            onError: (err) => {
+                              const message = err instanceof Error ? err.message : String(err);
+                              Alert.alert('Could not remove photo', message);
+                            },
+                          }
+                        );
+                      },
+                    },
+                  ]);
+                }}
+                disabled={!override || isClearingImage}
+                testID={`learn-card-remove-image-${slug}`}
+              >
+                <Trash2 size={16} color={'rgba(255,255,255,0.92)'} />
+              </Pressable>
+            </View>
+
             <View style={styles.typeTag}>
               <Text style={styles.typeText} numberOfLines={1}>
                 {category}
@@ -276,7 +387,7 @@ export default function LearnScreen() {
         </Pressable>
       );
     },
-    [getPlantImageUrl, onOpenPlant]
+    [clearImageMutate, getPlantImageUrl, isClearingImage, isPickingImage, onOpenPlant, pickImageMutate]
   );
 
   const keyExtractor = useCallback((item: LearnPlant) => item.id, []);
@@ -483,6 +594,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  cardImageActions: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cardImageButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.20)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardImageButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  cardImageButtonDisabled: {
+    opacity: 0.45,
   },
   typeTag: {
     position: 'absolute',
