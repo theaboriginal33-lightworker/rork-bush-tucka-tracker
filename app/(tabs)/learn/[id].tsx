@@ -559,6 +559,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'safe',
   },
   {
+    id: 'native-pepperberry',
+    slug: 'native-pepperberry',
+    commonName: 'Native Pepperberry',
+    scientificName: 'Native Spice • Mountain Pepper (Tasmannia lanceolata)',
+    category: 'Spice / Leaf / Berry',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/x3he40ggds7lj65cyxhgm',
+    overview:
+      'Mountain Pepper (Native Pepperberry) is a native Australian plant traditionally found in cool, highland and temperate rainforest regions, particularly in south-eastern Australia and Tasmania. Both the leaves and berries are valued for their strong, peppery heat and aromatic complexity.\n\nIt is one of Australia’s most potent native spices and is used sparingly with respect.',
+    safetyLevel: 'caution',
+    confidenceHint:
+      'Safe in small culinary amounts only. Very strong flavour — use sparingly. Avoid large quantities and avoid medicinal dosing without expert guidance.',
+    seasonality: 'Leaves: Most of the year • Berries: Late Summer → Autumn',
+    seasonalityNote: 'Berries darken as they ripen and are usually dried before use; drying enhances shelf life and intensity.',
+    preparation:
+      'Leaves: Harvest mature leaves, wash and dry, use fresh or dried; crush or grind lightly.\n\nBerries: Harvest ripe berries, dry thoroughly, then grind or crush before use.',
+    suggestedUses:
+      'Meat rubs • Savoury sauces • Vegetable dishes • Bush spice blends • Infused oils\n\nOften used as a black pepper substitute, but much stronger — start with a pinch.',
+    culturalNotes:
+      'Traditionally used as both food and medicine, harvested carefully in cool forest systems. Knowledge emphasises restraint and respect; leaves are often used more gently than berries.\n\nMountain Pepper teaches power through balance.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: CAUTION — STRONG & CONCENTRATED\n\n• Safe in small culinary amounts only\n• Very strong flavour — use sparingly\n• Not recommended in large quantities\n• Avoid medicinal dosing without expert guidance',
+    lookalikes:
+      'Some aromatic shrubs may be confused when not fruiting. Confirm identification using multiple features (leaf shape/aroma, berry appearance, habitat) and local guidance before harvesting.',
+    edibleParts: ['leaves', 'berries'],
+    prepBasics: ['use sparingly', 'dry leaves or berries for storage', 'grind/crush before use', 'start with a pinch'],
+    tags: ['Spice', 'Leaf', 'Berry', 'Caution', 'Preparation: Dry / Grind', 'Flavour: Hot / Peppery', 'Environment: Cool Temperate / Highland'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    isBushTucker: true,
+    isMedicinal: true,
+    edibilityStatus: 'caution',
+  },
+  {
     id: 'kakadu-plum',
     slug: 'kakadu-plum',
     commonName: 'Kakadu Plum',
