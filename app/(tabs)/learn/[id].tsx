@@ -65,28 +65,36 @@ type SupabasePlantRow = {
 
 const FALLBACK_PLANTS: LearnPlant[] = [
   {
-    id: 'fallback-1',
+    id: 'finger-lime',
     slug: 'finger-lime',
     commonName: 'Finger Lime',
-    scientificName: 'Citrus australasica',
-    category: 'Fruit',
-    overview: 'A citrus with caviar-like pearls used in both sweet and savoury dishes.',
+    scientificName: 'Native Citrus • Citrus Caviar',
+    category: 'Fruit / Citrus',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/n7m5z15iiqrv0xjj2jfby',
+    overview:
+      'Finger Lime is a native Australian citrus traditionally found in subtropical rainforest regions of eastern Australia. Known for its elongated shape and unique caviar-like pearls, it delivers a sharp, refreshing citrus burst unlike any other fruit.\n\nHighly valued today in contemporary cuisine, Finger Lime bridges traditional knowledge and modern food innovation.',
+    safetyLevel: 'safe',
+    confidenceHint: 'Confirm ID (shape + habitat) and harvest only ripe fruit; timing matters.',
+    seasonality: 'Late Summer → Autumn',
+    seasonalityNote: 'Fruit colour varies by species and region (green, pink, red, yellow).',
+    preparation:
+      'Harvest ripe fruit. Slice open lengthways and gently press to release the pearls. Use fresh for best flavour — minimal preparation preserves texture and aroma.',
+    suggestedUses:
+      'Seafood garnishes • Salads & fresh dishes • Desserts & pastries • Beverages & cocktails • Sauces & dressings\n\nOften used as a finishing ingredient rather than cooked down.',
+    culturalNotes:
+      'Traditionally harvested from rainforest edges and shared seasonally. Knowledge is passed through careful observation of ripeness and seasons.\n\nFinger Lime teaches patience — timing is everything.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE\n\n• Safe to eat when ripe\n• Suitable raw or cooked\n• Naturally acidic\n• Generally well tolerated when consumed in moderation',
+    lookalikes:
+      'Other small citrus can be confused at a glance. Confirm identification using multiple features (leaf, thorny branches, fruit shape/skin) and local guidance.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest ripe fruit', 'wash', 'slice lengthways', 'press pearls out', 'use fresh'],
+    tags: ['Fruit', 'Citrus', 'Safe', 'Preparation: Minimal', 'Flavour: Sharp / Citrus', 'Environment: Subtropical Rainforest'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
     isBushTucker: true,
     isMedicinal: false,
-    safetyLevel: 'unknown',
-    confidenceHint: 'Foraging identification can be tricky — double-check key features in multiple sources.',
-    edibleParts: ['fruit'],
-    preparation: 'Use the pearls fresh as a garnish; store whole fruit refrigerated.',
-    seasonality: 'Varies by region',
-    warnings: 'Confirm ID before eating; avoid roadside/treated plants.',
-    lookalikes: 'Other small citrus; check peel texture and finger-like shape.',
-    culturalNotes: 'Respect local knowledge and permissions when foraging.',
-    suggestedUses: 'Seafood garnish, desserts, cocktails.',
-    prepBasics: ['rinse gently', 'slice lengthwise', 'squeeze pearls'],
-    sourceRefs: ['Local field guides', 'Community knowledge'],
-    edibilityStatus: 'unknown',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop',
+    edibilityStatus: 'safe',
   },
   {
     id: 'fallback-2',

@@ -37,18 +37,19 @@ type LearnPlant = {
 
 const FALLBACK_PLANTS: LearnPlant[] = [
   {
-    id: 'fallback-1',
+    id: 'finger-lime',
     slug: 'finger-lime',
     commonName: 'Finger Lime',
-    scientificName: 'Citrus australasica',
-    category: 'Fruit',
-    overview: 'A citrus with caviar-like pearls used in both sweet and savoury dishes.',
+    scientificName: 'Native Citrus • Citrus Caviar',
+    category: 'Fruit / Citrus',
+    overview:
+      'Finger Lime is a native Australian citrus traditionally found in subtropical rainforest regions of eastern Australia. Known for its elongated shape and unique caviar-like pearls, it delivers a sharp, refreshing citrus burst unlike any other fruit.\n\nHighly valued today in contemporary cuisine, Finger Lime bridges traditional knowledge and modern food innovation.',
     isBushTucker: true,
     isMedicinal: false,
-    safetyLevel: 'unknown',
+    safetyLevel: 'safe',
     edibleParts: ['fruit'],
     heroImageUrl:
-      'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop',
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/n7m5z15iiqrv0xjj2jfby',
   },
   {
     id: 'fallback-2',
