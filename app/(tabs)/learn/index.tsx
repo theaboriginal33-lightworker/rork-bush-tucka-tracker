@@ -135,6 +135,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibleParts: ['fruit'],
     heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/97s78gf8aoub5c285davi',
   },
+  {
+    id: 'desert-lime',
+    slug: 'desert-lime',
+    commonName: 'Desert Lime',
+    scientificName: 'Arid Native Citrus • Wild Lime',
+    category: 'Fruit',
+    overview:
+      'Desert Lime is a hardy native citrus traditionally found in arid and semi-arid regions of Australia. Small in size but powerful in flavour, it delivers a sharp, tangy citrus punch prized in both traditional use and modern bush-food cuisine.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'safe',
+    edibleParts: ['fruit'],
+    heroImageUrl:
+      'https://images.unsplash.com/photo-1580915411954-282cb1c96b3b?q=80&w=2787&auto=format&fit=crop',
+  },
 ];
 
 type SupabasePlantRow = {
@@ -268,6 +283,7 @@ export default function LearnScreen() {
     const dataRaw = plantsQuery.data ?? FALLBACK_PLANTS;
     const hasBushPlum = dataRaw.some((p) => p.slug === 'bush-plum' || p.id === 'bush-plum');
     const hasBushTomato = dataRaw.some((p) => p.slug === 'bush-tomato' || p.id === 'bush-tomato');
+    const hasDesertLime = dataRaw.some((p) => p.slug === 'desert-lime' || p.id === 'desert-lime');
 
     let data = dataRaw;
     if (!hasBushTomato) {
@@ -276,6 +292,10 @@ export default function LearnScreen() {
     }
     if (!hasBushPlum) {
       const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'bush-plum');
+      data = fallback ? [...data, fallback] : data;
+    }
+    if (!hasDesertLime) {
+      const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'desert-lime');
       data = fallback ? [...data, fallback] : data;
     }
 

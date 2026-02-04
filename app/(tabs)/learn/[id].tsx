@@ -249,9 +249,42 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibleParts: ['fruit'],
     prepBasics: ['harvest ripe fruit only', 'wash gently', 'eat fresh or sun-dry', 'lightly cook or preserve'],
     sourceRefs: ['Local Indigenous voices', 'Community knowledge', 'Field guides (species varies by region)'],
+    tags: ['Traditional Native Food', 'Caution', 'Preparation: Standard', 'Cultural Use: Regional'],
     isBushTucker: true,
     isMedicinal: false,
     edibilityStatus: 'caution',
+  },
+  {
+    id: 'desert-lime',
+    slug: 'desert-lime',
+    commonName: 'Desert Lime',
+    scientificName: 'Desert Lime',
+    category: 'Fruit',
+    heroImageUrl:
+      'https://images.unsplash.com/photo-1580915411954-282cb1c96b3b?q=80&w=2787&auto=format&fit=crop',
+    overview:
+      'Desert Lime is a hardy native citrus traditionally found in arid and semi-arid regions of Australia. Small in size but powerful in flavour, it delivers a sharp, tangy citrus punch prized in both traditional use and modern bush-food cuisine.\n\nThis plant thrives where others don’t — a true symbol of resilience, adaptation, and Country knowledge.',
+    safetyLevel: 'safe',
+    confidenceHint: 'Safe to eat when ripe. Naturally acidic. Suitable raw or cooked. Basic cleaning is sufficient.',
+    seasonality: 'Late Summer → Autumn',
+    seasonalityNote: 'Fruit ripens from green to yellow-green depending on region.',
+    preparation:
+      'Harvest ripe fruit. Wash thoroughly. Use whole, juiced, or zested. Balance acidity with fats or sweetness — a little goes a long way.',
+    suggestedUses:
+      'Seafood seasoning • Sauces & dressings • Marinades • Beverages & syrups • Desserts & baking.\n\nOften used where lemon or lime would traditionally appear.',
+    lookalikes:
+      'Other small citrus or lime-like fruits can be confused at a glance. Confirm ID using multiple features (leaf, thorn/branch habit, fruit aroma, habitat) and local guidance before eating.',
+    culturalNotes:
+      'Traditionally used across desert and inland Nations. Valued for flavour and long-keeping qualities. Often harvested sparingly due to harsh environments, with knowledge passed through seasonal observation.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE\n\n• Safe to eat when ripe\n• Naturally acidic\n• Suitable raw or cooked\n• No special preparation required beyond basic cleaning',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest ripe fruit', 'wash thoroughly', 'juice/zest/whole use', 'balance acidity'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    tags: ['Arid Native Citrus', 'Safe', 'Preparation: Minimal', 'Flavour: Citrus / Tangy', 'Environment: Arid'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'safe',
   },
 ];
 
