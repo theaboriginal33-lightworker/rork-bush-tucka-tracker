@@ -621,7 +621,7 @@ export default function HomeScreen() {
       setChatError(null);
 
       const model = 'gpt-4.1-mini';
-      const endpoint = 'https://api.openai.com/v1/responses';
+      const endpoint = 'https://api.openai.com/v1/chat/completions';
 
       const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
 
@@ -678,26 +678,26 @@ export default function HomeScreen() {
 
       const requestBody = {
         model,
-        input: [
-          { role: 'system', content: [{ type: 'input_text', text: promptText }] },
+        messages: [
+          { role: 'system' as const, content: promptText },
           ...(shouldAppendUser
             ? [
                 ...history.map((m) => ({
                   role: m.role,
-                  content: [{ type: 'input_text', text: m.content ?? '' }],
+                  content: m.content ?? '',
                 })),
                 {
                   role: 'user' as const,
-                  content: [{ type: 'input_text', text: trimmed }],
+                  content: trimmed,
                 },
               ]
             : history.map((m) => ({
                 role: m.role,
-                content: [{ type: 'input_text', text: m.content ?? '' }],
+                content: m.content ?? '',
               }))),
         ],
         temperature: 0.35,
-        max_output_tokens: 500,
+        max_tokens: 500,
       };
 
       const parseFailureMessage = (resStatus: number, payload: unknown): string => {
@@ -745,18 +745,10 @@ export default function HomeScreen() {
             json = null;
           }
 
-          const data = json as {
-            output_text?: string;
-            output?: { content?: { type?: string; text?: string }[] }[];
-          } | null;
-          const outputText =
-            typeof data?.output_text === 'string'
-              ? data.output_text
-              : data?.output?.[0]?.content
-                  ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
-                  .join('')
-                  .trim();
-          const assistantText = String(outputText ?? '').trim();
+          const data = json as
+            | { choices?: { message?: { content?: string | null } | null }[] | null }
+            | null;
+          const assistantText = String(data?.choices?.[0]?.message?.content ?? '').trim();
 
           if (!res.ok || assistantText.length === 0) {
             throw new Error(parseFailureMessage(res.status, json));

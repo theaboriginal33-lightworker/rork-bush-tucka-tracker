@@ -273,28 +273,32 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     queryKey: ['scanJournal', 'entries'],
     retry: 0,
     queryFn: async () => {
-      console.log('[ScanJournal] loading from AsyncStorage');
+      console.log('[ScanJournal] loading from storage');
 
       const timeoutMs = 2500;
       const startedAt = Date.now();
 
-      const raw = await Promise.race<string | null>([
-        AsyncStorage.getItem(STORAGE_KEY),
-        new Promise<string | null>((resolve) => {
-          setTimeout(() => resolve(null), timeoutMs);
-        }),
-      ]);
+      let rawPayload: string | null = null;
 
-      const durationMs = Date.now() - startedAt;
-      console.log('[ScanJournal] load finished', { durationMs, timedOut: raw === null });
-
-      let rawPayload = raw;
-      if ((rawPayload === null || rawPayload === '') && Platform.OS === 'web') {
+      if (Platform.OS === 'web') {
         const idbPayload = await readFromIndexedDb(STORAGE_KEY);
         if (idbPayload) {
           rawPayload = idbPayload;
           console.log('[ScanJournal] loaded from indexedDB', { length: idbPayload.length });
         }
+      }
+
+      if (rawPayload === null) {
+        const raw = await Promise.race<string | null>([
+          AsyncStorage.getItem(STORAGE_KEY),
+          new Promise<string | null>((resolve) => {
+            setTimeout(() => resolve(null), timeoutMs);
+          }),
+        ]);
+
+        const durationMs = Date.now() - startedAt;
+        console.log('[ScanJournal] load finished (AsyncStorage)', { durationMs, timedOut: raw === null });
+        rawPayload = raw;
       }
 
       const parsed = safeParseJson<ScanJournalEntry[]>(rawPayload) ?? [];
@@ -358,17 +362,17 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       const payload = JSON.stringify(normalizedForStorage);
       let didPersist = false;
 
+      if (Platform.OS === 'web') {
+        const ok = await writeToIndexedDb(STORAGE_KEY, payload);
+        if (ok) didPersist = true;
+      }
+
       try {
         await AsyncStorage.setItem(STORAGE_KEY, payload);
         didPersist = true;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         console.log('[ScanJournal] AsyncStorage.setItem failed', { message });
-      }
-
-      if (Platform.OS === 'web') {
-        const ok = await writeToIndexedDb(STORAGE_KEY, payload);
-        if (ok) didPersist = true;
       }
 
       if (!didPersist) {
