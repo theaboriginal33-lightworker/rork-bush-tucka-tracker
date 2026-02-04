@@ -294,39 +294,40 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
   const trimmed = idOrSlug.trim();
   if (!trimmed) return null;
 
+  const local = FALLBACK_PLANTS.find((p) => p.slug === trimmed || p.id === trimmed) ?? null;
+
   if (!hasSupabaseConfig) {
     console.log('[learn-detail] supabase not configured; using fallback', supabasePublicDebugInfo);
-    const local = FALLBACK_PLANTS.find((p) => p.slug === trimmed || p.id === trimmed) ?? null;
     return local;
   }
 
   try {
-    console.log('[learn-detail] fetching plant', { idOrSlug: trimmed });
+    console.log('[learn-detail] fetching plant', { idOrSlug: trimmed, fallbackHit: Boolean(local) });
 
     const { data, error } = await supabase
       .from('plants')
       .select(
         'id, slug, common_name, scientific_name, category, is_bush_tucker, is_medicinal, safety_level, confidence_hint, overview, edible_parts, preparation, seasonality, warnings, lookalikes, cultural_notes, suggested_uses, prep_basics, seasonality_note, source_refs, edibility_status, created_at, updated_at'
       )
-      .or(`id.eq.${trimmed},slug.eq.${trimmed}`)
+      .eq('id', trimmed)
       .limit(1)
       .maybeSingle();
 
     if (error) {
-      console.log('[learn-detail] supabase error; fallback', { message: error.message });
-      return FALLBACK_PLANTS.find((p) => p.slug === trimmed || p.id === trimmed) ?? null;
+      console.log('[learn-detail] supabase error; falling back', { message: error.message });
+      return local;
     }
 
     if (!data) {
-      console.log('[learn-detail] not found in supabase; falling back to local seed content');
-      return FALLBACK_PLANTS.find((p) => p.slug === trimmed || p.id === trimmed) ?? null;
+      console.log('[learn-detail] not found in supabase by id; falling back', { idOrSlug: trimmed });
+      return local;
     }
 
     return toLearnPlant(data as SupabasePlantRow, 0);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    console.log('[learn-detail] unexpected error', { message });
-    return FALLBACK_PLANTS.find((p) => p.slug === trimmed || p.id === trimmed) ?? null;
+    console.log('[learn-detail] unexpected error; falling back', { message });
+    return local;
   }
 }
 
