@@ -159,6 +159,8 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
 }
 
 const MAX_WEB_DATA_URI_LENGTH = 650_000;
+const WEB_IDB_DB = 'bush-tucka-tracka';
+const WEB_IDB_STORE = 'scan-journal';
 
 function stripLargeWebImages(entry: ScanJournalEntry): ScanJournalEntry {
   if (Platform.OS !== 'web') return entry;
@@ -177,6 +179,75 @@ function stripLargeWebImages(entry: ScanJournalEntry): ScanJournalEntry {
     imageUri: stripIfTooLarge(entry.imageUri),
     imagePreviewUri: stripIfTooLarge(entry.imagePreviewUri),
   };
+}
+
+function getIndexedDb(): any | null {
+  if (Platform.OS !== 'web') return null;
+  const g = globalThis as unknown as { indexedDB?: unknown };
+  return g?.indexedDB ?? null;
+}
+
+async function readFromIndexedDb(key: string): Promise<string | null> {
+  const indexedDb = getIndexedDb();
+  if (!indexedDb) return null;
+
+  return await new Promise((resolve) => {
+    try {
+      const request = indexedDb.open(WEB_IDB_DB, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(WEB_IDB_STORE)) {
+          db.createObjectStore(WEB_IDB_STORE);
+        }
+      };
+      request.onerror = () => resolve(null);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(WEB_IDB_STORE, 'readonly');
+        const store = tx.objectStore(WEB_IDB_STORE);
+        const getReq = store.get(key);
+        getReq.onsuccess = () => {
+          const value = getReq.result;
+          resolve(typeof value === 'string' ? value : null);
+        };
+        getReq.onerror = () => resolve(null);
+        tx.oncomplete = () => db.close();
+        tx.onerror = () => db.close();
+      };
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+async function writeToIndexedDb(key: string, value: string): Promise<boolean> {
+  const indexedDb = getIndexedDb();
+  if (!indexedDb) return false;
+
+  return await new Promise((resolve) => {
+    try {
+      const request = indexedDb.open(WEB_IDB_DB, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(WEB_IDB_STORE)) {
+          db.createObjectStore(WEB_IDB_STORE);
+        }
+      };
+      request.onerror = () => resolve(false);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(WEB_IDB_STORE, 'readwrite');
+        const store = tx.objectStore(WEB_IDB_STORE);
+        const putReq = store.put(value, key);
+        putReq.onsuccess = () => resolve(true);
+        putReq.onerror = () => resolve(false);
+        tx.oncomplete = () => db.close();
+        tx.onerror = () => db.close();
+      };
+    } catch (e) {
+      resolve(false);
+    }
+  });
 }
 
 type ScanJournalContextValue = {
@@ -217,9 +288,19 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       const durationMs = Date.now() - startedAt;
       console.log('[ScanJournal] load finished', { durationMs, timedOut: raw === null });
 
-      const parsed = safeParseJson<ScanJournalEntry[]>(raw) ?? [];
+      let rawPayload = raw;
+      if ((rawPayload === null || rawPayload === '') && Platform.OS === 'web') {
+        const idbPayload = await readFromIndexedDb(STORAGE_KEY);
+        if (idbPayload) {
+          rawPayload = idbPayload;
+          console.log('[ScanJournal] loaded from indexedDB', { length: idbPayload.length });
+        }
+      }
+
+      const parsed = safeParseJson<ScanJournalEntry[]>(rawPayload) ?? [];
       const normalized = Array.isArray(parsed) ? parsed.map((e) => normalizeEntry(e)).filter(Boolean) : [];
-      return normalized.sort((a, b) => {
+      const cleaned = Platform.OS === 'web' ? normalized.map((entry) => stripLargeWebImages(entry)) : normalized;
+      return cleaned.sort((a, b) => {
         const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
         const bT = Number.isFinite(b.createdAt) ? b.createdAt : 0;
         if (bT !== aT) return bT - aT;
@@ -275,7 +356,25 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       const normalizedForStorage =
         Platform.OS === 'web' ? nextEntries.map((entry) => stripLargeWebImages(entry)) : nextEntries;
       const payload = JSON.stringify(normalizedForStorage);
-      await AsyncStorage.setItem(STORAGE_KEY, payload);
+      let didPersist = false;
+
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY, payload);
+        didPersist = true;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[ScanJournal] AsyncStorage.setItem failed', { message });
+      }
+
+      if (Platform.OS === 'web') {
+        const ok = await writeToIndexedDb(STORAGE_KEY, payload);
+        if (ok) didPersist = true;
+      }
+
+      if (!didPersist) {
+        throw new Error('Storage unavailable');
+      }
+
       return normalizedForStorage;
     },
     onError: (e) => {
