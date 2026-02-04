@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image as RNImage, ImageStyle, Platform, StyleProp, View, ViewStyle } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 
-function shouldProxyForAttachments(uri: string): boolean {
+function isAttachmentLikeUri(uri: string): boolean {
   const lower = uri.toLowerCase();
   if (lower.includes('r2.dev/attachments/') || lower.includes('r2-pub.rork.com/attachments/')) return true;
   if (lower.includes('pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/')) return true;
@@ -37,30 +37,22 @@ export function LearnRemoteImage({
   onError,
 }: LearnRemoteImageProps) {
   const [hasError, setHasError] = useState<boolean>(false);
+  const [currentUri, setCurrentUri] = useState<string>('');
 
   useEffect(() => {
     setHasError(false);
+    setCurrentUri(String(uri ?? '').trim());
   }, [uri]);
 
   const normalizedUri = useMemo(() => String(uri ?? '').trim(), [uri]);
 
-  const resolvedUri = useMemo(() => {
+  const attachmentProxyUri = useMemo(() => {
     if (!normalizedUri) return '';
-
-    const shouldProxy = Platform.OS === 'web' && shouldProxyForAttachments(normalizedUri);
-
-    if (shouldProxy) {
-      const proxied = proxyToJpeg(normalizedUri);
-      console.log('[LearnRemoteImage] proxying attachment image (web only)', {
-        from: normalizedUri,
-        to: proxied,
-        platform: Platform.OS,
-      });
-      return proxied;
-    }
-
-    return normalizedUri;
+    if (!isAttachmentLikeUri(normalizedUri)) return '';
+    return proxyToJpeg(normalizedUri);
   }, [normalizedUri]);
+
+  const resolvedUri = useMemo(() => String(currentUri ?? '').trim(), [currentUri]);
 
   if (!resolvedUri) {
     return <View style={style} testID={testID} />;
@@ -76,12 +68,26 @@ export function LearnRemoteImage({
         onLoad?.();
       }}
       onError={(e) => {
+        const err = (e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error;
         console.log('[LearnRemoteImage] RNImage error', {
           uri: resolvedUri,
           platform: Platform.OS,
-          error: (e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error,
+          error: err,
+          original: normalizedUri,
+          attachmentProxyUri,
         });
-        onError?.((e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error);
+
+        if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
+          console.log('[LearnRemoteImage] RNImage switching to proxy', {
+            from: resolvedUri,
+            to: attachmentProxyUri,
+            platform: Platform.OS,
+          });
+          setCurrentUri(attachmentProxyUri);
+          return;
+        }
+
+        onError?.(err);
       }}
       testID={testID ? `${testID}-rn` : undefined}
     />
@@ -103,11 +109,25 @@ export function LearnRemoteImage({
       }}
       onError={(e) => {
         const err = (e as unknown as { error?: string } | null | undefined)?.error;
-        console.log('[LearnRemoteImage] ExpoImage error -> fallback RNImage', {
+        console.log('[LearnRemoteImage] ExpoImage error', {
           uri: resolvedUri,
           platform: Platform.OS,
           error: err,
+          original: normalizedUri,
+          attachmentProxyUri,
         });
+
+        if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
+          console.log('[LearnRemoteImage] ExpoImage switching to proxy', {
+            from: resolvedUri,
+            to: attachmentProxyUri,
+            platform: Platform.OS,
+          });
+          setCurrentUri(attachmentProxyUri);
+          return;
+        }
+
+        console.log('[LearnRemoteImage] ExpoImage error -> fallback RNImage', { uri: resolvedUri, platform: Platform.OS });
         setHasError(true);
         onError?.(err);
       }}
