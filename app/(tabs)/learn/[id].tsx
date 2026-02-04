@@ -893,6 +893,14 @@ function mergePreferSupabase(supabasePlant: LearnPlant, fallback: LearnPlant | n
   if (!fallback) return supabasePlant;
 
   const pickString = (a: string | undefined, b: string | undefined) => (a && a.trim().length > 0 ? a : b);
+  const pickRichString = (a: string | undefined, b: string | undefined) => {
+    const aTrim = (a ?? '').trim();
+    const bTrim = (b ?? '').trim();
+    if (!aTrim && !bTrim) return undefined;
+    if (!aTrim) return bTrim;
+    if (!bTrim) return aTrim;
+    return aTrim.length >= bTrim.length ? aTrim : bTrim;
+  };
   const pickStringArr = (a: string[] | undefined, b: string[] | undefined) => (a && a.length > 0 ? a : b);
   const pickBool = (a: boolean | undefined, b: boolean | undefined) => (typeof a === 'boolean' ? a : b);
 
@@ -904,18 +912,18 @@ function mergePreferSupabase(supabasePlant: LearnPlant, fallback: LearnPlant | n
     scientificName: pickString(supabasePlant.scientificName, fallback.scientificName),
     category: pickString(supabasePlant.category, fallback.category),
     heroImageUrl: pickString(supabasePlant.heroImageUrl, fallback.heroImageUrl),
-    overview: pickString(supabasePlant.overview, fallback.overview),
+    overview: pickRichString(supabasePlant.overview, fallback.overview),
     safetyLevel: pickString(supabasePlant.safetyLevel, fallback.safetyLevel),
-    confidenceHint: pickString(supabasePlant.confidenceHint, fallback.confidenceHint),
+    confidenceHint: pickRichString(supabasePlant.confidenceHint, fallback.confidenceHint),
     edibleParts: pickStringArr(supabasePlant.edibleParts, fallback.edibleParts),
-    preparation: pickString(supabasePlant.preparation, fallback.preparation),
-    seasonality: pickString(supabasePlant.seasonality, fallback.seasonality),
-    warnings: pickString(supabasePlant.warnings, fallback.warnings),
-    lookalikes: pickString(supabasePlant.lookalikes, fallback.lookalikes),
-    culturalNotes: pickString(supabasePlant.culturalNotes, fallback.culturalNotes),
-    suggestedUses: pickString(supabasePlant.suggestedUses, fallback.suggestedUses),
+    preparation: pickRichString(supabasePlant.preparation, fallback.preparation),
+    seasonality: pickRichString(supabasePlant.seasonality, fallback.seasonality),
+    warnings: pickRichString(supabasePlant.warnings, fallback.warnings),
+    lookalikes: pickRichString(supabasePlant.lookalikes, fallback.lookalikes),
+    culturalNotes: pickRichString(supabasePlant.culturalNotes, fallback.culturalNotes),
+    suggestedUses: pickRichString(supabasePlant.suggestedUses, fallback.suggestedUses),
     prepBasics: pickStringArr(supabasePlant.prepBasics, fallback.prepBasics),
-    seasonalityNote: pickString(supabasePlant.seasonalityNote, fallback.seasonalityNote),
+    seasonalityNote: pickRichString(supabasePlant.seasonalityNote, fallback.seasonalityNote),
     sourceRefs: pickStringArr(supabasePlant.sourceRefs, fallback.sourceRefs),
     tags: pickStringArr(supabasePlant.tags, fallback.tags),
     edibilityStatus: pickString(supabasePlant.edibilityStatus, fallback.edibilityStatus),
