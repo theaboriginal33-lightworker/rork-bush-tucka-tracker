@@ -435,6 +435,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     sourceRefs: ['Local field guides', 'Community knowledge'],
     edibilityStatus: 'unknown',
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES.saltbush ??
       'https://images.unsplash.com/photo-1596726540679-0df8e8e7a61d?q=80&w=2787&auto=format&fit=crop',
   },
   {
