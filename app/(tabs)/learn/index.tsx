@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Platform,
   Pressable,
   RefreshControl,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
@@ -231,7 +231,20 @@ export default function LearnScreen() {
           testID={`learn-card-${item.slug}`}
         >
           <View style={styles.imageContainer}>
-            {hero ? <Image source={{ uri: hero }} style={styles.cardImage} /> : <View style={styles.imageFallback} />}
+            {hero ? (
+              <ExpoImage
+                source={{ uri: hero }}
+                style={styles.cardImage}
+                contentFit="cover"
+                transition={140}
+                onError={(e) => {
+                  console.log('[learn] card image load failed', { slug: item.slug, uri: hero, error: e?.error });
+                }}
+                testID={`learn-card-image-${item.slug}`}
+              />
+            ) : (
+              <View style={styles.imageFallback} />
+            )}
             <View style={styles.typeTag}>
               <Text style={styles.typeText} numberOfLines={1}>
                 {category}
