@@ -256,6 +256,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://images.unsplash.com/photo-1705360156521-40c178a4fa92?fm=jpg&q=60&w=2000&auto=format&fit=crop',
   },
+  {
+    id: 'midyim-berry',
+    slug: 'midyim-berry',
+    commonName: 'Midyim Berry',
+    scientificName: 'Native Berry • Sweet Myrtle Fruit',
+    category: 'Berry',
+    overview:
+      'Midyim Berry is a small native berry traditionally found along Australia’s east coast, growing on low shrubs in coastal and woodland environments. The berries are white to pale pink, softly speckled, and known for their gentle sweetness and subtle spice.\n\nIt has long been valued as a fresh seasonal food, particularly enjoyed straight from the plant.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'safe',
+    edibleParts: ['berry', 'fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9t5m36gwnpzgw20tb1rte',
+  },
 ];
 
 type SupabasePlantRow = {

@@ -527,6 +527,38 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'caution',
   },
   {
+    id: 'midyim-berry',
+    slug: 'midyim-berry',
+    commonName: 'Midyim Berry',
+    scientificName: 'Native Berry • Sweet Myrtle Fruit',
+    category: 'Berry',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9t5m36gwnpzgw20tb1rte',
+    overview:
+      'Midyim Berry is a small native berry traditionally found along Australia’s east coast, growing on low shrubs in coastal and woodland environments. The berries are white to pale pink, softly speckled, and known for their gentle sweetness and subtle spice.\n\nIt has long been valued as a fresh seasonal food, particularly enjoyed straight from the plant.',
+    safetyLevel: 'safe',
+    confidenceHint: 'Safe to consume when ripe. Always confirm identification — if unsure, do not consume.',
+    seasonality: 'Spring → Early Summer',
+    seasonalityNote: 'Berries ripen as weather warms and daylight increases.',
+    preparation:
+      'Harvest ripe berries gently. Wash lightly if needed. Eat fresh or lightly prepare — berries are delicate and best used soon after harvest.',
+    suggestedUses:
+      'Fresh snacking • Salads • Desserts • Light jams & preserves • Garnishes\n\nMidyim Berry shines in simple, fresh preparations.',
+    culturalNotes:
+      'Traditionally gathered by families (often women and children) and eaten fresh while moving across Country. Knowledge is shared through seasonal observation, reflecting lightness, care, and connection.\n\nMidyim Berry teaches us that nourishment can be gentle.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE\n\n• Safe to consume when ripe\n• Suitable raw or prepared\n• Always confirm identification\n• Generally well tolerated and low risk',
+    lookalikes:
+      'Some small native berries can look similar. Confirm using multiple features (leaf form, fruit speckling/colour, plant habit, habitat) and local guidance before eating.',
+    edibleParts: ['berry', 'fruit'],
+    prepBasics: ['harvest gently', 'wash lightly (optional)', 'eat fresh promptly', 'use in simple dishes'],
+    tags: ['Berry', 'Safe', 'Preparation: Minimal', 'Flavour: Sweet / Mild', 'Environment: Coastal / Woodland'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'safe',
+  },
+  {
     id: 'kakadu-plum',
     slug: 'kakadu-plum',
     commonName: 'Kakadu Plum',
