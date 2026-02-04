@@ -255,13 +255,17 @@ const FALLBACK_PLANTS: LearnPlant[] = [
   },
 ];
 
-function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
-  const id = String(row.id ?? `row-${index}`);
-  const slug = String(row.slug ?? row.common_name ?? id)
+function normalizeSlugish(input: string): string {
+  return input
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9\-]/g, '');
+}
+
+function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
+  const id = String(row.id ?? `row-${index}`);
+  const slug = normalizeSlugish(String(row.slug ?? row.common_name ?? id));
 
   return {
     id,
@@ -290,11 +294,72 @@ function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
   };
 }
 
+function pickFallbackForSupabaseRow(localKey: string, row: SupabasePlantRow | null): LearnPlant | null {
+  const key = normalizeSlugish(localKey);
+  if (!key) return null;
+
+  const byKey = FALLBACK_PLANTS.find((p) => normalizeSlugish(p.id) === key || normalizeSlugish(p.slug) === key) ?? null;
+  if (byKey) return byKey;
+
+  const rowSlug = row?.slug ? normalizeSlugish(row.slug) : '';
+  if (rowSlug) {
+    const byContains =
+      FALLBACK_PLANTS.find((p) => rowSlug.includes(normalizeSlugish(p.slug)) || normalizeSlugish(p.slug).includes(rowSlug)) ??
+      null;
+    if (byContains) return byContains;
+  }
+
+  const rowCommon = row?.common_name ? String(row.common_name).toLowerCase().trim() : '';
+  if (rowCommon) {
+    const byCommon = FALLBACK_PLANTS.find((p) => rowCommon.includes(p.commonName.toLowerCase())) ?? null;
+    if (byCommon) return byCommon;
+  }
+
+  return null;
+}
+
+function mergePreferSupabase(supabasePlant: LearnPlant, fallback: LearnPlant | null): LearnPlant {
+  if (!fallback) return supabasePlant;
+
+  const pickString = (a: string | undefined, b: string | undefined) => (a && a.trim().length > 0 ? a : b);
+  const pickStringArr = (a: string[] | undefined, b: string[] | undefined) => (a && a.length > 0 ? a : b);
+  const pickBool = (a: boolean | undefined, b: boolean | undefined) => (typeof a === 'boolean' ? a : b);
+
+  return {
+    ...fallback,
+    ...supabasePlant,
+    slug: pickString(supabasePlant.slug, fallback.slug) ?? fallback.slug,
+    commonName: pickString(supabasePlant.commonName, fallback.commonName) ?? fallback.commonName,
+    scientificName: pickString(supabasePlant.scientificName, fallback.scientificName),
+    category: pickString(supabasePlant.category, fallback.category),
+    heroImageUrl: pickString(supabasePlant.heroImageUrl, fallback.heroImageUrl),
+    overview: pickString(supabasePlant.overview, fallback.overview),
+    safetyLevel: pickString(supabasePlant.safetyLevel, fallback.safetyLevel),
+    confidenceHint: pickString(supabasePlant.confidenceHint, fallback.confidenceHint),
+    edibleParts: pickStringArr(supabasePlant.edibleParts, fallback.edibleParts),
+    preparation: pickString(supabasePlant.preparation, fallback.preparation),
+    seasonality: pickString(supabasePlant.seasonality, fallback.seasonality),
+    warnings: pickString(supabasePlant.warnings, fallback.warnings),
+    lookalikes: pickString(supabasePlant.lookalikes, fallback.lookalikes),
+    culturalNotes: pickString(supabasePlant.culturalNotes, fallback.culturalNotes),
+    suggestedUses: pickString(supabasePlant.suggestedUses, fallback.suggestedUses),
+    prepBasics: pickStringArr(supabasePlant.prepBasics, fallback.prepBasics),
+    seasonalityNote: pickString(supabasePlant.seasonalityNote, fallback.seasonalityNote),
+    sourceRefs: pickStringArr(supabasePlant.sourceRefs, fallback.sourceRefs),
+    tags: pickStringArr(supabasePlant.tags, fallback.tags),
+    edibilityStatus: pickString(supabasePlant.edibilityStatus, fallback.edibilityStatus),
+    isBushTucker: pickBool(supabasePlant.isBushTucker, fallback.isBushTucker),
+    isMedicinal: pickBool(supabasePlant.isMedicinal, fallback.isMedicinal),
+  };
+}
+
 async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null> {
   const trimmed = idOrSlug.trim();
   if (!trimmed) return null;
 
-  const local = FALLBACK_PLANTS.find((p) => p.slug === trimmed || p.id === trimmed) ?? null;
+  const local =
+    FALLBACK_PLANTS.find((p) => normalizeSlugish(p.slug) === normalizeSlugish(trimmed) || normalizeSlugish(p.id) === normalizeSlugish(trimmed)) ??
+    null;
 
   if (!hasSupabaseConfig) {
     console.log('[learn-detail] supabase not configured; using fallback', supabasePublicDebugInfo);
@@ -309,7 +374,7 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
       .select(
         'id, slug, common_name, scientific_name, category, is_bush_tucker, is_medicinal, safety_level, confidence_hint, overview, edible_parts, preparation, seasonality, warnings, lookalikes, cultural_notes, suggested_uses, prep_basics, seasonality_note, source_refs, edibility_status, created_at, updated_at'
       )
-      .eq('id', trimmed)
+      .or(`id.eq.${trimmed},slug.eq.${trimmed}`)
       .limit(1)
       .maybeSingle();
 
@@ -319,11 +384,32 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
     }
 
     if (!data) {
-      console.log('[learn-detail] not found in supabase by id; falling back', { idOrSlug: trimmed });
+      console.log('[learn-detail] not found in supabase by id/slug; falling back', { idOrSlug: trimmed });
       return local;
     }
 
-    return toLearnPlant(data as SupabasePlantRow, 0);
+    const fallback = pickFallbackForSupabaseRow(trimmed, data as SupabasePlantRow);
+    const supa = toLearnPlant(data as SupabasePlantRow, 0);
+
+    const merged = mergePreferSupabase(supa, fallback);
+
+    console.log('[learn-detail] merged plant', {
+      idOrSlug: trimmed,
+      supabaseId: supa.id,
+      supabaseSlug: supa.slug,
+      fallbackId: fallback?.id,
+      fallbackSlug: fallback?.slug,
+      hasOverview: Boolean(merged.overview),
+      hasPreparation: Boolean(merged.preparation),
+      hasSeasonality: Boolean(merged.seasonality || merged.seasonalityNote),
+      hasWarnings: Boolean(merged.warnings),
+      hasLookalikes: Boolean(merged.lookalikes),
+      hasCulturalNotes: Boolean(merged.culturalNotes),
+      hasSuggestedUses: Boolean(merged.suggestedUses),
+      tagsCount: merged.tags?.length ?? 0,
+    });
+
+    return merged;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.log('[learn-detail] unexpected error; falling back', { message });
