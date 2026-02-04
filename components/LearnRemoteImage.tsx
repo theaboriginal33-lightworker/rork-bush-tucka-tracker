@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Image as RNImage, Platform, StyleProp, View, ViewStyle } from 'react-native';
+import { Image as RNImage, ImageStyle, Platform, StyleProp, View, ViewStyle } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 
 function shouldProxyForAttachments(uri: string): boolean {
@@ -17,7 +17,7 @@ function proxyToJpeg(uri: string): string {
 
 type LearnRemoteImageProps = {
   uri: string;
-  style?: StyleProp<ViewStyle>;
+  style?: StyleProp<ViewStyle | ImageStyle>;
   contentFit?: 'cover' | 'contain' | 'fill' | 'scale-down' | 'none';
   cachePolicy?: 'none' | 'disk' | 'memory' | 'memory-disk';
   transition?: number;
@@ -47,9 +47,11 @@ export function LearnRemoteImage({
   const resolvedUri = useMemo(() => {
     if (!normalizedUri) return '';
 
-    if (shouldProxyForAttachments(normalizedUri)) {
+    const shouldProxy = Platform.OS === 'web' && shouldProxyForAttachments(normalizedUri);
+
+    if (shouldProxy) {
       const proxied = proxyToJpeg(normalizedUri);
-      console.log('[LearnRemoteImage] proxying attachment image', {
+      console.log('[LearnRemoteImage] proxying attachment image (web only)', {
         from: normalizedUri,
         to: proxied,
         platform: Platform.OS,
@@ -85,17 +87,13 @@ export function LearnRemoteImage({
     />
   );
 
-  if (Platform.OS === 'web') {
-    return fallback;
-  }
-
   if (hasError) return fallback;
 
   return (
     <ExpoImage
       key={resolvedUri}
       source={{ uri: resolvedUri }}
-      style={style}
+      style={style as never}
       contentFit={contentFit}
       transition={transition}
       cachePolicy={cachePolicy}
