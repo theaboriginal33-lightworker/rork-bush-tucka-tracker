@@ -26,6 +26,13 @@ function proxyToJpeg(uri: string): string {
   return `https://wsrv.nl/?url=${encodeURIComponent(withoutScheme)}&output=jpg&n=-1`;
 }
 
+function withCacheBust(uri: string, seed: number): string {
+  const trimmed = uri.trim();
+  if (!trimmed) return trimmed;
+  const hasQuery = trimmed.includes('?');
+  const sep = hasQuery ? '&' : '?';
+  return `${trimmed}${sep}cb=${encodeURIComponent(String(seed))}`;
+}
 
 type LearnRemoteImageProps = {
   uri: string;
@@ -50,21 +57,13 @@ export function LearnRemoteImage({
   onError,
   preferAttachmentProxy,
 }: LearnRemoteImageProps) {
-  const [hasError, setHasError] = useState<boolean>(false);
+  const [attemptIndex, setAttemptIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [currentUri, setCurrentUri] = useState<string>('');
   const [loadTimedOut, setLoadTimedOut] = useState<boolean>(false);
+  const [hasError, setHasError] = useState<boolean>(false);
   const loadStartRef = useRef<number>(Date.now());
 
   const normalizedUri = useMemo(() => String(uri ?? '').trim(), [uri]);
-
-  useEffect(() => {
-    setHasError(false);
-    setIsLoading(true);
-    setLoadTimedOut(false);
-    setCurrentUri(normalizedUri);
-    loadStartRef.current = Date.now();
-  }, [normalizedUri]);
 
   const attachmentProxyUri = useMemo(() => {
     if (!normalizedUri) return '';
@@ -74,43 +73,92 @@ export function LearnRemoteImage({
 
   const effectivePreferAttachmentProxy = preferAttachmentProxy ?? true;
 
-  useEffect(() => {
-    if (!effectivePreferAttachmentProxy) return;
-    if (!attachmentProxyUri) return;
-    if (currentUri === attachmentProxyUri) return;
+  const candidates = useMemo<string[]>(() => {
+    const list: string[] = [];
+    const base = normalizedUri;
+    const proxy = attachmentProxyUri;
 
-    console.log('[LearnRemoteImage] using proxy as primary for attachment', {
+    if (effectivePreferAttachmentProxy && proxy) list.push(proxy);
+    if (base) list.push(base);
+    if (!effectivePreferAttachmentProxy && proxy) list.push(proxy);
+
+    if (base) {
+      list.push(withCacheBust(base, Date.now()));
+    }
+
+    const deduped: string[] = [];
+    const seen = new Set<string>();
+    for (const item of list) {
+      const key = item.trim();
+      if (!key) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(key);
+    }
+
+    return deduped;
+  }, [attachmentProxyUri, effectivePreferAttachmentProxy, normalizedUri]);
+
+  const renderUri = useMemo(() => {
+    const picked = candidates[attemptIndex] ?? '';
+    return String(picked ?? '').trim();
+  }, [attemptIndex, candidates]);
+
+  useEffect(() => {
+    setAttemptIndex(0);
+    setIsLoading(true);
+    setLoadTimedOut(false);
+    setHasError(false);
+    loadStartRef.current = Date.now();
+
+    console.log('[LearnRemoteImage] start', {
+      platform: Platform.OS,
       original: normalizedUri,
       proxy: attachmentProxyUri,
-      platform: Platform.OS,
+      candidatesCount: candidates.length,
+      preferAttachmentProxy: effectivePreferAttachmentProxy,
     });
-    setCurrentUri(attachmentProxyUri);
-  }, [attachmentProxyUri, currentUri, effectivePreferAttachmentProxy, normalizedUri]);
-
-  const resolvedUri = useMemo(() => String(currentUri ?? '').trim(), [currentUri]);
-  const renderUri = resolvedUri;
+  }, [attachmentProxyUri, candidates.length, effectivePreferAttachmentProxy, normalizedUri]);
 
   useEffect(() => {
-    if (!resolvedUri) return;
+    if (!renderUri) return;
 
-    const timeoutMs = 9000;
+    const timeoutMs = 12000;
     const t = setTimeout(() => {
       if (!isLoading) return;
-      console.log('[LearnRemoteImage] load timeout -> forcing fallback', {
-        uri: resolvedUri,
+
+      console.log('[LearnRemoteImage] load timeout', {
+        uri: renderUri,
         platform: Platform.OS,
         ms: Date.now() - loadStartRef.current,
+        attemptIndex,
+        candidatesCount: candidates.length,
         original: normalizedUri,
         attachmentProxyUri,
       });
+
       setLoadTimedOut(true);
-      setHasError(true);
       setIsLoading(false);
+
+      if (attemptIndex + 1 < candidates.length) {
+        console.log('[LearnRemoteImage] timeout -> trying next candidate', {
+          from: renderUri,
+          to: candidates[attemptIndex + 1],
+          platform: Platform.OS,
+        });
+        setAttemptIndex((i) => i + 1);
+        setIsLoading(true);
+        setLoadTimedOut(false);
+        loadStartRef.current = Date.now();
+        return;
+      }
+
+      setHasError(true);
       onError?.('timeout');
     }, timeoutMs);
 
     return () => clearTimeout(t);
-  }, [attachmentProxyUri, isLoading, normalizedUri, onError, resolvedUri]);
+  }, [attemptIndex, attachmentProxyUri, candidates, isLoading, normalizedUri, onError, renderUri]);
 
 
   const containerStyle = useMemo<StyleProp<ViewStyle>>(() => {
@@ -151,7 +199,12 @@ export function LearnRemoteImage({
         style={imageFillStyle}
         resizeMode={contentFit === 'contain' ? 'contain' : 'cover'}
         onLoad={() => {
-          console.log('[LearnRemoteImage] RNImage loaded', { uri: renderUri, platform: Platform.OS, resolvedUri });
+          console.log('[LearnRemoteImage] RNImage loaded', {
+            uri: renderUri,
+            platform: Platform.OS,
+            attemptIndex,
+            candidatesCount: candidates.length,
+          });
           setIsLoading(false);
           onLoad?.();
         }}
@@ -159,25 +212,31 @@ export function LearnRemoteImage({
           const err = (e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error;
           console.log('[LearnRemoteImage] RNImage error', {
             uri: renderUri,
-            resolvedUri,
             platform: Platform.OS,
+            attemptIndex,
+            candidatesCount: candidates.length,
             error: err,
             original: normalizedUri,
             attachmentProxyUri,
           });
 
-          if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
-            console.log('[LearnRemoteImage] RNImage switching to proxy', {
-              from: resolvedUri,
-              to: attachmentProxyUri,
+          if (attemptIndex + 1 < candidates.length) {
+            const next = candidates[attemptIndex + 1];
+            console.log('[LearnRemoteImage] RNImage -> next candidate', {
+              from: renderUri,
+              to: next,
               platform: Platform.OS,
             });
-            setCurrentUri(attachmentProxyUri);
+            setAttemptIndex((i) => i + 1);
+            setIsLoading(true);
+            setLoadTimedOut(false);
+            loadStartRef.current = Date.now();
             return;
           }
 
           setIsLoading(false);
           setLoadTimedOut(false);
+          setHasError(true);
           onError?.(err);
         }}
         testID={testID ? `${testID}-rn` : undefined}
@@ -203,14 +262,19 @@ export function LearnRemoteImage({
   return (
     <View style={containerStyle} testID={testID ? `${testID}-expo-wrap` : undefined}>
       <ExpoImage
-        key={renderUri}
-        source={{ uri: renderUri }}
+        key={`${attemptIndex}-${renderUri}`}
+        source={Platform.OS === 'web' ? renderUri : { uri: renderUri }}
         style={imageFillStyle}
         contentFit={contentFit}
         transition={transition}
         cachePolicy={cachePolicy}
         onLoad={() => {
-          console.log('[LearnRemoteImage] ExpoImage loaded', { uri: renderUri, platform: Platform.OS, resolvedUri });
+          console.log('[LearnRemoteImage] ExpoImage loaded', {
+            uri: renderUri,
+            platform: Platform.OS,
+            attemptIndex,
+            candidatesCount: candidates.length,
+          });
           setIsLoading(false);
           onLoad?.();
         }}
@@ -218,24 +282,32 @@ export function LearnRemoteImage({
           const err = (e as unknown as { error?: string } | null | undefined)?.error;
           console.log('[LearnRemoteImage] ExpoImage error', {
             uri: renderUri,
-            resolvedUri,
             platform: Platform.OS,
+            attemptIndex,
+            candidatesCount: candidates.length,
             error: err,
             original: normalizedUri,
             attachmentProxyUri,
           });
 
-          if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
-            console.log('[LearnRemoteImage] ExpoImage switching to proxy', {
-              from: resolvedUri,
-              to: attachmentProxyUri,
+          if (attemptIndex + 1 < candidates.length) {
+            const next = candidates[attemptIndex + 1];
+            console.log('[LearnRemoteImage] ExpoImage -> next candidate', {
+              from: renderUri,
+              to: next,
               platform: Platform.OS,
             });
-            setCurrentUri(attachmentProxyUri);
+            setAttemptIndex((i) => i + 1);
+            setIsLoading(true);
+            setLoadTimedOut(false);
+            loadStartRef.current = Date.now();
             return;
           }
 
-          console.log('[LearnRemoteImage] ExpoImage error -> fallback RNImage', { uri: renderUri, platform: Platform.OS, resolvedUri });
+          console.log('[LearnRemoteImage] ExpoImage exhausted candidates -> fallback RNImage', {
+            uri: renderUri,
+            platform: Platform.OS,
+          });
           setIsLoading(false);
           setHasError(true);
           onError?.(err);
