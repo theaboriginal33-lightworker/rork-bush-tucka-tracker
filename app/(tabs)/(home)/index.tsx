@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import {
   AlertTriangle,
   ArrowRight,
@@ -24,7 +25,6 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
-import { generateText } from '@rork-ai/toolkit-sdk';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSupportDirectory, type SupportOrganization } from '@/constants/supportDirectory';
@@ -35,21 +35,40 @@ import {
   type ScanJournalChatMessage,
 } from '@/app/providers/ScanJournalProvider';
 
+type RorkToolkitModule = typeof import('@rork-ai/toolkit-sdk');
+
 type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
 
 type ExpoSharingModule = typeof import('expo-sharing');
 
 type ExpoClipboardModule = typeof import('expo-clipboard');
 
-type ExpoImagePickerModule = typeof import('expo-image-picker');
-
 type ExpoImageManipulatorModule = typeof import('expo-image-manipulator');
 
+let rorkToolkitPromise: Promise<RorkToolkitModule | null> | null = null;
 let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
 let sharingPromise: Promise<ExpoSharingModule | null> | null = null;
 let clipboardPromise: Promise<ExpoClipboardModule | null> | null = null;
-let imagePickerPromise: Promise<ExpoImagePickerModule | null> | null = null;
 let imageManipulatorPromise: Promise<ExpoImageManipulatorModule | null> | null = null;
+
+async function getRorkToolkit(): Promise<RorkToolkitModule | null> {
+  try {
+    if (!rorkToolkitPromise) {
+      rorkToolkitPromise = import('@rork-ai/toolkit-sdk')
+        .then((m) => m as RorkToolkitModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Home] failed to load @rork-ai/toolkit-sdk', { message, platform: Platform.OS });
+          return null;
+        });
+    }
+    return await rorkToolkitPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[Home] getRorkToolkit unexpected error', { message, platform: Platform.OS });
+    return null;
+  }
+}
 
 async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   try {
@@ -104,25 +123,6 @@ async function getExpoClipboard(): Promise<ExpoClipboardModule | null> {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.log('[Home] getExpoClipboard unexpected error', { message });
-    return null;
-  }
-}
-
-async function getExpoImagePicker(): Promise<ExpoImagePickerModule | null> {
-  try {
-    if (!imagePickerPromise) {
-      imagePickerPromise = import('expo-image-picker')
-        .then((m) => m as ExpoImagePickerModule)
-        .catch((e) => {
-          const message = e instanceof Error ? e.message : String(e);
-          console.log('[Home] failed to load expo-image-picker', { message });
-          return null;
-        });
-    }
-    return await imagePickerPromise;
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    console.log('[Home] getExpoImagePicker unexpected error', { message });
     return null;
   }
 }
@@ -660,6 +660,22 @@ export default function HomeScreen() {
       type BackendChatMessage = { role: 'user' | 'assistant'; content: string };
       const backendMessages = messages.filter((m) => m.role !== 'system') as BackendChatMessage[];
 
+      const toolkit = useRorkBackend ? await getRorkToolkit() : null;
+      const shouldUseRorkBackend = Boolean(useRorkBackend && toolkit?.generateText);
+      console.log('[TuckaGuide] backend choice', {
+        useRorkBackend,
+        shouldUseRorkBackend,
+        hasToolkit: Boolean(toolkit),
+        hasGenerateText: Boolean(toolkit?.generateText),
+        platform: Platform.OS,
+      });
+
+      if (useRorkBackend && !toolkit?.generateText) {
+        setChatStatus('idle');
+        setChatError(new Error('AI chat is unavailable right now. Please reload and try again.'));
+        return;
+      }
+
       const requestBody = {
         model,
         input: [
@@ -709,47 +725,75 @@ export default function HomeScreen() {
           }, timeoutMs);
         });
 
-        const requestPromise = useRorkBackend
-          ? generateText({ messages: backendMessages })
-          : (async () => {
-              const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${openAiKey}`,
-                },
-                body: JSON.stringify(requestBody),
-                signal: controller?.signal,
-              });
+        const runOpenAiDirect = async (): Promise<string> => {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${openAiKey}`,
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller?.signal,
+          });
 
-              let json: unknown = null;
-              try {
-                json = (await res.json()) as unknown;
-              } catch (e) {
-                const message = e instanceof Error ? e.message : String(e);
-                console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
-                json = null;
+          let json: unknown = null;
+          try {
+            json = (await res.json()) as unknown;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.log('[TuckaGuide] failed to parse json response', { message, status: res.status });
+            json = null;
+          }
+
+          const data = json as {
+            output_text?: string;
+            output?: { content?: { type?: string; text?: string }[] }[];
+          } | null;
+          const outputText =
+            typeof data?.output_text === 'string'
+              ? data.output_text
+              : data?.output?.[0]?.content
+                  ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
+                  .join('')
+                  .trim();
+          const assistantText = String(outputText ?? '').trim();
+
+          if (!res.ok || assistantText.length === 0) {
+            throw new Error(parseFailureMessage(res.status, json));
+          }
+
+          return assistantText;
+        };
+
+        const runRorkToolkit = async (): Promise<string> => {
+          const response = await (toolkit as RorkToolkitModule).generateText({ messages: backendMessages });
+          return String(response ?? '').trim();
+        };
+
+        const requestPromise = (async () => {
+          if (shouldUseRorkBackend) {
+            try {
+              const res = await runRorkToolkit();
+              if (res.length > 0) return res;
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e);
+              const isOpenAiDetected = /openai\s+key\s+detected/i.test(message);
+              console.log('[TuckaGuide] toolkit generateText failed', { message, isOpenAiDetected });
+              if (!isOpenAiDetected) {
+                throw e;
               }
-
-              const data = json as {
-                output_text?: string;
-                output?: { content?: { type?: string; text?: string }[] }[];
-              } | null;
-              const outputText =
-                typeof data?.output_text === 'string'
-                  ? data.output_text
-                  : data?.output?.[0]?.content
-                      ?.map((part) => (typeof part?.text === 'string' ? part.text : ''))
-                      .join('')
-                      .trim();
-              const assistantText = String(outputText ?? '').trim();
-
-              if (!res.ok || assistantText.length === 0) {
-                throw new Error(parseFailureMessage(res.status, json));
+              if (!hasOpenAiKey) {
+                throw e;
               }
+              console.log('[TuckaGuide] Falling back to direct OpenAI after toolkit rejection');
+            }
+          }
 
-              return assistantText;
-            })();
+          if (!hasOpenAiKey) {
+            throw new Error('OpenAI API key is missing.');
+          }
+          return await runOpenAiDirect();
+        })();
 
         try {
           const result = await Promise.race([requestPromise, timeoutPromise]);
@@ -763,7 +807,9 @@ export default function HomeScreen() {
 
       const fallbackToRork = async (): Promise<string | null> => {
         try {
-          const response = await generateText({ messages: backendMessages });
+          const mod = toolkit ?? (await getRorkToolkit());
+          if (!mod?.generateText) return null;
+          const response = await mod.generateText({ messages: backendMessages });
           const cleaned = String(response ?? '').trim();
           return cleaned.length > 0 ? cleaned : null;
         } catch (e) {
@@ -2395,9 +2441,10 @@ Return JSON with keys:
       const count = mode === 'identify360' ? 3 : 1;
       const label = source === 'camera' ? 'Take photo' : 'Select photo';
 
-      const ImagePicker = await getExpoImagePicker();
-      if (!ImagePicker) {
-        Alert.alert('Unavailable', 'Photo picker is not available right now.');
+      console.log('[Scan] collectImages start', { source, mode, platform: Platform.OS });
+
+      if (source === 'camera' && Platform.OS === 'web') {
+        Alert.alert('Unavailable', 'Camera capture is not available in the web preview. Please use Select photo, or open the app on your phone via the QR code.');
         return null;
       }
 
@@ -2566,23 +2613,6 @@ Return JSON with keys:
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>Good Morning,</Text>
-              <Text style={styles.title}>Bush Tucka</Text>
-            </View>
-            <TouchableOpacity style={styles.profileButton} testID="home-profile-button">
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop' }}
-                style={styles.profileImage}
-                contentFit="cover"
-                transition={120}
-                testID="home-profile-image"
-              />
-            </TouchableOpacity>
-          </View>
-
           <View style={styles.scanStage} testID="scan-stage">
             <LinearGradient
               colors={[DARK.bg, '#0B150F', '#09110C']}
@@ -2951,13 +2981,13 @@ Return JSON with keys:
                         ? 'Tucka Guide is busy right now. Retrying…'
                         : chatError.message}
                     </Text>
-                    {!isBusyChatError(chatError) ? (
+                    {!isBusyChatError(chatError) && __DEV__ ? (
                       <Text style={styles.chatErrorHint}>
                         {useRorkBackend
-                          ? 'Using Rork AI backend (web-safe).'
+                          ? 'Debug: Using Rork AI backend.'
                           : hasOpenAiKey
-                            ? 'OpenAI key detected.'
-                            : 'OpenAI key not detected in app config.'}
+                            ? 'Debug: OpenAI key present.'
+                            : 'Debug: OpenAI key missing.'}
                       </Text>
                     ) : null}
                     <TouchableOpacity

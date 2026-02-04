@@ -1,13 +1,56 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import type * as LocationType from 'expo-location';
-import { ChevronLeft, CookingPot, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, CookingPot, Download, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
+
+type ExpoSharingModule = typeof import('expo-sharing');
+type ExpoPrintModule = typeof import('expo-print');
+
+let sharingPromise: Promise<ExpoSharingModule | null> | null = null;
+let printPromise: Promise<ExpoPrintModule | null> | null = null;
+
+async function loadExpoSharing(): Promise<ExpoSharingModule | null> {
+  try {
+    if (!sharingPromise) {
+      sharingPromise = import('expo-sharing')
+        .then((m) => m as ExpoSharingModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanDetails] failed to load expo-sharing', { message });
+          return null;
+        });
+    }
+    return await sharingPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[ScanDetails] loadExpoSharing unexpected error', { message });
+    return null;
+  }
+}
+
+async function loadExpoPrint(): Promise<ExpoPrintModule | null> {
+  try {
+    if (!printPromise) {
+      printPromise = import('expo-print')
+        .then((m) => m as ExpoPrintModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanDetails] failed to load expo-print', { message });
+          return null;
+        });
+    }
+    return await printPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[ScanDetails] loadExpoPrint unexpected error', { message });
+    return null;
+  }
+}
 
 type ExpoFileSystemModule = typeof import('expo-file-system');
 
@@ -270,6 +313,197 @@ export default function ScanDetailsScreen() {
     return lines.filter((l) => l.trim().length > 0).join('\n');
   }, [entry]);
 
+  const buildPdfHtml = useCallback((): string => {
+    if (!entry) return '';
+
+    const imageUri = safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
+    const imageScheme = (imageUri ?? '').split(':')[0] ?? '';
+    const canEmbedImage = Boolean(imageUri) && imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph';
+
+    const esc = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+    const title = esc(entry.title);
+    const common = esc(entry.scan.commonName);
+    const scientific = entry.scan.scientificName ? esc(entry.scan.scientificName) : '';
+
+    const safety = esc(String(entry.scan.safety.status).toUpperCase());
+    const safetySummary = esc(String(entry.scan.safety.summary ?? ''));
+    const confidence = esc(`${Math.round(entry.scan.confidence * 100)}%`);
+
+    const categories = Array.isArray(entry.scan.categories) ? entry.scan.categories.map((c) => esc(String(c))).slice(0, 12) : [];
+    const suggestedUses = Array.isArray(entry.scan.suggestedUses) ? entry.scan.suggestedUses.map((u) => esc(String(u))).slice(0, 16) : [];
+    const warnings = Array.isArray(entry.scan.warnings) ? entry.scan.warnings.map((w) => esc(String(w))).slice(0, 16) : [];
+
+    const location = entry.locationName ? esc(entry.locationName) : '';
+    const notes = entry.notes ? esc(entry.notes) : '';
+
+    const createdAtLabel = (() => {
+      try {
+        return esc(new Date(entry.createdAt).toLocaleString('en-AU'));
+      } catch {
+        return '';
+      }
+    })();
+
+    const keyRisks = Array.isArray(entry.scan.safety.keyRisks) ? entry.scan.safety.keyRisks.map((r) => esc(String(r))).slice(0, 12) : [];
+    const preparationSteps = Array.isArray(entry.scan.preparation?.steps) ? entry.scan.preparation.steps.map((s) => esc(String(s))).slice(0, 16) : [];
+    const seasonalityMonths = Array.isArray(entry.scan.seasonality?.bestMonths) ? entry.scan.seasonality.bestMonths.map((m) => esc(String(m))).slice(0, 12) : [];
+    const seasonalityNotes = esc(String(entry.scan.seasonality?.notes ?? ''));
+    const culturalNotes = esc(refineCulturalNotes(entry.scan.culturalKnowledge?.notes ?? ''));
+    const culturalRespect = Array.isArray(entry.scan.culturalKnowledge?.respect) ? entry.scan.culturalKnowledge.respect.map((r) => esc(String(r))).slice(0, 12) : [];
+
+    const imageHtml = canEmbedImage
+      ? `<div class="hero"><img src="${imageUri}" alt="Photo" /></div>`
+      : `<div class="hero hero-empty"><div class="hero-empty-inner">Photo not available for PDF export</div></div>`;
+
+    const list = (items: string[]) => (items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul>` : '<div class="muted">—</div>');
+
+    return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${title}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; color: #0c1411; background: #f5f6f4; }
+  .page { padding: 22px 18px 28px; }
+  .card { background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid rgba(15, 36, 24, 0.10); box-shadow: 0 14px 30px rgba(12, 20, 17, 0.10); }
+  .hero { height: 240px; background: #0f2418; }
+  .hero img { width: 100%; height: 240px; object-fit: cover; display: block; }
+  .hero-empty { display: flex; align-items: center; justify-content: center; }
+  .hero-empty-inner { color: rgba(255,255,255,0.86); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .content { padding: 18px 16px 16px; }
+  .title { font-size: 22px; font-weight: 800; margin: 0 0 6px; }
+  .subtitle { font-size: 14px; color: rgba(12, 20, 17, 0.70); margin: 0 0 14px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 999px; background: rgba(15,36,24,0.06); border: 1px solid rgba(15,36,24,0.12); font-size: 12px; color: rgba(12,20,17,0.86); }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .section { padding: 12px 12px; border-radius: 14px; border: 1px solid rgba(15,36,24,0.10); background: rgba(245, 246, 244, 0.70); }
+  .section h3 { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 8px; color: rgba(12, 20, 17, 0.55); }
+  .section .muted { color: rgba(12, 20, 17, 0.55); font-size: 13px; }
+  .section p { margin: 0; font-size: 14px; line-height: 1.45; }
+  ul { margin: 0; padding: 0 0 0 18px; }
+  li { margin: 0 0 6px; font-size: 14px; line-height: 1.4; }
+  .footer { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(15,36,24,0.18); font-size: 12px; color: rgba(12, 20, 17, 0.55); }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      ${imageHtml}
+      <div class="content">
+        <h1 class="title">${title}</h1>
+        <p class="subtitle">${scientific ? `${common} (${scientific})` : common}</p>
+        <div class="meta">
+          <div class="pill">Safety: <strong>${safety}</strong></div>
+          <div class="pill">Confidence: <strong>${confidence}</strong></div>
+          ${location ? `<div class="pill">Location: <strong>${location}</strong></div>` : ''}
+          ${createdAtLabel ? `<div class="pill">Saved: <strong>${createdAtLabel}</strong></div>` : ''}
+        </div>
+
+        <div class="grid">
+          <div class="section">
+            <h3>Safety summary</h3>
+            <p>${safetySummary || '<span class="muted">—</span>'}</p>
+            ${keyRisks.length ? `<div style="height:10px"></div><h3>Key risks</h3>${list(keyRisks)}` : ''}
+          </div>
+
+          ${categories.length ? `<div class="section"><h3>Categories</h3>${list(categories)}</div>` : ''}
+
+          ${suggestedUses.length ? `<div class="section"><h3>Suggested uses</h3>${list(suggestedUses)}</div>` : ''}
+
+          ${preparationSteps.length ? `<div class="section"><h3>Preparation</h3>${list(preparationSteps)}</div>` : ''}
+
+          ${seasonalityMonths.length || seasonalityNotes ? `<div class="section"><h3>Seasonality</h3>${seasonalityMonths.length ? list(seasonalityMonths) : '<div class="muted">—</div>'}${seasonalityNotes ? `<div style="height:10px"></div><p>${seasonalityNotes}</p>` : ''}</div>` : ''}
+
+          ${culturalNotes || culturalRespect.length ? `<div class="section"><h3>Cultural notes</h3><p>${culturalNotes || '<span class="muted">—</span>'}</p>${culturalRespect.length ? `<div style="height:10px"></div><h3>Respect</h3>${list(culturalRespect)}` : ''}<div class="footer">${esc(CULTURAL_FOOTER)}</div></div>` : ''}
+
+          ${warnings.length ? `<div class="section"><h3>Warnings</h3>${list(warnings)}</div>` : ''}
+
+          ${notes ? `<div class="section"><h3>Your notes</h3><p>${notes}</p></div>` : ''}
+        </div>
+
+        <div class="footer">Generated from your Bush Tucka Collection.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }, [entry]);
+
+  const exportPdf = useCallback(async () => {
+    if (!entry) return;
+
+    const html = buildPdfHtml();
+    if (!html) return;
+
+    const safeName = `collection-${entry.id}.pdf`;
+
+    try {
+      console.log('[ScanDetails] exportPdf start', { entryId: entry.id, platform: Platform.OS });
+
+      if (Platform.OS === 'web') {
+        try {
+          const print = await loadExpoPrint();
+          if (!print) throw new Error('Printing not available');
+          const result = await print.printToFileAsync({ html, base64: false });
+          console.log('[ScanDetails] exportPdf web printToFileAsync result', { uri: result.uri });
+
+          if (typeof document !== 'undefined') {
+            const resp = await fetch(result.uri);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeName;
+            a.rel = 'noopener';
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            return;
+          }
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanDetails] exportPdf web printToFileAsync failed', { message });
+        }
+
+        {
+          const print = await loadExpoPrint();
+          if (!print) throw new Error('Printing not available');
+          await print.printAsync({ html });
+        }
+        return;
+      }
+
+      const print = await loadExpoPrint();
+      if (!print) throw new Error('Printing not available');
+      const { uri } = await print.printToFileAsync({ html, base64: false });
+      console.log('[ScanDetails] exportPdf file ready', { uri });
+
+      const sharing = await loadExpoSharing();
+      const canShare = (await sharing?.isAvailableAsync()) ?? false;
+      if (canShare) {
+        await sharing?.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
+        return;
+      }
+
+      await Share.share({ message: buildShareText(), title: entry.title });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[ScanDetails] exportPdf failed', { message });
+      Alert.alert('Could not export PDF', 'Please try again.');
+    }
+  }, [buildPdfHtml, buildShareText, entry]);
+
   const shareSummary = useCallback(async () => {
     if (!entry) return;
 
@@ -312,7 +546,8 @@ export default function ScanDetailsScreen() {
     }
 
     try {
-      const available = await Sharing.isAvailableAsync();
+      const sharing = await loadExpoSharing();
+      const available = (await sharing?.isAvailableAsync()) ?? false;
       if (!available) {
         Alert.alert('Sharing not available', 'Your device does not support sharing files.');
         return;
@@ -338,7 +573,7 @@ export default function ScanDetailsScreen() {
 
       if (imageUri.startsWith('file://')) {
         console.log('[ScanDetails] sharePhoto: shareAsync(local file)', { uri: imageUri, platform: Platform.OS });
-        await Sharing.shareAsync(imageUri, {
+        await sharing?.shareAsync(imageUri, {
           dialogTitle: `Share ${entry.title}`,
           mimeType: 'image/jpeg',
           UTI: 'public.jpeg',
@@ -351,7 +586,7 @@ export default function ScanDetailsScreen() {
         await fs.copyAsync({ from: imageUri, to: dest });
 
         console.log('[ScanDetails] sharePhoto: shareAsync(copied content uri)', { uri: dest });
-        await Sharing.shareAsync(dest, {
+        await sharing?.shareAsync(dest, {
           dialogTitle: `Share ${entry.title}`,
           mimeType: 'image/jpeg',
           UTI: 'public.jpeg',
@@ -363,7 +598,7 @@ export default function ScanDetailsScreen() {
       const download = await fs.downloadAsync(imageUri, dest);
 
       console.log('[ScanDetails] sharePhoto: shareAsync(downloaded)', { uri: download.uri });
-      await Sharing.shareAsync(download.uri, {
+      await sharing?.shareAsync(download.uri, {
         dialogTitle: `Share ${entry.title}`,
         mimeType: 'image/jpeg',
         UTI: 'public.jpeg',
@@ -378,12 +613,13 @@ export default function ScanDetailsScreen() {
   const onShare = useCallback(() => {
     if (!entry) return;
 
-    Alert.alert('Share', 'What would you like to share?', [
+    Alert.alert('Share / Save', 'What would you like to do?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Scan summary', onPress: () => shareSummary() },
-      { text: 'Photo', onPress: () => sharePhoto() },
+      { text: 'Save as PDF', onPress: () => void exportPdf() },
+      { text: 'Scan summary', onPress: () => void shareSummary() },
+      { text: 'Photo', onPress: () => void sharePhoto() },
     ]);
-  }, [entry, sharePhoto, shareSummary]);
+  }, [entry, exportPdf, sharePhoto, shareSummary]);
 
 
   const onSave = useCallback(async () => {
@@ -590,6 +826,9 @@ export default function ScanDetailsScreen() {
             {entry.title}
           </Text>
           <View style={styles.topActions}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => void exportPdf()} testID="scan-details-export-pdf">
+              <Download size={18} color={COLORS.text} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={onShare} testID="scan-details-share">
               <Share2 size={18} color={COLORS.text} />
             </TouchableOpacity>

@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BookmarkPlus, Search } from 'lucide-react-native';
+import { BookmarkPlus, ImageUp, Search } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook, type CookRecipeEntry } from '@/app/providers/CookbookProvider';
 
@@ -218,23 +218,36 @@ export default function CookScreen() {
               }}
             />
             <View style={styles.itemTopRow}>
-              <View style={styles.safetyPill}>
+              {canEditImageForEntry(item) ? (
+                <TouchableOpacity
+                  style={[styles.imageQuickAction, isBusy && styles.imageQuickActionDisabled]}
+                  onPress={() => openImageActions(item, hasPhoto)}
+                  disabled={isBusy}
+                  testID={`cook-item-image-action-${item.id}`}
+                >
+                  <ImageUp size={16} color={COLORS.text} />
+                </TouchableOpacity>
+              ) : null}
+
+              <View style={styles.itemTopRowInner}>
+                <View style={styles.safetyPill}>
                 <View style={[styles.safetyDot, { backgroundColor: safetyDot }]} />
                 <Text style={styles.safetyPillText}>{item.safetyStatus.toUpperCase()}</Text>
               </View>
 
-              {isGuide ? (
-                <View style={styles.guidePill} testID={`cook-item-guide-pill-${item.id}`}>
-                  <BookmarkPlus size={14} color={COLORS.primary} />
-                  <Text style={styles.guidePillText}>Guide</Text>
-                </View>
-              ) : null}
+                {isGuide ? (
+                  <View style={styles.guidePill} testID={`cook-item-guide-pill-${item.id}`}>
+                    <BookmarkPlus size={14} color={COLORS.primary} />
+                    <Text style={styles.guidePillText}>Guide</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
           </View>
 
           {canEditImageForEntry(item) ? (
             <Text style={styles.holdHint} testID={`cook-item-hold-hint-${item.id}`}>
-              HOLD TO CHANGE IMAGE
+              Tap photo icon to change / remove
             </Text>
           ) : null}
 
@@ -398,7 +411,26 @@ const styles = StyleSheet.create({
     right: 12,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  itemTopRowInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  imageQuickAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: 'rgba(7,17,11,0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  imageQuickActionDisabled: {
+    opacity: 0.6,
   },
   safetyPill: {
     flexDirection: 'row',

@@ -5,13 +5,15 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
-import { ChevronLeft, Download, Edit3, ImageUp, Share2, Trash2, X } from 'lucide-react-native';
+import { ChevronLeft, Edit3, FileDown, ImageUp, Share2, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 
 type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
+type ExpoPrintModule = typeof import('expo-print');
 
 let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
+let printPromise: Promise<ExpoPrintModule | null> | null = null;
 
 async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   try {
@@ -28,6 +30,25 @@ async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.log('[CookGuide] getLegacyFileSystem unexpected error', { message });
+    return null;
+  }
+}
+
+async function loadExpoPrint(): Promise<ExpoPrintModule | null> {
+  try {
+    if (!printPromise) {
+      printPromise = import('expo-print')
+        .then((m) => m as ExpoPrintModule)
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[CookGuide] failed to load expo-print', { message });
+          return null;
+        });
+    }
+    return await printPromise;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log('[CookGuide] loadExpoPrint unexpected error', { message });
     return null;
   }
 }
@@ -183,12 +204,179 @@ export default function CookGuideDetailsScreen() {
     const body = String(entry?.guideText ?? '').trim();
     lines.push(body.length > 0 ? body : '(No text saved)');
     lines.push('');
+    if (Array.isArray(entry?.suggestedUses) && entry.suggestedUses.length > 0) {
+      lines.push('Suggested uses:');
+      entry.suggestedUses.slice(0, 12).forEach((u) => lines.push(`• ${u}`));
+      lines.push('');
+    }
     lines.push('—');
     lines.push('Always verify locally before consuming.');
     return lines.join('\n');
-  }, [entry?.commonName, entry?.confidence, entry?.createdAt, entry?.guideText, entry?.safetyStatus, entry?.scientificName]);
+  }, [entry?.commonName, entry?.confidence, entry?.createdAt, entry?.guideText, entry?.safetyStatus, entry?.scientificName, entry?.suggestedUses]);
 
-  const onExport = useCallback(async () => {
+  const buildPdfHtml = useCallback((): string => {
+    if (!entry) return '';
+
+    const imageUri = safeImageUri(entry.imageUri);
+    const imageScheme = (imageUri ?? '').split(':')[0] ?? '';
+    const canEmbedImage = Boolean(imageUri) && imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph';
+
+    const esc = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+    const title = esc(entry.title);
+    const common = esc(entry.commonName);
+    const scientific = entry.scientificName ? esc(entry.scientificName) : '';
+
+    const safety = esc(String(entry.safetyStatus).toUpperCase());
+    const confidence = esc(`${Math.round(entry.confidence * 100)}%`);
+    const createdAtLabel = (() => {
+      try {
+        return typeof entry.createdAt === 'number' ? esc(new Date(entry.createdAt).toLocaleString('en-AU')) : '';
+      } catch {
+        return '';
+      }
+    })();
+
+    const body = esc(String(entry.guideText ?? '').trim() || 'No text saved.');
+    const suggestedUses = Array.isArray(entry.suggestedUses) ? entry.suggestedUses.map((u) => esc(String(u))).slice(0, 16) : [];
+
+    const imageHtml = canEmbedImage
+      ? `<div class="hero"><img src="${imageUri}" alt="Photo" /></div>`
+      : `<div class="hero hero-empty"><div class="hero-empty-inner">Photo not available for PDF export</div></div>`;
+
+    const usesHtml = suggestedUses.length
+      ? `<ul>${suggestedUses.map((u) => `<li>${u}</li>`).join('')}</ul>`
+      : '<div class="muted">—</div>';
+
+    return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${title}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; color: #0c1411; background: #f5f6f4; }
+  .page { padding: 22px 18px 28px; }
+  .card { background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid rgba(15, 36, 24, 0.10); box-shadow: 0 14px 30px rgba(12, 20, 17, 0.10); }
+  .hero { height: 240px; background: #0f2418; }
+  .hero img { width: 100%; height: 240px; object-fit: cover; display: block; }
+  .hero-empty { display: flex; align-items: center; justify-content: center; }
+  .hero-empty-inner { color: rgba(255,255,255,0.86); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .content { padding: 18px 16px 16px; }
+  .title { font-size: 22px; font-weight: 800; margin: 0 0 6px; }
+  .subtitle { font-size: 14px; color: rgba(12, 20, 17, 0.70); margin: 0 0 14px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 999px; background: rgba(15,36,24,0.06); border: 1px solid rgba(15,36,24,0.12); font-size: 12px; color: rgba(12,20,17,0.86); }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .section { padding: 12px 12px; border-radius: 14px; border: 1px solid rgba(15,36,24,0.10); background: rgba(245, 246, 244, 0.70); }
+  .section h3 { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 8px; color: rgba(12, 20, 17, 0.55); }
+  .section .muted { color: rgba(12, 20, 17, 0.55); font-size: 13px; }
+  .section p { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+  ul { margin: 0; padding: 0 0 0 18px; }
+  li { margin: 0 0 6px; font-size: 14px; line-height: 1.4; }
+  .footer { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(15,36,24,0.18); font-size: 12px; color: rgba(12, 20, 17, 0.55); }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      ${imageHtml}
+      <div class="content">
+        <h1 class="title">${title}</h1>
+        <p class="subtitle">${scientific ? `${common} (${scientific})` : common}</p>
+        <div class="meta">
+          <div class="pill">Safety: <strong>${safety}</strong></div>
+          <div class="pill">Confidence: <strong>${confidence}</strong></div>
+          ${createdAtLabel ? `<div class="pill">Saved: <strong>${createdAtLabel}</strong></div>` : ''}
+        </div>
+
+        <div class="grid">
+          <div class="section">
+            <h3>Saved answer</h3>
+            <p>${body}</p>
+          </div>
+          <div class="section">
+            <h3>Suggested uses</h3>
+            ${usesHtml}
+          </div>
+        </div>
+
+        <div class="footer">Generated from your saved Tucka Guide entry.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }, [entry]);
+
+  const exportPdf = useCallback(async () => {
+    if (!entry) return;
+
+    const html = buildPdfHtml();
+    if (!html) return;
+
+    const safeName = `tucka-guide-${entry.id}.pdf`;
+
+    try {
+      console.log('[CookGuide] exportPdf start', { entryId: entry.id, platform: Platform.OS });
+
+      const print = await loadExpoPrint();
+      if (!print) throw new Error('Printing not available');
+
+      if (Platform.OS === 'web') {
+        try {
+          const result = await print.printToFileAsync({ html, base64: false });
+          console.log('[CookGuide] exportPdf web printToFileAsync result', { uri: result.uri });
+
+          if (typeof document !== 'undefined') {
+            const resp = await fetch(result.uri);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeName;
+            a.rel = 'noopener';
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            return;
+          }
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[CookGuide] exportPdf web printToFileAsync failed', { message });
+        }
+
+        await print.printAsync({ html });
+        return;
+      }
+
+      const result = await print.printToFileAsync({ html, base64: false });
+      console.log('[CookGuide] exportPdf file ready', { uri: result.uri });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(result.uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
+        return;
+      }
+
+      await Share.share({ message: exportText });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[CookGuide] exportPdf failed', { message });
+      Alert.alert('Could not export PDF', 'Please try again.');
+    }
+  }, [buildPdfHtml, entry, exportText]);
+
+  const onExportText = useCallback(async () => {
     if (!entry) return;
 
     const safeName = `tucka-guide-${entry.id}.txt`;
@@ -392,14 +580,14 @@ export default function CookGuideDetailsScreen() {
           </View>
 
           <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.primaryAction} onPress={onExport} testID="cook-guide-export">
-              <Share2 size={18} color={COLORS.background} />
-              <Text style={styles.primaryActionText}>Share / Export</Text>
+            <TouchableOpacity style={styles.primaryAction} onPress={exportPdf} testID="cook-guide-export-pdf">
+              <FileDown size={18} color={COLORS.background} />
+              <Text style={styles.primaryActionText}>Save as PDF</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.secondaryAction} onPress={onExport} testID="cook-guide-download">
-              <Download size={18} color={COLORS.text} />
-              <Text style={styles.secondaryActionText}>Download</Text>
+            <TouchableOpacity style={styles.secondaryAction} onPress={onExportText} testID="cook-guide-export-text">
+              <Share2 size={18} color={COLORS.text} />
+              <Text style={styles.secondaryActionText}>Share text</Text>
             </TouchableOpacity>
           </View>
 
