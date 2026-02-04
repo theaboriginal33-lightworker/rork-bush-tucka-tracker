@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image as RNImage, Platform, StyleProp, View, ViewStyle } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 
-function shouldProxyForNative(uri: string): boolean {
+function shouldProxyForAttachments(uri: string): boolean {
   const lower = uri.toLowerCase();
   if (lower.includes('r2.dev/attachments/') || lower.includes('r2-pub.rork.com/attachments/')) return true;
   if (lower.includes('pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/')) return true;
@@ -47,11 +47,9 @@ export function LearnRemoteImage({
   const resolvedUri = useMemo(() => {
     if (!normalizedUri) return '';
 
-    if (Platform.OS === 'web') return normalizedUri;
-
-    if (shouldProxyForNative(normalizedUri)) {
+    if (shouldProxyForAttachments(normalizedUri)) {
       const proxied = proxyToJpeg(normalizedUri);
-      console.log('[LearnRemoteImage] proxying image for native decode', {
+      console.log('[LearnRemoteImage] proxying attachment image', {
         from: normalizedUri,
         to: proxied,
         platform: Platform.OS,
@@ -86,6 +84,10 @@ export function LearnRemoteImage({
       testID={testID ? `${testID}-rn` : undefined}
     />
   );
+
+  if (Platform.OS === 'web') {
+    return fallback;
+  }
 
   if (hasError) return fallback;
 
