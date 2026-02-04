@@ -116,7 +116,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: false,
     safetyLevel: 'caution',
     edibleParts: ['fruit'],
-    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/5jlxv3srevkvmlnhqj5ij',
+    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/w3iju5cnatf0o4neeveqf',
   },
 ];
 
@@ -470,11 +470,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 12,
     position: 'relative',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   cardImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+    ...StyleSheet.absoluteFillObject,
   },
   imageFallback: {
     width: '100%',
