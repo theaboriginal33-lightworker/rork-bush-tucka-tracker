@@ -318,8 +318,8 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
     }
 
     if (!data) {
-      console.log('[learn-detail] not found');
-      return null;
+      console.log('[learn-detail] not found in supabase; falling back to local seed content');
+      return FALLBACK_PLANTS.find((p) => p.slug === trimmed || p.id === trimmed) ?? null;
     }
 
     return toLearnPlant(data as SupabasePlantRow, 0);
@@ -332,14 +332,16 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
 
 export default function LearnPlantDetailScreen() {
   const params = useLocalSearchParams();
-  const idParam = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
+  const idParamRaw = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
+  const idParam = String(idParamRaw ?? '').trim();
+  console.log('[learn-detail] route param', { id: idParamRaw, normalized: idParam });
 
   const { getPlantImageUrl, setPlantImageUrl, clearPlantImageUrl } = useLearnImages();
 
   const plantQuery = useQuery({
     queryKey: ['learn', 'plant', idParam],
     queryFn: () => fetchPlantByIdOrSlug(idParam),
-    enabled: idParam.trim().length > 0,
+    enabled: idParam.length > 0,
   });
 
   const plant = plantQuery.data ?? null;
