@@ -2108,36 +2108,81 @@ Return JSON with keys:
             const mimeType = primaryToUse?.mimeType;
 
             if (Platform.OS === 'web') {
+              const maxDataUriLength = 650_000;
+
+              const makeDataUri = (mt: string, data: string) => `data:${mt};base64,${data}`;
+
+              const trySmaller = async (targetWidth: number, compress: number): Promise<string | null> => {
+                const ImageManipulator = await getExpoImageManipulator();
+                if (!ImageManipulator) return null;
+                const manipResult = await ImageManipulator.manipulateAsync(
+                  primaryToUse?.uri ?? '',
+                  [{ resize: { width: targetWidth } }],
+                  {
+                    compress,
+                    format: ImageManipulator.SaveFormat.JPEG,
+                    base64: true,
+                  },
+                );
+                if (typeof manipResult.base64 === 'string' && manipResult.base64.length > 0) {
+                  return manipResult.base64;
+                }
+                return null;
+              };
+
               if (typeof base64 === 'string' && base64.length > 0) {
+                const mt = 'image/jpeg';
+                let chosenBase64: string | null = base64;
+
                 try {
-                  const ImageManipulator = await getExpoImageManipulator();
-                  if (!ImageManipulator) {
-                    throw new Error('ImageManipulator unavailable');
+                  const reduced = await trySmaller(900, 0.6);
+                  if (reduced) {
+                    chosenBase64 = reduced;
+                    console.log('[Scan] web image reduced', { targetWidth: 900, outLength: reduced.length });
                   }
-
-                  const manipResult = await ImageManipulator.manipulateAsync(
-                    primaryToUse?.uri ?? '',
-                    [{ resize: { width: 1200 } }],
-                    {
-                      compress: 0.72,
-                      format: ImageManipulator.SaveFormat.JPEG,
-                      base64: true,
-                    },
-                  );
-
-                  const mt = 'image/jpeg';
-                  const outBase64 = typeof manipResult.base64 === 'string' && manipResult.base64.length > 0 ? manipResult.base64 : base64;
-                  persistedImageUri = `data:${mt};base64,${outBase64}`;
-                  console.log('[Scan] persisted scan photo as data URI (web, compressed)', {
-                    inLength: base64.length,
-                    outLength: outBase64.length,
-                    outUriScheme: (manipResult.uri ?? '').split(':')[0],
-                  });
                 } catch (e) {
                   const message = e instanceof Error ? e.message : String(e);
-                  const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
-                  persistedImageUri = `data:${mt};base64,${base64}`;
-                  console.log('[Scan] ImageManipulator failed; falling back to original base64 (web)', { message, mimeType: mt, length: base64.length });
+                  console.log('[Scan] web image reduction failed (initial)', { message });
+                }
+
+                if (chosenBase64 && chosenBase64.length > maxDataUriLength) {
+                  const fallbackCandidates: Array<{ width: number; compress: number }> = [
+                    { width: 640, compress: 0.52 },
+                    { width: 420, compress: 0.45 },
+                  ];
+
+                  for (const candidate of fallbackCandidates) {
+                    try {
+                      const reduced = await trySmaller(candidate.width, candidate.compress);
+                      if (reduced) {
+                        chosenBase64 = reduced;
+                        console.log('[Scan] web image reduced (fallback)', {
+                          targetWidth: candidate.width,
+                          outLength: reduced.length,
+                        });
+                      }
+                      if (chosenBase64 && chosenBase64.length <= maxDataUriLength) break;
+                    } catch (e) {
+                      const message = e instanceof Error ? e.message : String(e);
+                      console.log('[Scan] web image reduction failed (fallback)', { message, candidate });
+                    }
+                  }
+                }
+
+                if (chosenBase64 && chosenBase64.length <= maxDataUriLength) {
+                  persistedImageUri = makeDataUri(mt, chosenBase64);
+                  previewImageUri = persistedImageUri;
+                  console.log('[Scan] persisted scan photo (web, size-capped)', {
+                    base64Length: chosenBase64.length,
+                    dataUriLength: persistedImageUri.length,
+                  });
+                } else {
+                  persistedImageUri = undefined;
+                  previewImageUri = undefined;
+                  console.log('[Scan] web image too large for storage; skipping image persistence', {
+                    base64Length: chosenBase64?.length ?? 0,
+                    maxDataUriLength,
+                  });
                 }
               } else {
                 console.log('[Scan] web scan has no base64; using original uri (non-persistent)', { uri: primaryToUse?.uri });
@@ -2284,7 +2329,7 @@ Return JSON with keys:
                 console.log('[Scan] skipping photo persist (no document/cache directory)', { platform: Platform.OS });
               }
 
-              if (typeof previewImageUri !== 'string' || previewImageUri.length === 0) {
+              if ((typeof previewImageUri !== 'string' || previewImageUri.length === 0) && Platform.OS !== 'web') {
                 if (typeof base64 === 'string' && base64.length > 0) {
                   try {
                     const ImageManipulator = await getExpoImageManipulator();

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Platform } from 'react-native';
 
 const STORAGE_KEY = 'bush-tucka.scan-journal.v1';
 
@@ -157,6 +158,27 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
   };
 }
 
+const MAX_WEB_DATA_URI_LENGTH = 650_000;
+
+function stripLargeWebImages(entry: ScanJournalEntry): ScanJournalEntry {
+  if (Platform.OS !== 'web') return entry;
+
+  const stripIfTooLarge = (uri?: string) => {
+    if (!uri) return uri;
+    const trimmed = uri.trim();
+    if (!trimmed) return undefined;
+    if (trimmed.startsWith('blob:')) return undefined;
+    if (trimmed.startsWith('data:') && trimmed.length > MAX_WEB_DATA_URI_LENGTH) return undefined;
+    return trimmed;
+  };
+
+  return {
+    ...entry,
+    imageUri: stripIfTooLarge(entry.imageUri),
+    imagePreviewUri: stripIfTooLarge(entry.imagePreviewUri),
+  };
+}
+
 type ScanJournalContextValue = {
   entries: ScanJournalEntry[];
   isLoading: boolean;
@@ -250,9 +272,11 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
   const { mutateAsync: persistMutateAsync } = useMutation({
     mutationFn: async (nextEntries: ScanJournalEntry[]) => {
-      const payload = JSON.stringify(nextEntries);
+      const normalizedForStorage =
+        Platform.OS === 'web' ? nextEntries.map((entry) => stripLargeWebImages(entry)) : nextEntries;
+      const payload = JSON.stringify(normalizedForStorage);
       await AsyncStorage.setItem(STORAGE_KEY, payload);
-      return nextEntries;
+      return normalizedForStorage;
     },
     onError: (e) => {
       const message = e instanceof Error ? e.message : String(e);
