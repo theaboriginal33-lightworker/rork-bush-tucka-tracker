@@ -6,9 +6,11 @@ import { BookOpen, ChefHat, Home, NotebookPen, UserCircle2 } from 'lucide-react-
 
 
 export default function TabLayout() {
+  const initialRouteName: 'journal' | 'learn' = Platform.OS === 'web' ? 'journal' : 'learn';
+
   return (
     <Tabs
-      initialRouteName="learn"
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.tabBarActive,

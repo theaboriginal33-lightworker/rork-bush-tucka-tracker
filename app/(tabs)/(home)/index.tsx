@@ -2321,7 +2321,7 @@ Return JSON with keys:
                 console.log('[Scan] skipping photo persist (no document/cache directory)', { platform: Platform.OS });
               }
 
-              if ((typeof previewImageUri !== 'string' || previewImageUri.length === 0) && Platform.OS !== 'web') {
+              if ((typeof previewImageUri !== 'string' || previewImageUri.length === 0) && Platform.OS !== ('web' as any)) {
                 if (typeof base64 === 'string' && base64.length > 0) {
                   try {
                     const ImageManipulator = await getExpoImageManipulator();
