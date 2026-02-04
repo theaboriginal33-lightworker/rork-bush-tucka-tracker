@@ -552,8 +552,9 @@ export default function LearnScreen() {
         return;
       }
 
-      const href = { pathname: '/learn/[id]', params: { id: idForRoute } } as const;
-      console.log('[learn] navigate ->', { href });
+      const routeId = encodeURIComponent(idForRoute);
+      const href = `/learn/${routeId}` as const;
+      console.log('[learn] navigate ->', { href, idForRoute });
       router.push(href);
     },
     [normalizeSlugish]

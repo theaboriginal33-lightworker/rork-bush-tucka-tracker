@@ -1113,7 +1113,17 @@ export default function LearnPlantDetailScreen() {
     return (
       <View style={styles.loadingContainer} testID="learn-detail-not-found">
         <Text style={styles.notFoundTitle}>Not found</Text>
-        <Text style={styles.loadingText}>This plant resource isn’t available yet.</Text>
+        <Text style={styles.loadingText}>We couldn’t load this plant. Try going back and opening it again.</Text>
+        <Pressable
+          style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+          onPress={() => {
+            console.log('[learn-detail] retry pressed', { idParam, idParamNormalized });
+            plantQuery.refetch();
+          }}
+          testID="learn-detail-retry"
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </Pressable>
       </View>
     );
   }
@@ -1302,6 +1312,23 @@ export default function LearnPlantDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+  },
+  retryButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
