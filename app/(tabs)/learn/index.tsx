@@ -166,6 +166,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/mnjeackl074xi8muhu5k9',
   },
+  {
+    id: 'illawarra-plum',
+    slug: 'illawarra-plum',
+    commonName: 'Illawarra Plum',
+    scientificName: 'Rainforest Native Fruit • Dark Plum',
+    category: 'Fruit',
+    overview:
+      'Illawarra Plum is a native rainforest fruit found along the east coast of Australia, growing on tall canopy trees. Recognisable by its deep purple to black flesh and large seed, it has a rich, mild sweetness with earthy undertones.\n\nTraditionally harvested seasonally, it is now valued in both bush food knowledge and modern native cuisine.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'caution',
+    edibleParts: ['fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/wniclm256l583hw566ce1',
+  },
 ];
 
 type SupabasePlantRow = {

@@ -361,6 +361,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: false,
     edibilityStatus: 'safe',
   },
+  {
+    id: 'illawarra-plum',
+    slug: 'illawarra-plum',
+    commonName: 'Illawarra Plum',
+    scientificName: 'Rainforest Native Fruit • Dark Plum',
+    category: 'Fruit',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/wniclm256l583hw566ce1',
+    overview:
+      'Illawarra Plum is a native rainforest fruit found along the east coast of Australia, growing on tall canopy trees. Recognisable by its deep purple to black flesh and large seed, it has a rich, mild sweetness with earthy undertones.\n\nTraditionally harvested seasonally, it is now valued in both bush food knowledge and modern native cuisine.',
+    safetyLevel: 'caution',
+    confidenceHint:
+      'Fruit flesh is edible when fully ripe, but the large seed is NOT edible and must be removed. Do not consume unripe fruit. Always confirm identification before eating.',
+    seasonality: 'Late Summer → Autumn',
+    seasonalityNote: 'Fruit ripens after warm, wet conditions in rainforest environments.',
+    preparation:
+      'Harvest fully ripe fruit. Cut away and discard the large seed. Use the flesh fresh or cooked. Balance flavour with sweetness or spice — cooking enhances texture and depth.',
+    suggestedUses:
+      'Jams & preserves • Desserts & baking • Sauces & reductions • Chutneys • Savoury accompaniments.\n\nOften compared to European plums but with a distinctly native character.',
+    culturalNotes:
+      'Traditionally harvested from tall rainforest trees and shared within communities during peak season. Harvesting required skill and timing, reflecting deep knowledge of forest cycles.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: CAUTION — PREPARATION REQUIRED\n\n• Fruit flesh is edible when ripe\n• Seed is NOT edible and must be removed\n• Do not consume unripe fruit\n• Always prepare correctly before use',
+    lookalikes:
+      'Some rainforest fruits can look similar at a glance. Confirm identification using multiple features (leaf form, fruit/seed size, habitat) and local guidance before eating.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest fully ripe fruit', 'remove and discard the large seed', 'use flesh fresh or cooked', 'balance with sweetness/spice'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    tags: ['Rainforest Native Fruit', 'Caution', 'Preparation: Required', 'Flavour: Rich / Mildly Sweet', 'Environment: Rainforest'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'caution',
+  },
 ];
 
 function normalizeSlugish(input: string): string {
