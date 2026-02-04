@@ -52,6 +52,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/n7m5z15iiqrv0xjj2jfby',
   },
   {
+    id: 'lemon-aspen',
+    slug: 'lemon-aspen',
+    commonName: 'Lemon Aspen',
+    scientificName: 'Rainforest Native Fruit • Citrus-Flavoured Berry',
+    category: 'Fruit',
+    overview:
+      'Lemon Aspen is a native rainforest fruit traditionally found in eastern Australia, particularly in subtropical and tropical rainforest regions. Small in size but intense in flavour, it delivers a bright, lemony tang with floral notes.\n\nIt is highly regarded in modern native cuisine for its fresh acidity and aromatic profile.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'safe',
+    edibleParts: ['fruit'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/sg7y96jpf74eyg7kql43u',
+  },
+  {
     id: 'kurrajong',
     slug: 'kurrajong',
     commonName: 'Kurrajong',

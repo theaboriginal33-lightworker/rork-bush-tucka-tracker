@@ -97,6 +97,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'safe',
   },
   {
+    id: 'lemon-aspen',
+    slug: 'lemon-aspen',
+    commonName: 'Lemon Aspen',
+    scientificName: 'Rainforest Native Fruit • Citrus-Flavoured Berry',
+    category: 'Fruit',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/sg7y96jpf74eyg7kql43u',
+    overview:
+      'Lemon Aspen is a native rainforest fruit traditionally found in eastern Australia, particularly in subtropical and tropical rainforest regions. Small in size but intense in flavour, it delivers a bright, lemony tang with floral notes.\n\nIt is highly regarded in modern native cuisine for its fresh acidity and aromatic profile.',
+    safetyLevel: 'safe',
+    confidenceHint:
+      'Safe to consume when ripe. Naturally acidic. Best used fresh or lightly processed; generally well tolerated when eaten in moderation.',
+    seasonality: 'Late Summer → Autumn',
+    seasonalityNote: 'Fruit ripens following warm, wet conditions.',
+    preparation:
+      'Harvest ripe fruit. Wash thoroughly. Use whole, or remove seed if preferred. Balance acidity with sweetness or fats — a small amount provides strong flavour.',
+    suggestedUses:
+      'Sauces & dressings • Desserts & baking • Beverages & cordials • Seafood pairings • Syrups & preserves.\n\nOften used where lemon or lime would traditionally be used.',
+    culturalNotes:
+      'Traditionally harvested seasonally from rainforest Country, used fresh and shared within communities. Knowledge is guided by ripeness and seasonal change, reflecting abundance after rain.\n\nLemon Aspen reminds us that small fruits can carry strong medicine.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE\n\n• Safe to consume when ripe\n• Naturally acidic\n• Best used fresh or lightly processed\n• Generally well tolerated when eaten in moderation',
+    lookalikes:
+      'Some small rainforest berries can look similar at a glance. Confirm identification using multiple features (leaf form, aroma when crushed, fruit size/colour, habitat) and local guidance before eating.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest ripe fruit', 'wash thoroughly', 'use whole or remove seed', 'balance acidity with sweet or fats'],
+    tags: ['Fruit', 'Safe', 'Preparation: Minimal', 'Flavour: Citrus / Aromatic', 'Environment: Subtropical Rainforest'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'safe',
+  },
+  {
     id: 'kurrajong',
     slug: 'kurrajong',
     commonName: 'Kurrajong',
@@ -824,7 +857,7 @@ export default function LearnPlantDetailScreen() {
           ),
         }}
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="learn-detail-scroll">
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="learn-detail-scroll" keyboardShouldPersistTaps="handled">
       <View style={styles.heroWrap}>
         {hero ? (
           <LearnRemoteImage
@@ -986,7 +1019,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   content: {
-    paddingBottom: 24,
+    paddingBottom: 36,
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,
