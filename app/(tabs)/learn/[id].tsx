@@ -6,6 +6,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { LEARN_HERO_IMAGE_OVERRIDES } from '@/constants/learnImageOverrides';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
 import { useLearnImages } from '@/app/providers/LearnImageProvider';
 
@@ -376,6 +377,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     sourceRefs: ['Local field guides', 'Community knowledge'],
     edibilityStatus: 'caution',
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES.wattleseed ??
       'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
   },
   {
@@ -832,6 +834,7 @@ function normalizeSlugish(input: string): string {
 function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
   const id = String(row.id ?? `row-${index}`);
   const slug = normalizeSlugish(String(row.slug ?? row.common_name ?? id));
+  const overrideHero = LEARN_HERO_IMAGE_OVERRIDES[slug];
   const edibleParts = normalizeList(row.edible_parts);
   const prepBasics = normalizeList(row.prep_basics);
   const warnings = normalizeList(row.warnings);
@@ -861,7 +864,10 @@ function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
     createdAt: row.created_at ? String(row.created_at) : undefined,
     updatedAt: row.updated_at ? String(row.updated_at) : undefined,
     tags: buildTagsFromRow(category, status, edibleParts),
-    heroImageUrl: CATEGORY_HERO_IMAGES[String(row.primary_category ?? 'other').toLowerCase()] ?? CATEGORY_HERO_IMAGES.other,
+    heroImageUrl:
+      overrideHero ??
+      CATEGORY_HERO_IMAGES[String(row.primary_category ?? 'other').toLowerCase()] ??
+      CATEGORY_HERO_IMAGES.other,
   };
 }
 

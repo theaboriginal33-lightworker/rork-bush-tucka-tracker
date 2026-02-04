@@ -17,6 +17,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Filter, ImagePlus, Search, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { LEARN_HERO_IMAGE_OVERRIDES } from '@/constants/learnImageOverrides';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
 import { useLearnImages } from '@/app/providers/LearnImageProvider';
 import * as ImagePicker from 'expo-image-picker';
@@ -139,6 +140,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     safetyLevel: 'caution',
     edibleParts: ['seed'],
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES.wattleseed ??
       'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
   },
   {
@@ -391,6 +393,7 @@ function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
     .toLowerCase()
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9\-]/g, '');
+  const overrideHero = LEARN_HERO_IMAGE_OVERRIDES[slug];
 
   return {
     id,
@@ -403,7 +406,10 @@ function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
     isMedicinal: false,
     safetyLevel: row.edibility_status ? String(row.edibility_status) : undefined,
     edibleParts: Array.isArray(row.edible_parts) ? row.edible_parts.map((p) => String(p)) : undefined,
-    heroImageUrl: CATEGORY_HERO_IMAGES[String(row.primary_category ?? 'other').toLowerCase()] ?? CATEGORY_HERO_IMAGES.other,
+    heroImageUrl:
+      overrideHero ??
+      CATEGORY_HERO_IMAGES[String(row.primary_category ?? 'other').toLowerCase()] ??
+      CATEGORY_HERO_IMAGES.other,
   };
 }
 
