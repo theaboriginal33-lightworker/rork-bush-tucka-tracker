@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LearnRemoteImage } from '@/components/LearnRemoteImage';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, Trash2 } from 'lucide-react-native';
@@ -308,6 +308,16 @@ export default function LearnPlantDetailScreen() {
   const pickImageMutation = useMutation({
     mutationFn: async () => {
       if (!plant) throw new Error('Plant not loaded');
+
+      const existingPerm = await ImagePicker.getMediaLibraryPermissionsAsync();
+      if (!existingPerm.granted) {
+        const requested = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!requested.granted) {
+          console.log('[learn-detail] media library permission denied');
+          throw new Error('Photos permission is required to change the image.');
+        }
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -336,6 +346,37 @@ export default function LearnPlantDetailScreen() {
       console.log('[learn-detail] image override cleared', { slug: plant.slug });
     },
   });
+
+  const { mutate: pickImageMutate, isPending: isPickingImage } = pickImageMutation;
+  const { mutate: clearImageMutate, isPending: isClearingImage } = clearImageMutation;
+
+  const onPressChangeImage = useCallback(() => {
+    pickImageMutate(undefined, {
+      onError: (e) => {
+        const message = e instanceof Error ? e.message : String(e);
+        Alert.alert('Could not change photo', message);
+      },
+    });
+  }, [pickImageMutate]);
+
+  const onPressRemoveImage = useCallback(() => {
+    if (!plant) return;
+    Alert.alert('Remove photo?', 'This will restore the default image for this plant.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          clearImageMutate(undefined, {
+            onError: (e) => {
+              const message = e instanceof Error ? e.message : String(e);
+              Alert.alert('Could not remove photo', message);
+            },
+          });
+        },
+      },
+    ]);
+  }, [clearImageMutate, plant]);
 
   const chips = useMemo<string[]>(() => {
     const out: string[] = [];
@@ -387,7 +428,33 @@ export default function LearnPlantDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="learn-detail-scroll">
+    <>
+      <Stack.Screen
+        options={{
+          title: plant.commonName,
+          headerRight: () => (
+            <View style={styles.headerActions} testID="learn-detail-header-actions">
+              <Pressable
+                style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
+                onPress={onPressChangeImage}
+                disabled={isPickingImage}
+                testID="learn-detail-header-change"
+              >
+                <ImagePlus size={18} color={COLORS.text} />
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.headerIconButton, pressed && styles.headerIconButtonPressed]}
+                onPress={onPressRemoveImage}
+                disabled={isClearingImage}
+                testID="learn-detail-header-remove"
+              >
+                <Trash2 size={18} color={COLORS.text} />
+              </Pressable>
+            </View>
+          ),
+        }}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="learn-detail-scroll">
       <View style={styles.heroWrap}>
         {hero ? (
           <LearnRemoteImage
@@ -412,22 +479,22 @@ export default function LearnPlantDetailScreen() {
         <View style={styles.heroActions} pointerEvents="box-none">
           <Pressable
             style={({ pressed }) => [styles.heroActionButton, pressed && styles.heroActionButtonPressed]}
-            onPress={() => pickImageMutation.mutate()}
-            disabled={pickImageMutation.isPending}
+            onPress={onPressChangeImage}
+            disabled={isPickingImage}
             testID="learn-detail-change-image"
           >
             <ImagePlus size={16} color="rgba(255,255,255,0.92)" />
-            <Text style={styles.heroActionText}>{pickImageMutation.isPending ? 'Opening…' : 'Change'}</Text>
+            <Text style={styles.heroActionText}>{isPickingImage ? 'Opening…' : 'Change'}</Text>
           </Pressable>
 
           <Pressable
             style={({ pressed }) => [styles.heroActionButton, pressed && styles.heroActionButtonPressed]}
-            onPress={() => clearImageMutation.mutate()}
-            disabled={clearImageMutation.isPending}
+            onPress={onPressRemoveImage}
+            disabled={isClearingImage}
             testID="learn-detail-clear-image"
           >
             <Trash2 size={16} color="rgba(255,255,255,0.92)" />
-            <Text style={styles.heroActionText}>{clearImageMutation.isPending ? 'Removing…' : 'Remove'}</Text>
+            <Text style={styles.heroActionText}>{isClearingImage ? 'Removing…' : 'Remove'}</Text>
           </Pressable>
         </View>
 
@@ -539,6 +606,7 @@ export default function LearnPlantDetailScreen() {
         ) : null}
       </View>
     </ScrollView>
+    </>
   );
 }
 
@@ -572,6 +640,25 @@ const styles = StyleSheet.create({
     height: 340,
     backgroundColor: COLORS.card,
     overflow: 'hidden',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginRight: 6,
+  },
+  headerIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+  },
+  headerIconButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.98 }],
   },
   hero: {
     width: '100%',
