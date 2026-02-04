@@ -927,19 +927,28 @@ export default function LearnPlantDetailScreen() {
   };
 
   const idParam = sanitizeParam(String(idParamRaw ?? ''));
-  console.log('[learn-detail] route param', { id: idParamRaw, sanitized: idParam });
+  const idParamNormalized = normalizeSlugish(idParam);
+  console.log('[learn-detail] route param', {
+    raw: idParamRaw,
+    sanitized: idParam,
+    normalized: idParamNormalized,
+    allParams: params,
+  });
 
   const { getPlantImageUrl, setPlantImageUrl, clearPlantImageUrl } = useLearnImages();
 
   const plantQuery = useQuery({
-    queryKey: ['learn', 'plant', idParam],
-    queryFn: () => fetchPlantByIdOrSlug(idParam),
-    enabled: idParam.length > 0,
+    queryKey: ['learn', 'plant', idParamNormalized],
+    queryFn: () => fetchPlantByIdOrSlug(idParamNormalized),
+    enabled: idParamNormalized.length > 0,
   });
 
   const plant = plantQuery.data ?? null;
 
-  const hero = getPlantImageUrl(plant?.slug ?? idParam) ?? plant?.heroImageUrl ?? FALLBACK_PLANTS[0]?.heroImageUrl;
+  const hero =
+    getPlantImageUrl(plant?.slug ?? idParamNormalized) ??
+    plant?.heroImageUrl ??
+    FALLBACK_PLANTS[0]?.heroImageUrl;
 
   const pickImageMutation = useMutation({
     mutationFn: async () => {
@@ -1102,10 +1111,10 @@ export default function LearnPlantDetailScreen() {
             transition={180}
             cachePolicy="disk"
             onLoad={() => {
-              console.log('[learn-detail] hero loaded', { idParam, uri: hero });
+              console.log('[learn-detail] hero loaded', { idParam: idParamNormalized, uri: hero });
             }}
             onError={(error) => {
-              console.log('[learn-detail] hero load failed', { idParam, uri: hero, error });
+              console.log('[learn-detail] hero load failed', { idParam: idParamNormalized, uri: hero, error });
             }}
             testID="learn-detail-hero-image"
           />
