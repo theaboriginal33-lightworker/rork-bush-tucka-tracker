@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Image as RNImage, ImageStyle, Platform, StyleProp, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, Image as RNImage, ImageStyle, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 
 function isAttachmentLikeUri(uri: string): boolean {
@@ -24,6 +24,7 @@ type LearnRemoteImageProps = {
   testID?: string;
   onLoad?: () => void;
   onError?: (error: string | null | undefined) => void;
+  preferAttachmentProxy?: boolean;
 };
 
 export function LearnRemoteImage({
@@ -35,16 +36,19 @@ export function LearnRemoteImage({
   testID,
   onLoad,
   onError,
+  preferAttachmentProxy,
 }: LearnRemoteImageProps) {
   const [hasError, setHasError] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentUri, setCurrentUri] = useState<string>('');
+
+  const normalizedUri = useMemo(() => String(uri ?? '').trim(), [uri]);
 
   useEffect(() => {
     setHasError(false);
-    setCurrentUri(String(uri ?? '').trim());
-  }, [uri]);
-
-  const normalizedUri = useMemo(() => String(uri ?? '').trim(), [uri]);
+    setIsLoading(true);
+    setCurrentUri(normalizedUri);
+  }, [normalizedUri]);
 
   const attachmentProxyUri = useMemo(() => {
     if (!normalizedUri) return '';
@@ -52,86 +56,145 @@ export function LearnRemoteImage({
     return proxyToJpeg(normalizedUri);
   }, [normalizedUri]);
 
+  const effectivePreferAttachmentProxy = preferAttachmentProxy ?? true;
+
+  useEffect(() => {
+    if (!effectivePreferAttachmentProxy) return;
+    if (!attachmentProxyUri) return;
+    if (currentUri === attachmentProxyUri) return;
+
+    console.log('[LearnRemoteImage] using proxy as primary for attachment', {
+      original: normalizedUri,
+      proxy: attachmentProxyUri,
+      platform: Platform.OS,
+    });
+    setCurrentUri(attachmentProxyUri);
+  }, [attachmentProxyUri, currentUri, effectivePreferAttachmentProxy, normalizedUri]);
+
   const resolvedUri = useMemo(() => String(currentUri ?? '').trim(), [currentUri]);
 
   if (!resolvedUri) {
-    return <View style={style} testID={testID} />;
+    return (
+      <View style={style} testID={testID}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator />
+        </View>
+      </View>
+    );
   }
 
   const fallback = (
-    <RNImage
-      source={{ uri: resolvedUri }}
-      style={style as never}
-      resizeMode={contentFit === 'contain' ? 'contain' : 'cover'}
-      onLoad={() => {
-        console.log('[LearnRemoteImage] RNImage loaded', { uri: resolvedUri, platform: Platform.OS });
-        onLoad?.();
-      }}
-      onError={(e) => {
-        const err = (e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error;
-        console.log('[LearnRemoteImage] RNImage error', {
-          uri: resolvedUri,
-          platform: Platform.OS,
-          error: err,
-          original: normalizedUri,
-          attachmentProxyUri,
-        });
-
-        if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
-          console.log('[LearnRemoteImage] RNImage switching to proxy', {
-            from: resolvedUri,
-            to: attachmentProxyUri,
+    <View style={style} testID={testID ? `${testID}-rn-wrap` : undefined}>
+      <RNImage
+        source={{ uri: resolvedUri }}
+        style={{ width: '100%', height: '100%' }}
+        resizeMode={contentFit === 'contain' ? 'contain' : 'cover'}
+        onLoad={() => {
+          console.log('[LearnRemoteImage] RNImage loaded', { uri: resolvedUri, platform: Platform.OS });
+          setIsLoading(false);
+          onLoad?.();
+        }}
+        onError={(e) => {
+          const err = (e as unknown as { nativeEvent?: { error?: string } })?.nativeEvent?.error;
+          console.log('[LearnRemoteImage] RNImage error', {
+            uri: resolvedUri,
             platform: Platform.OS,
+            error: err,
+            original: normalizedUri,
+            attachmentProxyUri,
           });
-          setCurrentUri(attachmentProxyUri);
-          return;
-        }
 
-        onError?.(err);
-      }}
-      testID={testID ? `${testID}-rn` : undefined}
-    />
+          if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
+            console.log('[LearnRemoteImage] RNImage switching to proxy', {
+              from: resolvedUri,
+              to: attachmentProxyUri,
+              platform: Platform.OS,
+            });
+            setCurrentUri(attachmentProxyUri);
+            return;
+          }
+
+          setIsLoading(false);
+          onError?.(err);
+        }}
+        testID={testID ? `${testID}-rn` : undefined}
+      />
+
+      {isLoading ? (
+        <View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0,0,0,0.06)',
+          }}
+          pointerEvents="none"
+          testID={testID ? `${testID}-loading` : undefined}
+        >
+          <ActivityIndicator />
+        </View>
+      ) : null}
+    </View>
   );
 
   if (hasError) return fallback;
 
   return (
-    <ExpoImage
-      key={resolvedUri}
-      source={{ uri: resolvedUri }}
-      style={style as never}
-      contentFit={contentFit}
-      transition={transition}
-      cachePolicy={cachePolicy}
-      onLoad={() => {
-        console.log('[LearnRemoteImage] ExpoImage loaded', { uri: resolvedUri, platform: Platform.OS });
-        onLoad?.();
-      }}
-      onError={(e) => {
-        const err = (e as unknown as { error?: string } | null | undefined)?.error;
-        console.log('[LearnRemoteImage] ExpoImage error', {
-          uri: resolvedUri,
-          platform: Platform.OS,
-          error: err,
-          original: normalizedUri,
-          attachmentProxyUri,
-        });
-
-        if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
-          console.log('[LearnRemoteImage] ExpoImage switching to proxy', {
-            from: resolvedUri,
-            to: attachmentProxyUri,
+    <View style={style} testID={testID ? `${testID}-expo-wrap` : undefined}>
+      <ExpoImage
+        key={resolvedUri}
+        source={{ uri: resolvedUri }}
+        style={{ width: '100%', height: '100%' }}
+        contentFit={contentFit}
+        transition={transition}
+        cachePolicy={cachePolicy}
+        onLoad={() => {
+          console.log('[LearnRemoteImage] ExpoImage loaded', { uri: resolvedUri, platform: Platform.OS });
+          setIsLoading(false);
+          onLoad?.();
+        }}
+        onError={(e) => {
+          const err = (e as unknown as { error?: string } | null | undefined)?.error;
+          console.log('[LearnRemoteImage] ExpoImage error', {
+            uri: resolvedUri,
             platform: Platform.OS,
+            error: err,
+            original: normalizedUri,
+            attachmentProxyUri,
           });
-          setCurrentUri(attachmentProxyUri);
-          return;
-        }
 
-        console.log('[LearnRemoteImage] ExpoImage error -> fallback RNImage', { uri: resolvedUri, platform: Platform.OS });
-        setHasError(true);
-        onError?.(err);
-      }}
-      testID={testID ? `${testID}-expo` : undefined}
-    />
+          if (attachmentProxyUri && resolvedUri !== attachmentProxyUri) {
+            console.log('[LearnRemoteImage] ExpoImage switching to proxy', {
+              from: resolvedUri,
+              to: attachmentProxyUri,
+              platform: Platform.OS,
+            });
+            setCurrentUri(attachmentProxyUri);
+            return;
+          }
+
+          console.log('[LearnRemoteImage] ExpoImage error -> fallback RNImage', { uri: resolvedUri, platform: Platform.OS });
+          setIsLoading(false);
+          setHasError(true);
+          onError?.(err);
+        }}
+        testID={testID ? `${testID}-expo` : undefined}
+      />
+
+      {isLoading ? (
+        <View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0,0,0,0.06)',
+          }}
+          pointerEvents="none"
+          testID={testID ? `${testID}-loading` : undefined}
+        >
+          <ActivityIndicator />
+        </View>
+      ) : null}
+    </View>
   );
 }
