@@ -1,23 +1,105 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
+import React, { useMemo } from 'react';
+import { ActivityIndicator, View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Filter } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { useQuery } from '@tanstack/react-query';
+import { hasSupabaseConfig, supabase } from '@/constants/supabase';
 
-const LEARN_DATA = [
-  { id: '1', name: 'Finger Lime', scientific: 'Citrus australasica', type: 'Fruit', color: '#E8F5E9', image: 'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop' },
-  { id: '2', name: 'Wattleseed', scientific: 'Acacia', type: 'Seed', color: '#FFF3E0', image: 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop' },
-  { id: '3', name: 'Davidson Plum', scientific: 'Davidsonia', type: 'Fruit', color: '#F3E5F5', image: 'https://images.unsplash.com/photo-1678165842817-062e21245781?q=80&w=2574&auto=format&fit=crop' },
-  { id: '4', name: 'Saltbush', scientific: 'Atriplex nummularia', type: 'Leaf', color: '#E0F7FA', image: 'https://images.unsplash.com/photo-1596726540679-0df8e8e7a61d?q=80&w=2787&auto=format&fit=crop' },
-  { id: '5', name: 'Macadamia', scientific: 'Macadamia integrifolia', type: 'Nut', color: '#FFF8E1', image: 'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop' },
-];
+type PlantRow = {
+  id: string;
+  slug: string;
+  common_name: string;
+  scientific_name: string | null;
+  primary_category: string | null;
+  edibility_status: string | null;
+  seasonality_note: string | null;
+  ui_accent: string | null;
+};
+
+const CATEGORY_IMAGES: Record<string, string> = {
+  fruit: 'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop',
+  seed: 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
+  leaf: 'https://images.unsplash.com/photo-1596726540679-0df8e8e7a61d?q=80&w=2787&auto=format&fit=crop',
+  nut: 'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
+  root: 'https://images.unsplash.com/photo-1587049352846-4a222e784b5d?q=80&w=2670&auto=format&fit=crop',
+  spice: 'https://images.unsplash.com/photo-1505576399279-565b52d4ac71?q=80&w=2670&auto=format&fit=crop',
+  other: 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?q=80&w=2670&auto=format&fit=crop',
+};
+
+const ACCENT_COLORS: Record<string, string> = {
+  green: '#E8F5E9',
+  teal: '#E0F7FA',
+  amber: '#FFF3E0',
+  purple: '#F3E5F5',
+  yellow: '#FFF8E1',
+  blue: '#E0F2FE',
+  red: '#FDE8E8',
+};
+
+const titleCase = (value: string): string => {
+  return value
+    .replace(/[_-]/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
 
 export default function LearnScreen() {
-  const renderItem = ({ item }: { item: typeof LEARN_DATA[0] }) => (
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['learn', 'plants'],
+    enabled: hasSupabaseConfig,
+    queryFn: async (): Promise<PlantRow[]> => {
+      const { data: rows, error: queryError } = await supabase
+        .from('plants')
+        .select('id,slug,common_name,scientific_name,primary_category,edibility_status,seasonality_note,ui_accent')
+        .order('common_name', { ascending: true });
+
+      if (queryError) {
+        throw new Error(queryError.message);
+      }
+
+      return (rows ?? []) as PlantRow[];
+    },
+  });
+
+  const plants = data ?? [];
+
+  const listData = useMemo(() => {
+    return plants.map((plant) => {
+      const category = (plant.primary_category ?? 'other').toLowerCase();
+      const image = CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.other;
+      const accentKey = (plant.ui_accent ?? '').toLowerCase();
+      const accent = ACCENT_COLORS[accentKey] ?? 'rgba(7,17,11,0.78)';
+      return {
+        id: plant.id || plant.slug,
+        name: plant.common_name,
+        scientific: plant.scientific_name ?? 'Unknown',
+        type: titleCase(category),
+        color: accent,
+        image,
+      };
+    });
+  }, [plants]);
+
+  const statusMessage = useMemo(() => {
+    if (!hasSupabaseConfig) {
+      return 'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.';
+    }
+    if (isLoading) return 'Loading plants…';
+    if (error) {
+      return 'Could not load plants. Check Supabase connection and RLS policies.';
+    }
+    if (listData.length === 0) return 'No plants found yet.';
+    return '';
+  }, [error, isLoading, listData.length]);
+
+  const renderItem = ({ item }: { item: (typeof listData)[0] }) => (
     <TouchableOpacity style={styles.card}>
       <View style={styles.imageContainer}>
         <Image source={{ uri: item.image }} style={styles.cardImage} />
-        <View style={[styles.typeTag, { backgroundColor: 'rgba(7,17,11,0.78)' }]}>
+        <View style={[styles.typeTag, { backgroundColor: item.color }]}>
           <Text style={styles.typeText}>{item.type}</Text>
         </View>
       </View>
@@ -32,7 +114,10 @@ export default function LearnScreen() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Encyclopedia</Text>
+          <View>
+            <Text style={styles.headerTitle}>Encyclopedia</Text>
+            {statusMessage ? <Text style={styles.headerSubtitle}>{statusMessage}</Text> : null}
+          </View>
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.iconButton} testID="learn-search">
               <Search size={22} color={COLORS.text} />
@@ -43,14 +128,28 @@ export default function LearnScreen() {
           </View>
         </View>
 
+        {isLoading ? (
+          <View style={styles.loadingRow} testID="learn-loading">
+            <ActivityIndicator color={COLORS.primary} />
+          </View>
+        ) : null}
+
         <FlatList
-          data={LEARN_DATA}
+          data={listData}
           renderItem={renderItem}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           numColumns={2}
           columnWrapperStyle={styles.columnWrapper}
+          ListEmptyComponent={
+            !isLoading ? (
+              <View style={styles.emptyState} testID="learn-empty">
+                <Text style={styles.emptyTitle}>No Learn entries yet</Text>
+                <Text style={styles.emptyText}>Add plants to Supabase to populate this list.</Text>
+              </View>
+            ) : null
+          }
         />
       </SafeAreaView>
     </View>
@@ -79,6 +178,12 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     letterSpacing: -0.5,
   },
+  headerSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+  },
   headerActions: {
     flexDirection: 'row',
     gap: 12,
@@ -101,6 +206,10 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 24,
     paddingTop: 8,
+  },
+  loadingRow: {
+    paddingHorizontal: 24,
+    paddingBottom: 12,
   },
   columnWrapper: {
     justifyContent: 'space-between',
@@ -161,5 +270,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     fontStyle: 'italic',
+  },
+  emptyState: {
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 });
