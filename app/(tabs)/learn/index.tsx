@@ -132,10 +132,11 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Wattleseed',
     scientificName: 'Acacia spp.',
     category: 'Seed',
-    overview: 'Nutty, coffee-like roasted seed often used in baking and spice blends.',
+    overview:
+      'Wattleseed comes from various native Acacia species found across Australia. Traditionally harvested and prepared by Aboriginal communities, it has been a reliable, nutrient-dense food source for thousands of years.\n\nWhen roasted and ground, wattleseed develops a rich, nutty flavour with notes of coffee, chocolate, and hazelnut.\n\nNutritional insight (general): traditionally valued for protein, complex carbohydrates, fibre, and sustained energy. Values vary by species and environment.',
     isBushTucker: true,
     isMedicinal: false,
-    safetyLevel: 'unknown',
+    safetyLevel: 'caution',
     edibleParts: ['seed'],
     heroImageUrl:
       'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
