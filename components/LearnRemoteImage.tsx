@@ -26,9 +26,14 @@ function proxyToJpeg(uri: string): string {
   return `https://wsrv.nl/?url=${encodeURIComponent(withoutScheme)}&output=jpg&n=-1`;
 }
 
+function isHttpLikeUri(uri: string): boolean {
+  return /^https?:\/\//i.test(uri.trim());
+}
+
 function withCacheBust(uri: string, seed: number): string {
   const trimmed = uri.trim();
   if (!trimmed) return trimmed;
+  if (!isHttpLikeUri(trimmed)) return trimmed;
   const hasQuery = trimmed.includes('?');
   const sep = hasQuery ? '&' : '?';
   return `${trimmed}${sep}cb=${encodeURIComponent(String(seed))}`;
@@ -65,25 +70,40 @@ export function LearnRemoteImage({
 
   const normalizedUri = useMemo(() => String(uri ?? '').trim(), [uri]);
 
-  const attachmentProxyUri = useMemo(() => {
-    if (!normalizedUri) return '';
-    if (!isAttachmentLikeUri(normalizedUri)) return '';
-    return proxyToJpeg(normalizedUri);
+  const isLocalLike = useMemo(() => {
+    const u = normalizedUri.toLowerCase();
+    if (!u) return false;
+    if (u.startsWith('file:')) return true;
+    if (u.startsWith('content:')) return true;
+    if (u.startsWith('blob:')) return true;
+    if (u.startsWith('data:')) return true;
+    return false;
   }, [normalizedUri]);
 
-  const effectivePreferAttachmentProxy = preferAttachmentProxy ?? true;
+  const attachmentProxyUri = useMemo(() => {
+    if (!normalizedUri) return '';
+    if (isLocalLike) return '';
+    if (!isAttachmentLikeUri(normalizedUri)) return '';
+    return proxyToJpeg(normalizedUri);
+  }, [isLocalLike, normalizedUri]);
+
+  const effectivePreferAttachmentProxy = (preferAttachmentProxy ?? true) && !isLocalLike;
 
   const candidates = useMemo<string[]>(() => {
     const list: string[] = [];
     const base = normalizedUri;
     const proxy = attachmentProxyUri;
 
-    if (effectivePreferAttachmentProxy && proxy) list.push(proxy);
-    if (base) list.push(base);
-    if (!effectivePreferAttachmentProxy && proxy) list.push(proxy);
+    if (base && isLocalLike) {
+      list.push(base);
+    } else {
+      if (effectivePreferAttachmentProxy && proxy) list.push(proxy);
+      if (base) list.push(base);
+      if (!effectivePreferAttachmentProxy && proxy) list.push(proxy);
 
-    if (base) {
-      list.push(withCacheBust(base, Date.now()));
+      if (base) {
+        list.push(withCacheBust(base, Date.now()));
+      }
     }
 
     const deduped: string[] = [];
@@ -97,7 +117,7 @@ export function LearnRemoteImage({
     }
 
     return deduped;
-  }, [attachmentProxyUri, effectivePreferAttachmentProxy, normalizedUri]);
+  }, [attachmentProxyUri, effectivePreferAttachmentProxy, isLocalLike, normalizedUri]);
 
   const renderUri = useMemo(() => {
     const picked = candidates[attemptIndex] ?? '';
@@ -115,10 +135,11 @@ export function LearnRemoteImage({
       platform: Platform.OS,
       original: normalizedUri,
       proxy: attachmentProxyUri,
+      isLocalLike,
       candidatesCount: candidates.length,
       preferAttachmentProxy: effectivePreferAttachmentProxy,
     });
-  }, [attachmentProxyUri, candidates.length, effectivePreferAttachmentProxy, normalizedUri]);
+  }, [attachmentProxyUri, candidates.length, effectivePreferAttachmentProxy, isLocalLike, normalizedUri]);
 
   useEffect(() => {
     if (!renderUri) return;
