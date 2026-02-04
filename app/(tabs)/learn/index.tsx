@@ -518,11 +518,17 @@ export default function LearnScreen() {
   }, [plantsQuery.data, query]);
 
   const normalizeSlugish = useCallback((input: string): string => {
-    return String(input ?? '')
+    const normalized = String(input ?? '')
       .trim()
       .toLowerCase()
+      .replace(/\+/g, '-')
       .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9\-]/g, '');
+      .replace(/[^a-z0-9\-]/g, '')
+      .replace(/\-+/g, '-')
+      .replace(/^\-+/, '')
+      .replace(/\-+$/, '');
+
+    return normalized;
   }, []);
 
   const onOpenPlant = useCallback(

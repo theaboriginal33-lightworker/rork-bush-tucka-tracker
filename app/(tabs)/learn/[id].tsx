@@ -725,11 +725,15 @@ const FALLBACK_PLANTS: LearnPlant[] = [
 ];
 
 function normalizeSlugish(input: string): string {
-  return input
+  return String(input ?? '')
     .trim()
     .toLowerCase()
+    .replace(/\+/g, '-')
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9\-]/g, '');
+    .replace(/[^a-z0-9\-]/g, '')
+    .replace(/\-+/g, '-')
+    .replace(/^\-+/, '')
+    .replace(/\-+$/, '');
 }
 
 function toLearnPlant(row: SupabasePlantRow, index: number): LearnPlant {
@@ -909,7 +913,17 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
 export default function LearnPlantDetailScreen() {
   const params = useLocalSearchParams();
   const pathname = usePathname();
+
   const idParamRaw = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
+
+  const firstStringParamRaw = useMemo(() => {
+    const values = Object.values(params);
+    for (const v of values) {
+      if (typeof v === 'string' && v.trim().length > 0) return v;
+      if (Array.isArray(v) && typeof v[0] === 'string' && String(v[0]).trim().length > 0) return String(v[0]);
+    }
+    return '';
+  }, [params]);
 
   const safeDecode = (value: string): string => {
     const v = String(value ?? '');
@@ -950,11 +964,13 @@ export default function LearnPlantDetailScreen() {
   };
 
   const idParamFromParams = sanitizeParam(String(idParamRaw ?? ''));
+  const idParamFromAnyParam = sanitizeParam(String(firstStringParamRaw ?? ''));
   const idParamFromPath = deriveFromPathname(pathname);
-  const idParam = idParamFromParams || idParamFromPath;
+  const idParam = idParamFromParams || idParamFromAnyParam || idParamFromPath;
   const idParamNormalized = normalizeSlugish(idParam);
   console.log('[learn-detail] route param', {
     raw: idParamRaw,
+    firstStringParamRaw,
     pathname,
     fromParams: idParamFromParams,
     fromPath: idParamFromPath,
