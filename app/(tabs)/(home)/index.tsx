@@ -2981,15 +2981,6 @@ Return JSON with keys:
                         ? 'Tucka Guide is busy right now. Retrying…'
                         : chatError.message}
                     </Text>
-                    {!isBusyChatError(chatError) && __DEV__ ? (
-                      <Text style={styles.chatErrorHint}>
-                        {useRorkBackend
-                          ? 'Debug: Using Rork AI backend.'
-                          : hasOpenAiKey
-                            ? 'Debug: OpenAI key present.'
-                            : 'Debug: OpenAI key missing.'}
-                      </Text>
-                    ) : null}
                     <TouchableOpacity
                       style={styles.chatErrorDismiss}
                       onPress={isBusyChatError(chatError) ? retryChatNow : clearChatError}
@@ -3754,14 +3745,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 16,
-  },
-  chatErrorHint: {
-    flexBasis: '100%',
-    color: '#7F1D1D',
-    fontSize: 11,
-    fontWeight: '600',
-    lineHeight: 14,
-    marginTop: 6,
   },
   chatErrorDismiss: {
     paddingHorizontal: 8,
