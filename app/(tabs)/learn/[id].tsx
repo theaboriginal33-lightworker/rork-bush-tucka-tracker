@@ -130,6 +130,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'safe',
   },
   {
+    id: 'lemon-myrtle',
+    slug: 'lemon-myrtle',
+    commonName: 'Lemon Myrtle',
+    scientificName: 'Native Leaf • Aromatic Herb',
+    category: 'Leaf / Herb',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9aps3g2u5gb9wfop6gmjy',
+    overview:
+      'Lemon Myrtle is a native Australian rainforest tree celebrated for its intense lemon aroma, often stronger than conventional citrus. Traditionally valued by Aboriginal communities, its leaves have been used for flavouring, cleansing, and wellbeing.\n\nToday, Lemon Myrtle is one of the most widely recognised native herbs in modern Australian cuisine.',
+    safetyLevel: 'safe',
+    confidenceHint:
+      'Safe when used as a culinary herb. Very concentrated — use small amounts only; avoid excessive consumption.',
+    seasonality: 'Leaves: Available year-round (best in warmer months)',
+    seasonalityNote: 'Leaves are most aromatic when mature and healthy.',
+    preparation:
+      'Harvest mature leaves. Wash gently and dry. Use fresh, or dry for storage. Crush or grind before use — drying intensifies aroma and shelf life.',
+    suggestedUses:
+      'Herbal teas • Baking & desserts • Seasoning blends • Seafood & poultry • Infused oils & syrups\n\nOften used as a lemon substitute, but with deeper complexity.',
+    culturalNotes:
+      'Traditionally used for cleansing and flavour; leaves are respected for strength and potency. Knowledge is passed through careful use, not excess, and harvest is guided by attention to tree health.\n\nLemon Myrtle teaches restraint — strength lies in balance.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE (Use in Moderation)\n\n• Safe when used as a culinary herb\n• Very concentrated — small amounts only\n• Avoid excessive consumption\n• Generally safe for most people when used appropriately',
+    lookalikes:
+      'Some Myrtaceae species can look similar at a glance. Confirm identification using multiple features (leaf aroma when crushed, leaf shape, habitat) and local guidance before use.',
+    edibleParts: ['leaves'],
+    prepBasics: ['harvest mature leaves', 'wash gently', 'dry (optional)', 'crush or grind', 'use sparingly'],
+    tags: ['Leaf / Herb', 'Safe (Moderation)', 'Preparation: Dry / Infuse', 'Flavour: Lemon / Aromatic', 'Environment: Rainforest'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    isBushTucker: true,
+    isMedicinal: true,
+    edibilityStatus: 'safe',
+  },
+  {
     id: 'kurrajong',
     slug: 'kurrajong',
     commonName: 'Kurrajong',

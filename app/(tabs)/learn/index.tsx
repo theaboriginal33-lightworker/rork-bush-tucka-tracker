@@ -67,6 +67,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/sg7y96jpf74eyg7kql43u',
   },
   {
+    id: 'lemon-myrtle',
+    slug: 'lemon-myrtle',
+    commonName: 'Lemon Myrtle',
+    scientificName: 'Native Leaf • Aromatic Herb',
+    category: 'Leaf / Herb',
+    overview:
+      'Lemon Myrtle is a native Australian rainforest tree celebrated for its intense lemon aroma, often stronger than conventional citrus. Traditionally valued by Aboriginal communities, its leaves have been used for flavouring, cleansing, and wellbeing.\n\nToday, Lemon Myrtle is one of the most widely recognised native herbs in modern Australian cuisine.',
+    isBushTucker: true,
+    isMedicinal: true,
+    safetyLevel: 'safe',
+    edibleParts: ['leaves'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9aps3g2u5gb9wfop6gmjy',
+  },
+  {
     id: 'kurrajong',
     slug: 'kurrajong',
     commonName: 'Kurrajong',
