@@ -11,8 +11,8 @@ function shouldProxyForAttachments(uri: string): boolean {
 
 function proxyToJpeg(uri: string): string {
   const trimmed = uri.trim();
-  const withoutScheme = trimmed.replace(/^https?:\/\//i, '');
-  return `https://images.weserv.nl/?url=${encodeURIComponent(withoutScheme)}&output=jpg&n=-1`;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return `https://images.weserv.nl/?url=${encodeURIComponent(withScheme)}&output=jpg&n=-1`;
 }
 
 type LearnRemoteImageProps = {
