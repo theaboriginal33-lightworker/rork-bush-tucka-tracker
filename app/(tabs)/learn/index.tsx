@@ -107,6 +107,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
   },
   {
+    id: 'bush-tomato',
+    slug: 'bush-tomato',
+    commonName: 'Bush Tomato',
+    scientificName: 'Bush Tomato (Desert Raisin)',
+    category: 'Fruit / Seed',
+    overview:
+      'Bush Tomato, often known as Desert Raisin, is a highly valued native food traditionally harvested across arid and semi-arid regions of Australia. When properly prepared, it has a rich, savoury flavour and is widely used in both traditional and contemporary bush foods.\n\nImportant: only the fully ripe fruit is safe to consume.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'high caution',
+    edibleParts: ['fruit'],
+    heroImageUrl:
+      'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?q=80&w=2670&auto=format&fit=crop',
+  },
+  {
     id: 'bush-plum',
     slug: 'bush-plum',
     commonName: 'Bush Plum',
@@ -252,7 +267,17 @@ export default function LearnScreen() {
   const plants = useMemo<LearnPlant[]>(() => {
     const dataRaw = plantsQuery.data ?? FALLBACK_PLANTS;
     const hasBushPlum = dataRaw.some((p) => p.slug === 'bush-plum' || p.id === 'bush-plum');
-    const data = hasBushPlum ? dataRaw : [...dataRaw, FALLBACK_PLANTS.find((p) => p.slug === 'bush-plum')!];
+    const hasBushTomato = dataRaw.some((p) => p.slug === 'bush-tomato' || p.id === 'bush-tomato');
+
+    let data = dataRaw;
+    if (!hasBushTomato) {
+      const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'bush-tomato');
+      data = fallback ? [...data, fallback] : data;
+    }
+    if (!hasBushPlum) {
+      const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'bush-plum');
+      data = fallback ? [...data, fallback] : data;
+    }
 
     const q = query.trim().toLowerCase();
     if (!q) return data;

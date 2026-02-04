@@ -184,6 +184,38 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://images.unsplash.com/photo-1523498877546-6c8469c4505c?q=80&w=2670&auto=format&fit=crop',
   },
   {
+    id: 'bush-tomato',
+    slug: 'bush-tomato',
+    commonName: 'Bush Tomato',
+    scientificName: 'Bush Tomato (Desert Raisin)',
+    category: 'Fruit / Seed',
+    heroImageUrl:
+      'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?q=80&w=2670&auto=format&fit=crop',
+    overview:
+      'Bush Tomato, often known as Desert Raisin, is a highly valued native food traditionally harvested across arid and semi-arid regions of Australia. When properly prepared, it has a rich, savoury flavour and is widely used in both traditional and contemporary bush foods.\n\nImportant: only the fully ripe fruit is safe to consume.',
+    safetyLevel: 'high caution',
+    confidenceHint:
+      'Only consume fully ripe fruit that has been traditionally dried or properly prepared. Unripe (green) fruit can be toxic. If unsure — do not consume.',
+    seasonality: 'Late Spring → Summer',
+    seasonalityNote:
+      'Often follows rain events in desert regions. Traditionally harvested once plants naturally dry and fruit matures.',
+    preparation:
+      'Harvest only fully ripe fruit. Sun-dry naturally until dark and raisin-like. Store dried fruit in a cool, dry place. Rehydrate or grind when ready to use. Drying neutralises toxins and concentrates flavour.',
+    suggestedUses:
+      'Sauces & relishes • Seasoning blends • Stews & slow-cooked dishes • Pasta & savoury bakes • Contemporary bush spice mixes.\n\nFlavour is often described as umami, caramelised, tomato-like (safe & prepared only).',
+    culturalNotes:
+      'Traditionally harvested after plants dry naturally and often prepared/stored for long journeys. Knowledge is passed through observation, timing, and care. Use varies significantly by Country and community.\n\nCultural knowledge shared here is general and non-restricted. Respect cultural protocols and local knowledge systems.',
+    warnings:
+      'Status: CAUTION — PREPARATION REQUIRED.\n\nUnripe (green) bush tomatoes are toxic.\nOnly consume fruit that is fully ripened and has been traditionally dried or properly prepared.\nNever eat raw or green fruit.\nDo not substitute with lookalike Solanum species.\nIf unsure — do not consume.',
+    lookalikes: 'Do not substitute with lookalike Solanum species. If unsure — do not consume.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest fully ripe fruit only', 'sun-dry until dark and raisin-like', 'store cool & dry', 'rehydrate or grind to use'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local Indigenous voices', 'Field guides (Solanum spp.)'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'caution',
+  },
+  {
     id: 'bush-plum',
     slug: 'bush-plum',
     commonName: 'Bush Plum',
