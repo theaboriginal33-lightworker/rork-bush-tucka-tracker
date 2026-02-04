@@ -214,7 +214,9 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     isMedicinal: false,
     safetyLevel: 'caution',
     edibleParts: ['fruit'],
-    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/97s78gf8aoub5c285davi',
+    heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES['bush-plum'] ??
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/97s78gf8aoub5c285davi',
   },
   {
     id: 'desert-lime',

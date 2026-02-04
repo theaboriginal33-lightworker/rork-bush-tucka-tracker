@@ -500,7 +500,9 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Bush Plum',
     scientificName: undefined,
     category: 'Fruit',
-    heroImageUrl: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/5jlxv3srevkvmlnhqj5ij',
+    heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES['bush-plum'] ??
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/5jlxv3srevkvmlnhqj5ij',
     overview:
       'Bush Plum refers to several native Australian plum species traditionally harvested by Aboriginal communities as a nutrient-dense seasonal food. Flavour ranges from tart to mildly sweet, often enjoyed fresh or dried, and sometimes preserved for later use.\n\nKnowledge and use vary by Country, language group, and season.',
     safetyLevel: 'caution',
