@@ -97,6 +97,39 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     edibilityStatus: 'safe',
   },
   {
+    id: 'kurrajong',
+    slug: 'kurrajong',
+    commonName: 'Kurrajong',
+    scientificName: 'Native Tree • Seed & Fibre Plant',
+    category: 'Seed / Tree',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/btyrnxjhwk5xvf16buiiv',
+    overview:
+      'Kurrajong is a hardy native Australian tree traditionally valued for its seeds, inner bark fibre, and water-holding roots. Found across many regions, it has long supported Aboriginal communities as a reliable survival resource during dry periods.\n\nIts broad canopy and resilience make it a strong symbol of adaptability and endurance on Country.',
+    safetyLevel: 'caution',
+    confidenceHint:
+      'Seeds are not eaten raw. Proper roasting/processing is required. Fibres and roots are not food. Only consume seeds when correctly prepared.',
+    seasonality: 'Seeds / Pods: Late Summer → Autumn',
+    seasonalityNote: 'Pods mature as they dry and split open on the tree.',
+    preparation:
+      'Collect mature, dry pods and remove seeds. Roast thoroughly to neutralise irritants, then eat roasted or grind into a meal/flour (small quantities). Roasting is essential for safety and flavour.',
+    suggestedUses:
+      'Roasted seed snack • Ground seed meal • Emergency food source • Modern bush-inspired flours (small quantities)\n\nTraditionally used when other food sources were scarce.',
+    culturalNotes:
+      'Seeds were harvested during times of need, and the tree was valued for multiple uses beyond food. Inner bark fibre was used for cordage and tools, with knowledge passed through survival teaching.\n\nKurrajong teaches preparedness and respect for resources.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: CAUTION — PREPARATION REQUIRED\n\n• Seeds are not eaten raw\n• Proper roasting/processing is required\n• Fibres and roots are not food\n• Only consume seeds when correctly prepared',
+    lookalikes:
+      'Some seed pods from other native trees can look similar. Confirm identification using multiple traits (leaf shape, pod form, seed characteristics, habitat) and local guidance before consuming.',
+    edibleParts: ['seeds'],
+    prepBasics: ['collect mature, dry pods', 'remove seeds', 'roast thoroughly', 'eat roasted or grind into meal'],
+    tags: ['Seed / Tree', 'Caution', 'Preparation: Required', 'Flavour: Nutty (roasted)', 'Environment: Woodland / Arid'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
+    isBushTucker: true,
+    isMedicinal: false,
+    edibilityStatus: 'caution',
+  },
+  {
     id: 'fallback-2',
     slug: 'wattleseed',
     commonName: 'Wattleseed',

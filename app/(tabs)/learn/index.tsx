@@ -52,6 +52,21 @@ const FALLBACK_PLANTS: LearnPlant[] = [
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/n7m5z15iiqrv0xjj2jfby',
   },
   {
+    id: 'kurrajong',
+    slug: 'kurrajong',
+    commonName: 'Kurrajong',
+    scientificName: 'Native Tree • Seed & Fibre Plant',
+    category: 'Seed / Tree',
+    overview:
+      'Kurrajong is a hardy native Australian tree traditionally valued for its seeds, inner bark fibre, and water-holding roots. Found across many regions, it has long supported Aboriginal communities as a reliable survival resource during dry periods.\n\nIts broad canopy and resilience make it a strong symbol of adaptability and endurance on Country.',
+    isBushTucker: true,
+    isMedicinal: false,
+    safetyLevel: 'caution',
+    edibleParts: ['seeds'],
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/btyrnxjhwk5xvf16buiiv',
+  },
+  {
     id: 'fallback-2',
     slug: 'wattleseed',
     commonName: 'Wattleseed',
@@ -332,6 +347,7 @@ export default function LearnScreen() {
     const hasDesertLime = dataRaw.some((p) => p.slug === 'desert-lime' || p.id === 'desert-lime');
     const hasDorrigoPepper = dataRaw.some((p) => p.slug === 'dorrigo-pepper' || p.id === 'dorrigo-pepper');
     const hasEmuApple = dataRaw.some((p) => p.slug === 'emu-apple' || p.id === 'emu-apple');
+    const hasKurrajong = dataRaw.some((p) => p.slug === 'kurrajong' || p.id === 'kurrajong');
 
     let data = dataRaw;
     if (!hasBushTomato) {
@@ -352,6 +368,10 @@ export default function LearnScreen() {
     }
     if (!hasEmuApple) {
       const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'emu-apple');
+      data = fallback ? [...data, fallback] : data;
+    }
+    if (!hasKurrajong) {
+      const fallback = FALLBACK_PLANTS.find((p) => p.slug === 'kurrajong');
       data = fallback ? [...data, fallback] : data;
     }
 
