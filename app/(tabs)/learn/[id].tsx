@@ -423,9 +423,22 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
   const trimmed = idOrSlug.trim();
   if (!trimmed) return null;
 
-  const local =
-    FALLBACK_PLANTS.find((p) => normalizeSlugish(p.slug) === normalizeSlugish(trimmed) || normalizeSlugish(p.id) === normalizeSlugish(trimmed)) ??
+  const key = normalizeSlugish(trimmed);
+
+  const localExact =
+    FALLBACK_PLANTS.find((p) => normalizeSlugish(p.slug) === key || normalizeSlugish(p.id) === key) ?? null;
+
+  const localFuzzy =
+    localExact ??
+    FALLBACK_PLANTS.find((p) => {
+      const slug = normalizeSlugish(p.slug);
+      const id = normalizeSlugish(p.id);
+      const name = p.commonName.toLowerCase();
+      return slug === key || id === key || slug.includes(key) || key.includes(slug) || name.includes(trimmed.toLowerCase());
+    }) ??
     null;
+
+  const local = localFuzzy;
 
   if (!hasSupabaseConfig) {
     console.log('[learn-detail] supabase not configured; using fallback', supabasePublicDebugInfo);
@@ -435,12 +448,14 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
   try {
     console.log('[learn-detail] fetching plant', { idOrSlug: trimmed, fallbackHit: Boolean(local) });
 
+    const slugValue = key.length > 0 ? key : trimmed;
+
     const { data, error } = await supabase
       .from('plants')
       .select(
         'id, slug, common_name, scientific_name, category, is_bush_tucker, is_medicinal, safety_level, confidence_hint, overview, edible_parts, preparation, seasonality, warnings, lookalikes, cultural_notes, suggested_uses, prep_basics, seasonality_note, source_refs, edibility_status, created_at, updated_at'
       )
-      .or(`id.eq.${trimmed},slug.eq.${trimmed}`)
+      .or(`id.eq.${trimmed},slug.eq.${trimmed},slug.eq.${slugValue}`)
       .limit(1)
       .maybeSingle();
 
@@ -486,8 +501,24 @@ async function fetchPlantByIdOrSlug(idOrSlug: string): Promise<LearnPlant | null
 export default function LearnPlantDetailScreen() {
   const params = useLocalSearchParams();
   const idParamRaw = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
-  const idParam = String(idParamRaw ?? '').trim();
-  console.log('[learn-detail] route param', { id: idParamRaw, normalized: idParam });
+
+  const sanitizeParam = (raw: string): string => {
+    const trimmed = String(raw ?? '').trim();
+    if (!trimmed) return '';
+
+    const noFragment = trimmed.split('#')[0] ?? '';
+    const noQuery = noFragment.split('?')[0] ?? '';
+    const firstSegment = noQuery.split('/')[0] ?? '';
+
+    try {
+      return decodeURIComponent(firstSegment).trim();
+    } catch {
+      return firstSegment.trim();
+    }
+  };
+
+  const idParam = sanitizeParam(String(idParamRaw ?? ''));
+  console.log('[learn-detail] route param', { id: idParamRaw, sanitized: idParam });
 
   const { getPlantImageUrl, setPlantImageUrl, clearPlantImageUrl } = useLearnImages();
 
