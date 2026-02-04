@@ -1,5 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image as RNImage, ImageStyle, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image as RNImage,
+  ImageStyle,
+  Platform,
+  StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  ViewStyle,
+} from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 
 function isAttachmentLikeUri(uri: string): boolean {
@@ -41,13 +51,17 @@ export function LearnRemoteImage({
   const [hasError, setHasError] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentUri, setCurrentUri] = useState<string>('');
+  const [loadTimedOut, setLoadTimedOut] = useState<boolean>(false);
+  const loadStartRef = useRef<number>(Date.now());
 
   const normalizedUri = useMemo(() => String(uri ?? '').trim(), [uri]);
 
   useEffect(() => {
     setHasError(false);
     setIsLoading(true);
+    setLoadTimedOut(false);
     setCurrentUri(normalizedUri);
+    loadStartRef.current = Date.now();
   }, [normalizedUri]);
 
   const attachmentProxyUri = useMemo(() => {
@@ -73,9 +87,40 @@ export function LearnRemoteImage({
 
   const resolvedUri = useMemo(() => String(currentUri ?? '').trim(), [currentUri]);
 
+  useEffect(() => {
+    if (!resolvedUri) return;
+
+    const timeoutMs = 9000;
+    const t = setTimeout(() => {
+      if (!isLoading) return;
+      console.log('[LearnRemoteImage] load timeout -> forcing fallback', {
+        uri: resolvedUri,
+        platform: Platform.OS,
+        ms: Date.now() - loadStartRef.current,
+        original: normalizedUri,
+        attachmentProxyUri,
+      });
+      setLoadTimedOut(true);
+      setHasError(true);
+      setIsLoading(false);
+      onError?.('timeout');
+    }, timeoutMs);
+
+    return () => clearTimeout(t);
+  }, [attachmentProxyUri, isLoading, normalizedUri, onError, resolvedUri]);
+
+  const containerStyle = useMemo<StyleProp<ViewStyle>>(() => {
+    const base: ViewStyle = { position: 'relative' };
+    return [base, style as StyleProp<ViewStyle>];
+  }, [style]);
+
+  const imageFillStyle = useMemo<StyleProp<ImageStyle>>(() => {
+    return StyleSheet.absoluteFillObject as ImageStyle;
+  }, []);
+
   if (!resolvedUri) {
     return (
-      <View style={style} testID={testID}>
+      <View style={containerStyle} testID={testID}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator />
         </View>
@@ -84,10 +129,10 @@ export function LearnRemoteImage({
   }
 
   const fallback = (
-    <View style={style} testID={testID ? `${testID}-rn-wrap` : undefined}>
+    <View style={containerStyle} testID={testID ? `${testID}-rn-wrap` : undefined}>
       <RNImage
         source={{ uri: resolvedUri }}
-        style={{ width: '100%', height: '100%' }}
+        style={imageFillStyle}
         resizeMode={contentFit === 'contain' ? 'contain' : 'cover'}
         onLoad={() => {
           console.log('[LearnRemoteImage] RNImage loaded', { uri: resolvedUri, platform: Platform.OS });
@@ -115,6 +160,7 @@ export function LearnRemoteImage({
           }
 
           setIsLoading(false);
+          setLoadTimedOut(false);
           onError?.(err);
         }}
         testID={testID ? `${testID}-rn` : undefined}
@@ -122,12 +168,10 @@ export function LearnRemoteImage({
 
       {isLoading ? (
         <View
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(0,0,0,0.06)',
-          }}
+          style={[
+            styles.loadingOverlay,
+            { backgroundColor: 'rgba(0,0,0,0.06)' },
+          ]}
           pointerEvents="none"
           testID={testID ? `${testID}-loading` : undefined}
         >
@@ -140,11 +184,11 @@ export function LearnRemoteImage({
   if (hasError) return fallback;
 
   return (
-    <View style={style} testID={testID ? `${testID}-expo-wrap` : undefined}>
+    <View style={containerStyle} testID={testID ? `${testID}-expo-wrap` : undefined}>
       <ExpoImage
         key={resolvedUri}
         source={{ uri: resolvedUri }}
-        style={{ width: '100%', height: '100%' }}
+        style={imageFillStyle}
         contentFit={contentFit}
         transition={transition}
         cachePolicy={cachePolicy}
@@ -182,19 +226,33 @@ export function LearnRemoteImage({
       />
 
       {isLoading ? (
-        <View
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(0,0,0,0.06)',
-          }}
-          pointerEvents="none"
-          testID={testID ? `${testID}-loading` : undefined}
-        >
+        <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.06)' }]} pointerEvents="none" testID={testID ? `${testID}-loading` : undefined}>
           <ActivityIndicator />
+        </View>
+      ) : null}
+
+      {loadTimedOut ? (
+        <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.08)', paddingHorizontal: 10 }]} pointerEvents="none">
+          <Text style={styles.timeoutText} numberOfLines={2}>
+            Image timed out
+          </Text>
         </View>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeoutText: {
+    marginTop: 10,
+    color: 'rgba(20,20,20,0.7)',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+});
