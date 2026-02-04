@@ -231,6 +231,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     safetyLevel: 'safe',
     edibleParts: ['fruit'],
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES['desert-lime'] ??
       'https://images.unsplash.com/photo-1580915411954-282cb1c96b3b?q=80&w=2787&auto=format&fit=crop',
   },
   {

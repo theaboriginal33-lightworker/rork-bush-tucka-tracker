@@ -533,6 +533,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     scientificName: 'Desert Lime',
     category: 'Fruit',
     heroImageUrl:
+      LEARN_HERO_IMAGE_OVERRIDES['desert-lime'] ??
       'https://images.unsplash.com/photo-1580915411954-282cb1c96b3b?q=80&w=2787&auto=format&fit=crop',
     overview:
       'Desert Lime is a hardy native citrus traditionally found in arid and semi-arid regions of Australia. Small in size but powerful in flavour, it delivers a sharp, tangy citrus punch prized in both traditional use and modern bush-food cuisine.\n\nThis plant thrives where others don’t — a true symbol of resilience, adaptation, and Country knowledge.',
