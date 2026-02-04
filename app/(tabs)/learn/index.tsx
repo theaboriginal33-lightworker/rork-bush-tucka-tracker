@@ -118,7 +118,7 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     scientificName: 'Native Shrub • Flower Bud & Fruit',
     category: 'Shrub / Condiment',
     overview:
-      'Native Caper Bush refers to several native Capparis species found across arid, semi-arid, and coastal regions of Australia. Traditionally, different parts of the plant — including flower buds and ripe fruit — have been used as food after correct preparation.\n\nFlavour is sharp, tangy, and savoury, similar to Mediterranean capers but uniquely adapted to Australian conditions.',
+      'Native Caper Bush refers to several native Capparis species found across arid, semi-arid, and coastal regions of Australia. Traditionally, different parts of the plant — including flower buds and ripe fruit — have been used as food after correct preparation.\n\nFlavour is sharp, tangy, and savoury, similar to Mediterranean capers but uniquely adapted to Australian conditions.\n\nNutritional insight (general): traditionally valued for digestive stimulation, flavour enhancement, and seasonal variety in arid diets. Nutritional content varies by species and preparation.',
     isBushTucker: true,
     isMedicinal: false,
     safetyLevel: 'caution',

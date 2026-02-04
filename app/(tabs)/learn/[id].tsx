@@ -298,25 +298,38 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     heroImageUrl:
       'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/inpehr5gvdisuvxibesep',
     overview:
-      'Native Caper Bush refers to several native Capparis species found across arid, semi-arid, and coastal regions of Australia. Traditionally, different parts of the plant — including flower buds and ripe fruit — have been used as food after correct preparation.\n\nFlavour is sharp, tangy, and savoury, similar to Mediterranean capers but uniquely adapted to Australian conditions.',
+      'Native Caper Bush refers to several native Capparis species found across arid, semi-arid, and coastal regions of Australia. Traditionally, different parts of the plant — including flower buds and ripe fruit — have been used as food after correct preparation.\n\nFlavour is sharp, tangy, and savoury, similar to Mediterranean capers but uniquely adapted to Australian conditions.\n\nNutritional insight (general): traditionally valued for digestive stimulation, flavour enhancement, and seasonal variety in arid diets. Nutritional content varies by species and preparation.',
     safetyLevel: 'caution',
     confidenceHint:
-      'Only specific parts are edible, and correct preparation matters. If unsure of the species or part, do not consume.',
+      'Only specific plant parts are edible, and correct preparation matters. If unsure of the species or part, do not consume.',
     seasonality: 'Flower buds: Spring → Early Summer • Fruit: Summer',
     seasonalityNote: 'Timing varies by rainfall and region.',
     preparation:
-      'Flower buds: harvest young buds, soak or ferment in brine, then rinse before use.\n\nFruit: harvest fully ripe fruit, cook or process before eating; discard seeds if advised by local knowledge. Preparation reduces bitterness and improves flavour.',
+      'Flower buds: harvest young buds, soak or ferment in brine, then rinse before use.\n\nFruit: harvest fully ripe fruit, cook or process before eating, discard seeds if advised by local knowledge.\n\nPreparation reduces bitterness and improves flavour.',
     suggestedUses:
       'Pickled caper-style buds • Savoury sauces • Condiments • Vegetable dishes • Modern bush-inspired garnishes\n\nOften used as a flavour accent, not a main ingredient.',
     culturalNotes:
-      'Knowledge of edible parts is highly localised, and preparation techniques are passed through experience. Often harvested sparingly, reflecting deep understanding of plant chemistry.\n\nNative Caper Bush teaches discernment — not everything edible is obvious.\n\nCultural knowledge shared here is general and non-restricted.',
+      'Knowledge of edible parts is highly localised. Preparation techniques are passed through experience. Often harvested sparingly, reflecting deep understanding of plant chemistry.\n\nNative Caper Bush teaches discernment — not everything edible is obvious.\n\nRespect & sustainability:\n• Harvest lightly\n• Never over-strip buds or fruit\n• Leave plants to regenerate\n• Respect land access and custodianship\n\nApp guidance:\n• Gate recipes behind preparation acknowledgement\n• Prompt confirmation of plant part\n• Suggest pickling/fermentation guidance\n• Avoid raw-use suggestions\n\nCultural knowledge shared here is general and non-restricted.',
     warnings:
       'Status: CAUTION — CORRECT PART & PREPARATION REQUIRED\n\n• Only specific plant parts are edible\n• Unripe fruit and raw buds can be bitter or unsafe\n• Proper preparation is essential\n• Never consume unless correctly identified\n• If unsure, do not consume',
     lookalikes:
       'Some shrubs with similar buds/fruit occur in arid and coastal systems. Confirm identification using multiple traits (leaf form, flower structure, fruit shape, habitat) and local guidance.',
     edibleParts: ['flower buds', 'fruit'],
-    prepBasics: ['harvest young buds', 'brine/ferment', 'rinse', 'harvest fully ripe fruit', 'cook/process'],
-    tags: ['Shrub / Condiment', 'Caution', 'Preparation: Required', 'Flavour: Tangy / Savoury', 'Environment: Arid / Coastal'],
+    prepBasics: [
+      'harvest young buds',
+      'soak or ferment in brine',
+      'rinse before use',
+      'harvest fully ripe fruit',
+      'cook or process before eating',
+      'discard seeds if advised by local knowledge',
+    ],
+    tags: [
+      'Shrub / Condiment',
+      'Safety: Caution',
+      'Preparation: Required',
+      'Flavour Profile: Tangy / Savoury',
+      'Environment: Arid / Coastal',
+    ],
     sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
     isBushTucker: true,
     isMedicinal: false,
