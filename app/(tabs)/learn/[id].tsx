@@ -31,6 +31,7 @@ type LearnPlant = {
   prepBasics?: string[];
   seasonalityNote?: string;
   sourceRefs?: string[];
+  tags?: string[];
   edibilityStatus?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -117,23 +118,31 @@ const FALLBACK_PLANTS: LearnPlant[] = [
     commonName: 'Davidson Plum',
     scientificName: 'Davidsonia spp.',
     category: 'Fruit',
-    overview: 'Tart rainforest fruit great for jams, sauces and syrups.',
+    heroImageUrl:
+      'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/k95ccbdmm9553oq2sjwcr',
+    overview:
+      'Davidson Plum is a native rainforest fruit traditionally found along the east coast of Australia. Known for its deep purple flesh and sharp, tart flavour, it is rarely eaten raw but highly valued once prepared.\n\nThis fruit is widely used in contemporary bush foods, blending traditional knowledge with modern culinary practice.',
+    safetyLevel: 'safe',
+    confidenceHint: 'Very acidic — not usually eaten raw. Best used cooked, preserved, or processed.',
+    seasonality: 'Summer → Early Autumn',
+    seasonalityNote: 'Harvested when fruit falls naturally or turns deep purple.',
+    preparation:
+      'Harvest ripe fruit only. Remove seed before use. Cook, ferment, or preserve to balance acidity. Combine with sweet or savoury elements. Cooking enhances flavour and reduces sharpness.',
+    suggestedUses:
+      'Jams & preserves • Sauces & reductions • Syrups & drinks • Desserts & baking • Marinades & glazes.\n\nDavidson Plum is prized for its colour, acidity, and complexity.',
+    culturalNotes:
+      'Traditionally harvested from rainforest Country. Use and knowledge vary by Nation and region. Fruit is often shared, preserved, or traded. Respectful harvesting maintains tree health.\n\nKnowledge systems are local — always learn from Country.\n\nCultural knowledge shared here is general and non-restricted.',
+    warnings:
+      'Status: SAFE — PREPARATION ADVISED\n\n• Safe to consume when ripe\n• Very acidic — not usually eaten raw\n• Best used cooked, preserved, or processed\n• Suitable for most people when prepared properly',
+    lookalikes:
+      'Many rainforest fruits can be confused at a glance. Confirm ID using multiple features (leaf shape, fruit form/colour, habitat) and local guidance before eating.',
+    edibleParts: ['fruit'],
+    prepBasics: ['harvest ripe fruit only', 'remove seed', 'cook/ferment/preserve', 'balance with sweet or savoury'],
+    tags: ['Rainforest Native Fruit', 'Safe', 'Preparation: Recommended', 'Flavour: Sour / Acidic', 'Cultural Use: Regional'],
+    sourceRefs: ['Community knowledge (varies by Country)', 'Local field guides', 'Local Indigenous voices'],
     isBushTucker: true,
     isMedicinal: false,
-    safetyLevel: 'unknown',
-    confidenceHint: 'Taste is very sour—use cooked or sweetened preparations.',
-    edibleParts: ['fruit'],
-    preparation: 'Cook into jams/syrups or blend into sauces; remove seeds.',
-    seasonality: 'Varies by region',
-    warnings: 'Confirm ID; avoid unripe fruit if very astringent.',
-    lookalikes: 'Other rainforest fruits; check leaf and fruit shape.',
-    culturalNotes: 'Harvest sustainably; avoid stripping trees.',
-    suggestedUses: 'Jam, chutney, syrup, sauces.',
-    prepBasics: ['wash', 'pit/seed', 'cook down'],
-    sourceRefs: ['Local field guides', 'Community knowledge'],
-    edibilityStatus: 'unknown',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1678165842817-062e21245781?q=80&w=2574&auto=format&fit=crop',
+    edibilityStatus: 'safe',
   },
   {
     id: 'fallback-4',
@@ -417,8 +426,10 @@ export default function LearnPlantDetailScreen() {
     if (plant?.isMedicinal) out.push('Medicinal');
     if (plant?.safetyLevel) out.push(`Safety: ${plant.safetyLevel}`);
     if (plant?.edibilityStatus) out.push(`Edibility: ${plant.edibilityStatus}`);
-    return out;
-  }, [plant?.category, plant?.edibilityStatus, plant?.isBushTucker, plant?.isMedicinal, plant?.safetyLevel]);
+    const extraTags = (plant?.tags ?? []).map((t) => String(t)).filter((t) => t.trim().length > 0);
+    out.push(...extraTags);
+    return Array.from(new Set(out));
+  }, [plant?.category, plant?.edibilityStatus, plant?.isBushTucker, plant?.isMedicinal, plant?.safetyLevel, plant?.tags]);
 
   const edibleParts = useMemo<string[]>(() => {
     return (plant?.edibleParts ?? []).map((t) => String(t)).filter((t) => t.trim().length > 0).slice(0, 12);
