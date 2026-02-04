@@ -124,18 +124,14 @@ export function LearnRemoteImage({
   }, [style]);
 
   const imageFillStyle = useMemo<StyleProp<ImageStyle>>(() => {
-    if (Platform.OS === 'web') {
-      const s: ImageStyle = {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-      };
-      return s;
-    }
-
-    return StyleSheet.absoluteFillObject as ImageStyle;
+    const s: ImageStyle = {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    };
+    return s;
   }, []);
 
   if (!renderUri) {
@@ -201,6 +197,8 @@ export function LearnRemoteImage({
       ) : null}
     </View>
   );
+
+  if (Platform.OS === 'web') return fallback;
 
   if (hasError) return fallback;
 
