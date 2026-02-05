@@ -3275,7 +3275,7 @@ Return JSON with keys:
                 <View style={styles.guideIconBrand}>
                   <Image
                     source={{
-                      uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/q0ba7e9rhso2gk6j3v492',
+                      uri: 'https://r2-pub.rork.com/generated-images/ecd891a0-aa88-436a-a7c0-74f96bbb2eab.png',
                     }}
                     style={styles.guideIconArt}
                     contentFit="contain"
