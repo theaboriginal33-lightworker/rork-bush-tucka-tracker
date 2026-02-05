@@ -3298,6 +3298,48 @@ Return JSON with keys:
                 </Text>
                 <Text style={styles.guideCount}>Pocket guide</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.guideCard, styles.guideCardBrand]}
+                onPress={() => {
+                  console.log('[Home] open pocket guide', { slug: 'if-something-goes-wrong' });
+                  router.push('/pocket-guides/if-something-goes-wrong');
+                }}
+                testID="pocket-guide-card-if-something-wrong"
+              >
+                <LinearGradient
+                  colors={['rgba(56,217,137,0.18)', 'rgba(246,196,69,0.18)', 'rgba(255,140,60,0.18)']}
+                  start={{ x: 0.05, y: 0.0 }}
+                  end={{ x: 0.95, y: 1.0 }}
+                  style={styles.guideCardGlow}
+                />
+
+                <View style={styles.guideIconBrand}>
+                  <Image
+                    source={{
+                      uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/te8vqa5rsun5j348kk3ln',
+                    }}
+                    style={styles.guideIconArt}
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
+                    transition={140}
+                    testID="pocket-guide-icon-if-something-wrong"
+                    onLoad={() => console.log('[Home] pocket guide icon loaded', { slug: 'if-something-goes-wrong' })}
+                    onError={(e) =>
+                      console.log('[Home] pocket guide icon load error', {
+                        slug: 'if-something-goes-wrong',
+                        error: (e as unknown as { error?: string })?.error,
+                      })
+                    }
+                  />
+                </View>
+
+                <Text style={styles.guideTitle} numberOfLines={2}>
+                  If Something
+                  {'\n'}Goes Wrong
+                </Text>
+                <Text style={styles.guideCount}>Pocket guide</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
 
