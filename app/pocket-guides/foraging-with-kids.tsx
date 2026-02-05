@@ -30,7 +30,7 @@ type GuideSection = {
   icon: 'core' | 'observe' | 'safety' | 'wildlife' | 'less' | 'play' | 'teaching' | 'promise' | 'why';
 };
 
-const ART_URI = 'https://r2-pub.rork.com/generated-images/aabd01af-554f-4bb0-a96b-3f80b1bdf21e.png';
+const ART_URI = 'https://r2-pub.rork.com/generated-images/50835e04-6a03-4f4c-87c8-eee59a6447ce.png';
 
 const OCHRE = '#F6C445' as const;
 const OCHRE_DEEP = '#FF8C3C' as const;
