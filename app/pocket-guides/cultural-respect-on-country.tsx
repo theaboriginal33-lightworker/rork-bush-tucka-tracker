@@ -36,7 +36,7 @@ type GuideSection = {
 };
 
 const ART_URI =
-  'https://r2-pub.rork.com/generated-images/5d6196cf-6797-44a6-a08c-43f48ad17307.png';
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/r5y6q5zltfpde776ienrb';
 
 const OCHRE = '#F6C445' as const;
 const OCHRE_DEEP = '#FF8C3C' as const;
@@ -426,6 +426,7 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 66,
     height: 66,
+    backgroundColor: 'transparent',
   },
   heroTitleWrap: {
     flex: 1,
