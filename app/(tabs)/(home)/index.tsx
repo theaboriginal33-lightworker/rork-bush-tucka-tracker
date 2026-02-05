@@ -9,13 +9,11 @@ import {
   AlertTriangle,
   ArrowRight,
   BookmarkPlus,
-  Bug,
   Copy,
   Download,
   ChevronRight,
   HelpCircle,
   Image as ImageIcon,
-  Leaf,
   MessageCircle,
   RefreshCcw,
   Scan,
@@ -952,10 +950,14 @@ export default function HomeScreen() {
       retryChatNow().catch(() => undefined);
     }, delayMs);
 
+    const busyRetry = busyRetryRef.current;
+    const timerToClear = busyRetry.timer;
     return () => {
-      if (busyRetryRef.current.timer) {
-        clearTimeout(busyRetryRef.current.timer);
-        busyRetryRef.current.timer = null;
+      if (timerToClear) {
+        clearTimeout(timerToClear);
+      }
+      if (busyRetry.timer === timerToClear) {
+        busyRetry.timer = null;
       }
     };
   }, [chatError, isBusyChatError, retryChatNow]);
@@ -1643,6 +1645,7 @@ ${scanContext}`;
     chatInput,
     clearChatError,
     handleSupportRequest,
+    isRegionOnlyMessage,
     sendDisabled,
     sendMessage,
     updateRegionFromText,
@@ -1681,6 +1684,7 @@ ${scanContext}`;
       chatError,
       clearChatError,
       handleSupportRequest,
+      isRegionOnlyMessage,
       sendMessage,
       updateRegionFromText,
       needsRegionForQuestion,
@@ -2138,7 +2142,7 @@ Return JSON with keys:
                 }
 
                 if (chosenBase64 && chosenBase64.length > maxDataUriLength) {
-                  const fallbackCandidates: Array<{ width: number; compress: number }> = [
+                  const fallbackCandidates: { width: number; compress: number }[] = [
                     { width: 640, compress: 0.52 },
                     { width: 420, compress: 0.45 },
                   ];
@@ -3254,18 +3258,45 @@ Return JSON with keys:
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.guideCard, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: DARK.border }]}
-                onPress={() => Alert.alert('Coming soon', 'This pocket guide is being prepared.')}
-                testID="pocket-guide-card-coming-soon-2"
+                style={[styles.guideCard, styles.guideCardBrand]}
+                onPress={() => {
+                  console.log('[Home] open pocket guide', { slug: 'foraging-with-kids' });
+                  router.push('/pocket-guides/foraging-with-kids');
+                }}
+                testID="pocket-guide-card-foraging-kids"
               >
-                <View style={[styles.guideIcon, { backgroundColor: 'rgba(246,196,69,0.14)', borderWidth: 1, borderColor: 'rgba(246,196,69,0.22)' }]}>
-                  <AlertTriangle size={22} color={COLORS.warning} />
+                <LinearGradient
+                  colors={['rgba(56,217,137,0.22)', 'rgba(246,196,69,0.20)', 'rgba(255,140,60,0.14)']}
+                  start={{ x: 0.05, y: 0.0 }}
+                  end={{ x: 0.95, y: 1.0 }}
+                  style={styles.guideCardGlow}
+                />
+
+                <View style={styles.guideIconBrand}>
+                  <Image
+                    source={{
+                      uri: 'https://r2-pub.rork.com/generated-images/71aab140-1c0d-4112-9987-b260869bdcc5.png',
+                    }}
+                    style={styles.guideIconArt}
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
+                    transition={140}
+                    testID="pocket-guide-icon-foraging-kids"
+                    onLoad={() => console.log('[Home] pocket guide icon loaded', { slug: 'foraging-with-kids' })}
+                    onError={(e) =>
+                      console.log('[Home] pocket guide icon load error', {
+                        slug: 'foraging-with-kids',
+                        error: (e as unknown as { error?: string })?.error,
+                      })
+                    }
+                  />
                 </View>
+
                 <Text style={styles.guideTitle} numberOfLines={2}>
-                  Safety &
-                  {'\n'}Lookalikes
+                  Foraging
+                  {'\n'}With Kids
                 </Text>
-                <Text style={styles.guideCount}>Coming soon</Text>
+                <Text style={styles.guideCount}>Pocket guide</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
