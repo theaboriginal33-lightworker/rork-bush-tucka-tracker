@@ -3212,18 +3212,45 @@ Return JSON with keys:
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.guideCard, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: DARK.border }]}
-                onPress={() => Alert.alert('Coming soon', 'This pocket guide is being prepared.')}
-                testID="pocket-guide-card-coming-soon-1"
+                style={[styles.guideCard, styles.guideCardBrand]}
+                onPress={() => {
+                  console.log('[Home] open pocket guide', { slug: 'animal-care-and-share' });
+                  router.push('/pocket-guides/animal-care-and-share');
+                }}
+                testID="pocket-guide-card-animal-care"
               >
-                <View style={[styles.guideIcon, { backgroundColor: 'rgba(56,217,137,0.14)', borderWidth: 1, borderColor: 'rgba(56,217,137,0.22)' }]}>
-                  <Leaf size={22} color={COLORS.primary} />
+                <LinearGradient
+                  colors={['rgba(56,217,137,0.22)', 'rgba(246,196,69,0.20)', 'rgba(255,140,60,0.14)']}
+                  start={{ x: 0.05, y: 0.0 }}
+                  end={{ x: 0.95, y: 1.0 }}
+                  style={styles.guideCardGlow}
+                />
+
+                <View style={styles.guideIconBrand}>
+                  <Image
+                    source={{
+                      uri: 'https://r2-pub.rork.com/generated-images/fe0dfa28-4dd0-4574-b256-a3bc44b69f81.png',
+                    }}
+                    style={styles.guideIconArt}
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
+                    transition={140}
+                    testID="pocket-guide-icon-animal-care"
+                    onLoad={() => console.log('[Home] pocket guide icon loaded', { slug: 'animal-care-and-share' })}
+                    onError={(e) =>
+                      console.log('[Home] pocket guide icon load error', {
+                        slug: 'animal-care-and-share',
+                        error: (e as unknown as { error?: string })?.error,
+                      })
+                    }
+                  />
                 </View>
+
                 <Text style={styles.guideTitle} numberOfLines={2}>
-                  Sustainable
-                  {'\n'}Harvesting
+                  Animal Care
+                  {'\n'}& Share
                 </Text>
-                <Text style={styles.guideCount}>Coming soon</Text>
+                <Text style={styles.guideCount}>Pocket guide</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
