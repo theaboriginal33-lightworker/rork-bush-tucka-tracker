@@ -3151,39 +3151,94 @@ Return JSON with keys:
             )}
           </View>
 
-          {/* Quick Categories / Guides */}
+          {/* Handy Pocket Guides */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Handy Pocket Guides</Text>
-              <TouchableOpacity style={styles.seeAllButton}>
+              <TouchableOpacity
+                style={styles.seeAllButton}
+                onPress={() => {
+                  console.log('[Home] pocket guides: See All pressed');
+                  Alert.alert('Coming soon', 'More Handy Pocket Guides are being added.');
+                }}
+                testID="pocket-guides-see-all"
+              >
                 <Text style={styles.seeAllText}>See All</Text>
                 <ArrowRight size={16} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.guidesScroll}>
-              <TouchableOpacity style={[styles.guideCard, { backgroundColor: '#E3F2FD' }]}>
-                <View style={[styles.guideIcon, { backgroundColor: '#BBDEFB' }]}>
-                  <Bug size={24} color="#1565C0" />
+              <TouchableOpacity
+                style={[styles.guideCard, styles.guideCardBrand]}
+                onPress={() => {
+                  console.log('[Home] open pocket guide', { slug: 'cultural-respect-on-country' });
+                  router.push('/pocket-guides/cultural-respect-on-country');
+                }}
+                testID="pocket-guide-card-cultural-respect"
+              >
+                <LinearGradient
+                  colors={['rgba(56,217,137,0.26)', 'rgba(246,196,69,0.20)', 'rgba(255,140,60,0.14)']}
+                  start={{ x: 0.05, y: 0.0 }}
+                  end={{ x: 0.95, y: 1.0 }}
+                  style={styles.guideCardGlow}
+                />
+
+                <View style={styles.guideIconBrand}>
+                  <Image
+                    source={{
+                      uri: 'https://r2-pub.rork.com/generated-images/3557752f-d8c5-4990-8e75-39a56c0573a4.png',
+                    }}
+                    style={styles.guideIconArt}
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
+                    transition={140}
+                    testID="pocket-guide-icon-cultural-respect"
+                    onLoad={() => console.log('[Home] pocket guide icon loaded', { slug: 'cultural-respect-on-country' })}
+                    onError={(e) =>
+                      console.log('[Home] pocket guide icon load error', {
+                        slug: 'cultural-respect-on-country',
+                        error: (e as unknown as { error?: string })?.error,
+                      })
+                    }
+                  />
                 </View>
-                <Text style={styles.guideTitle}>Edible Insects</Text>
-                <Text style={styles.guideCount}>12 Species</Text>
+
+                <Text style={styles.guideTitle} numberOfLines={2}>
+                  Cultural respect
+                  {'\n'}On Country
+                </Text>
+                <Text style={styles.guideCount}>Pocket guide</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.guideCard, { backgroundColor: '#E8F5E9' }]}>
-                <View style={[styles.guideIcon, { backgroundColor: '#C8E6C9' }]}>
-                  <Leaf size={24} color="#2E7D32" />
+              <TouchableOpacity
+                style={[styles.guideCard, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: DARK.border }]}
+                onPress={() => Alert.alert('Coming soon', 'This pocket guide is being prepared.')}
+                testID="pocket-guide-card-coming-soon-1"
+              >
+                <View style={[styles.guideIcon, { backgroundColor: 'rgba(56,217,137,0.14)', borderWidth: 1, borderColor: 'rgba(56,217,137,0.22)' }]}>
+                  <Leaf size={22} color={COLORS.primary} />
                 </View>
-                <Text style={styles.guideTitle}>Native Berries</Text>
-                <Text style={styles.guideCount}>24 Species</Text>
+                <Text style={styles.guideTitle} numberOfLines={2}>
+                  Sustainable
+                  {'\n'}Harvesting
+                </Text>
+                <Text style={styles.guideCount}>Coming soon</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.guideCard, { backgroundColor: '#FFF3E0' }]}>
-                <View style={[styles.guideIcon, { backgroundColor: '#FFE0B2' }]}>
-                  <AlertTriangle size={24} color="#E65100" />
+              <TouchableOpacity
+                style={[styles.guideCard, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: DARK.border }]}
+                onPress={() => Alert.alert('Coming soon', 'This pocket guide is being prepared.')}
+                testID="pocket-guide-card-coming-soon-2"
+              >
+                <View style={[styles.guideIcon, { backgroundColor: 'rgba(246,196,69,0.14)', borderWidth: 1, borderColor: 'rgba(246,196,69,0.22)' }]}>
+                  <AlertTriangle size={22} color={COLORS.warning} />
                 </View>
-                <Text style={styles.guideTitle}>Toxic Lookalikes</Text>
-                <Text style={styles.guideCount}>8 Species</Text>
+                <Text style={styles.guideTitle} numberOfLines={2}>
+                  Safety &
+                  {'\n'}Lookalikes
+                </Text>
+                <Text style={styles.guideCount}>Coming soon</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -3527,11 +3582,35 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   guideCard: {
-    width: 140,
+    width: 152,
     padding: 16,
     borderRadius: 24,
     justifyContent: 'space-between',
-    height: 160,
+    height: 176,
+  },
+  guideCardBrand: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,217,137,0.22)',
+    overflow: 'hidden',
+  },
+  guideCardGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  guideIconBrand: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(7,10,8,0.52)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  guideIconArt: {
+    width: 44,
+    height: 44,
   },
   guideIcon: {
     width: 48,
