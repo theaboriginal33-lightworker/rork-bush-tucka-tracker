@@ -36,7 +36,7 @@ type GuideSection = {
 };
 
 const ART_URI =
-  'https://r2-pub.rork.com/generated-images/3557752f-d8c5-4990-8e75-39a56c0573a4.png';
+  'https://r2-pub.rork.com/generated-images/5d6196cf-6797-44a6-a08c-43f48ad17307.png';
 
 const OCHRE = '#F6C445' as const;
 const OCHRE_DEEP = '#FF8C3C' as const;
