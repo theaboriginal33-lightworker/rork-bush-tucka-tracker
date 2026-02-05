@@ -3275,7 +3275,7 @@ Return JSON with keys:
                 <View style={styles.guideIconBrand}>
                   <Image
                     source={{
-                      uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/y9a3k7oi873ukrk31rtv0',
+                      uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/q0ba7e9rhso2gk6j3v492',
                     }}
                     style={styles.guideIconArt}
                     contentFit="contain"
@@ -3711,6 +3711,7 @@ const styles = StyleSheet.create({
   guideIconArt: {
     width: 44,
     height: 44,
+    backgroundColor: 'transparent',
   },
   guideIcon: {
     width: 48,
