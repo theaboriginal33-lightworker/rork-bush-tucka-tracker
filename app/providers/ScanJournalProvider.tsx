@@ -161,6 +161,7 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
 const MAX_WEB_DATA_URI_LENGTH = 650_000;
 const WEB_IDB_DB = 'bush-tucka-tracka';
 const WEB_IDB_STORE = 'scan-journal';
+let webMemoryCache: ScanJournalEntry[] | null = null;
 
 function stripLargeWebImages(entry: ScanJournalEntry): ScanJournalEntry {
   if (Platform.OS !== 'web') return entry;
@@ -185,6 +186,38 @@ function getIndexedDb(): any | null {
   if (Platform.OS !== 'web') return null;
   const g = globalThis as unknown as { indexedDB?: unknown };
   return g?.indexedDB ?? null;
+}
+
+function getWebStorage(): Storage | null {
+  if (Platform.OS !== 'web') return null;
+  try {
+    const storage = globalThis?.localStorage ?? null;
+    return storage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function readFromLocalStorage(key: string): Promise<string | null> {
+  const storage = getWebStorage();
+  if (!storage) return null;
+  try {
+    const value = storage.getItem(key);
+    return typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeToLocalStorage(key: string, value: string): Promise<boolean> {
+  const storage = getWebStorage();
+  if (!storage) return false;
+  try {
+    storage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function readFromIndexedDb(key: string): Promise<string | null> {
@@ -268,6 +301,22 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
   const [entries, setEntries] = useState<ScanJournalEntry[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const loadedOnceRef = useRef<boolean>(false);
+  const storageInitRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (storageInitRef.current) return;
+    storageInitRef.current = true;
+
+    if (Platform.OS === 'web') {
+      const nav = globalThis?.navigator as unknown as { storage?: { persist?: () => Promise<boolean> } } | undefined;
+      const persist = nav?.storage?.persist;
+      if (typeof persist === 'function') {
+        persist().catch(() => {
+          return;
+        });
+      }
+    }
+  }, []);
 
   const { data, error, isLoading, refetch } = useQuery({
     queryKey: ['scanJournal', 'entries'],
@@ -281,10 +330,24 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       let rawPayload: string | null = null;
 
       if (Platform.OS === 'web') {
+        if (webMemoryCache && webMemoryCache.length > 0) {
+          const payload = JSON.stringify(webMemoryCache);
+          rawPayload = payload;
+          console.log('[ScanJournal] loaded from memory cache', { count: webMemoryCache.length });
+        }
+
         const idbPayload = await readFromIndexedDb(STORAGE_KEY);
         if (idbPayload) {
           rawPayload = idbPayload;
           console.log('[ScanJournal] loaded from indexedDB', { length: idbPayload.length });
+        }
+
+        if (!rawPayload) {
+          const localPayload = await readFromLocalStorage(STORAGE_KEY);
+          if (localPayload) {
+            rawPayload = localPayload;
+            console.log('[ScanJournal] loaded from localStorage', { length: localPayload.length });
+          }
         }
       }
 
@@ -304,6 +367,9 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       const parsed = safeParseJson<ScanJournalEntry[]>(rawPayload) ?? [];
       const normalized = Array.isArray(parsed) ? parsed.map((e) => normalizeEntry(e)).filter(Boolean) : [];
       const cleaned = Platform.OS === 'web' ? normalized.map((entry) => stripLargeWebImages(entry)) : normalized;
+      if (Platform.OS === 'web') {
+        webMemoryCache = cleaned;
+      }
       return cleaned.sort((a, b) => {
         const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
         const bT = Number.isFinite(b.createdAt) ? b.createdAt : 0;
@@ -363,8 +429,11 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       let didPersist = false;
 
       if (Platform.OS === 'web') {
+        webMemoryCache = normalizedForStorage;
         const ok = await writeToIndexedDb(STORAGE_KEY, payload);
         if (ok) didPersist = true;
+        const localOk = await writeToLocalStorage(STORAGE_KEY, payload);
+        if (localOk) didPersist = true;
       }
 
       try {
@@ -448,6 +517,9 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         resolvedEntry = entry;
 
         const next = sortEntries([entry, ...prev.filter((e) => e.id !== entry.id)]);
+        if (Platform.OS === 'web') {
+          webMemoryCache = next;
+        }
         persist(next);
         return next;
       });
