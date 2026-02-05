@@ -17,7 +17,7 @@ type GuideSection = {
   icon: 'first' | 'stop' | 'rinse' | 'observe' | 'help' | 'dont' | 'reminder';
 };
 
-const ART_URI = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/te8vqa5rsun5j348kk3ln';
+const ART_URI = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/o2kx7bu87e3fxjx2tc9zg';
 
 const OCHRE = '#F6C445' as const;
 const OCHRE_DEEP = '#FF8C3C' as const;
