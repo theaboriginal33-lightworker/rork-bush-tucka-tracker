@@ -36,7 +36,9 @@ type GuideSection = {
 };
 
 const ART_URI =
-  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/r5y6q5zltfpde776ienrb';
+  'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/pgpbqamdlcd66rshna53j';
+
+const BRAND_GREEN = '#38D989' as const;
 
 const OCHRE = '#F6C445' as const;
 const OCHRE_DEEP = '#FF8C3C' as const;
@@ -427,6 +429,7 @@ const styles = StyleSheet.create({
     width: 66,
     height: 66,
     backgroundColor: 'transparent',
+    tintColor: BRAND_GREEN,
   },
   heroTitleWrap: {
     flex: 1,
