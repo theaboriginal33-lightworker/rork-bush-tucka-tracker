@@ -925,15 +925,25 @@ export default function HomeScreen() {
 
         setChatError(new Error(userMessage));
 
-        if (!isRateLimited) {
-          const fallbackAssistantMsg: AgentMessage = {
-            id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            role: 'assistant',
-            parts: [{ type: 'text', text: userMessage }],
-            createdAt: Date.now(),
-          };
-          setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), fallbackAssistantMsg]);
-        }
+        // Always add error message to chat so user sees feedback
+        const fallbackAssistantMsg: AgentMessage = {
+          id: `assistant-error-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: isRateLimited ? 'Tucka Guide is busy right now. Please wait a moment and try again.' : userMessage }],
+          createdAt: Date.now(),
+        };
+        setChatMessages((prev) => {
+          const base = Array.isArray(prev) ? prev : [];
+          // Avoid duplicate error messages within 5 seconds
+          const hasRecentError = base.some(
+            (m) => m.role === 'assistant' &&
+              typeof m.id === 'string' &&
+              m.id.startsWith('assistant-error-') &&
+              Date.now() - (m.createdAt ?? 0) < 5000
+          );
+          if (hasRecentError) return base;
+          return [...base, fallbackAssistantMsg];
+        });
       } finally {
         if (chatRequestIdRef.current === requestId) {
           setChatStatus('idle');
@@ -960,11 +970,10 @@ export default function HomeScreen() {
     if (!error) return false;
     const message = error.message?.toLowerCase?.() ?? '';
     return (
-      message.includes('busy') ||
-      message.includes('try again') ||
+      message.includes('busy right now') ||
       message.includes('temporarily unavailable') ||
       message.includes('overloaded') ||
-      message.includes('rate') ||
+      message.includes('rate limit') ||
       message.includes('quota') ||
       message.includes('429') ||
       message.includes('503')
