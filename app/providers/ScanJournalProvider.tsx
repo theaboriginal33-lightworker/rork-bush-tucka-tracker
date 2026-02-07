@@ -160,6 +160,8 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
 
 const MAX_WEB_DATA_URI_LENGTH = 650_000;
 const MAX_NATIVE_DATA_URI_LENGTH = 650_000;
+const MAX_NATIVE_TEXT_LENGTH = 1400;
+const MAX_NATIVE_SCAN_ITEMS = 10;
 const WEB_IDB_DB = 'bush-tucka-tracka';
 const WEB_IDB_STORE = 'scan-journal';
 let webMemoryCache: ScanJournalEntry[] | null = null;
@@ -199,6 +201,66 @@ function stripLargeNativeImages(entry: ScanJournalEntry): ScanJournalEntry {
     ...entry,
     imageUri: stripIfTooLarge(entry.imageUri),
     imagePreviewUri: stripIfTooLarge(entry.imagePreviewUri),
+  };
+}
+
+function compactText(value: string | undefined | null, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length <= max) return trimmed;
+  return trimmed.slice(0, max);
+}
+
+function compactStringArray(items: string[] | undefined, maxItems: number, maxLen: number): string[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => String(item))
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .slice(0, maxItems)
+    .map((item) => (item.length > maxLen ? item.slice(0, maxLen) : item));
+}
+
+function compactEntryForNative(entry: ScanJournalEntry): ScanJournalEntry {
+  const scan = entry.scan;
+  const compactScan: GeminiScanResult = {
+    ...scan,
+    commonName: compactText(scan.commonName, 120) ?? scan.commonName,
+    scientificName: compactText(scan.scientificName, 160),
+    safety: {
+      status: scan.safety.status,
+      summary: compactText(scan.safety.summary, MAX_NATIVE_TEXT_LENGTH) ?? '',
+      keyRisks: compactStringArray(scan.safety.keyRisks, MAX_NATIVE_SCAN_ITEMS, 160),
+    },
+    categories: compactStringArray(scan.categories, MAX_NATIVE_SCAN_ITEMS, 160),
+    bushTuckerLikely: Boolean(scan.bushTuckerLikely),
+    preparation: {
+      ease: scan.preparation.ease,
+      steps: compactStringArray(scan.preparation.steps, MAX_NATIVE_SCAN_ITEMS, 180),
+    },
+    seasonality: {
+      bestMonths: compactStringArray(scan.seasonality.bestMonths, 12, 24),
+      notes: compactText(scan.seasonality.notes, MAX_NATIVE_TEXT_LENGTH) ?? '',
+    },
+    culturalKnowledge: {
+      notes: compactText(scan.culturalKnowledge.notes, MAX_NATIVE_TEXT_LENGTH) ?? '',
+      respect: compactStringArray(scan.culturalKnowledge.respect, MAX_NATIVE_SCAN_ITEMS, 160),
+    },
+    warnings: compactStringArray(scan.warnings, MAX_NATIVE_SCAN_ITEMS, 220),
+    suggestedUses: compactStringArray(scan.suggestedUses, MAX_NATIVE_SCAN_ITEMS, 220),
+  };
+
+  return {
+    ...entry,
+    notes: compactText(entry.notes, 2400),
+    chatHistory: Array.isArray(entry.chatHistory)
+      ? entry.chatHistory.slice(-12).map((msg) => ({
+          ...msg,
+          text: compactText(msg.text, 800) ?? '',
+        }))
+      : entry.chatHistory,
+    scan: compactScan,
   };
 }
 
@@ -472,13 +534,14 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       };
 
       if (Platform.OS !== 'web') {
-        const compact = normalizedForStorage.map((entry) => ({
-          ...entry,
-          imageUri: entry.imageUri?.startsWith('data:') ? undefined : entry.imageUri,
-          imagePreviewUri: entry.imagePreviewUri?.startsWith('data:') ? undefined : entry.imagePreviewUri,
-          chatHistory: Array.isArray(entry.chatHistory) ? entry.chatHistory.slice(-12) : entry.chatHistory,
-          notes: typeof entry.notes === 'string' ? entry.notes.slice(0, 2400) : entry.notes,
-        }));
+        const compact = normalizedForStorage.map((entry) => {
+          const base = compactEntryForNative(entry);
+          return {
+            ...base,
+            imageUri: base.imageUri?.startsWith('data:') ? undefined : base.imageUri,
+            imagePreviewUri: base.imagePreviewUri?.startsWith('data:') ? undefined : base.imagePreviewUri,
+          };
+        });
         const compactPayload = JSON.stringify(compact);
 
         didPersist = (await tryPersistNative(compactPayload, 'compact')) || didPersist;
