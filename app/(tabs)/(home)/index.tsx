@@ -2103,7 +2103,8 @@ Return JSON with keys:
             const base64 = primaryToUse?.base64;
             const mimeType = primaryToUse?.mimeType;
 
-            if (Platform.OS === 'web') {
+            try {
+              if (Platform.OS === 'web') {
               const maxDataUriLength = 650_000;
 
               const makeDataUri = (mt: string, data: string) => `data:${mt};base64,${data}`;
@@ -2403,6 +2404,13 @@ Return JSON with keys:
                   console.log('[Scan] getInfoAsync failed for persisted image', { message, uri: persistedImageUri });
                 }
               }
+            }
+
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e);
+              console.log('[Scan] image persistence failed; continuing without image', { message, platform: Platform.OS });
+              persistedImageUri = undefined;
+              previewImageUri = undefined;
             }
 
             const savedEntry = await addEntry({
