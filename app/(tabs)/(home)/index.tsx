@@ -670,7 +670,7 @@ export default function HomeScreen() {
       type UserMessage = { role: 'user'; content: string };
       type BackendChatMessage = AssistantMessage | UserMessage | { role: 'system'; content: string };
       const backendMessages = messages as BackendChatMessage[];
-      const toolkitMessages = backendMessages.filter(
+      const toolkitMessages: (AssistantMessage | UserMessage)[] = backendMessages.filter(
         (m): m is AssistantMessage | UserMessage => m.role === 'assistant' || m.role === 'user'
       );
 
