@@ -17,7 +17,7 @@ type GuideSection = {
   icon: 'core' | 'guest' | 'homes' | 'food' | 'space' | 'snake' | 'teaching' | 'reminder';
 };
 
-const ART_URI = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/pcqp219k0yynm2ow0yi97';
+const ART_URI = 'https://r2-pub.rork.com/generated-images/c499489e-f0d6-492f-a487-72790a4bb3f5.png';
 
 const OCHRE = '#F6C445' as const;
 const OCHRE_DEEP = '#FF8C3C' as const;
