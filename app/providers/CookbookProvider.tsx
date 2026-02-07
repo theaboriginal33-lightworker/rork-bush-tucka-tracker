@@ -449,10 +449,6 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
 
   const derivedFromCollection = useMemo<CookRecipeEntry[]>(() => {
     const cooked = scanEntries
-      .filter((e) => {
-        const confidence = Number.isFinite(e.scan?.confidence) ? (e.scan.confidence as number) : 0;
-        return e.scan?.safety?.status === 'safe' && confidence >= 0.75;
-      })
       .map((e) => applyOverrides(normalizeCookEntryFromScan(e)))
       .sort((a, b) => b.createdAt - a.createdAt);
 
