@@ -673,15 +673,19 @@ export default function HomeScreen() {
         }));
 
       // Prepend system prompt to the first user message for toolkit (no system role support)
-      const toolkitMessages: ToolkitMessage[] = toolkitHistoryMessages.map((m, idx) => {
-        if (idx === 0 && m.role === 'user') {
-          return {
-            role: 'user' as const,
-            content: `[System Instructions]\n${promptText}\n\n[User Message]\n${m.content}`,
-          };
-        }
-        return m;
-      });
+      const toolkitMessages: ToolkitMessage[] = (() => {
+        let systemPrepended = false;
+        return toolkitHistoryMessages.map((m) => {
+          if (!systemPrepended && m.role === 'user') {
+            systemPrepended = true;
+            return {
+              role: 'user' as const,
+              content: `[System Instructions]\n${promptText}\n\n[User Message]\n${m.content}`,
+            };
+          }
+          return m;
+        });
+      })();
 
       const toolkit = await getRorkToolkit();
       const hasToolkit = Boolean(toolkit?.generateText);
