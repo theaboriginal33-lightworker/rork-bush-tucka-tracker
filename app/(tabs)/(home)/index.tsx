@@ -685,10 +685,14 @@ export default function HomeScreen() {
         platform: Platform.OS,
       });
 
-      if (useRorkBackend && !hasToolkit) {
+      if (useRorkBackend && !hasToolkit && !hasOpenAiKey) {
         setChatStatus('idle');
         setChatError(new Error('AI chat is unavailable right now. Please reload and try again.'));
         return;
+      }
+
+      if (useRorkBackend && !hasToolkit) {
+        console.log('[TuckaGuide] toolkit unavailable; falling back to OpenAI if possible');
       }
 
       const requestBody = {
@@ -920,6 +924,14 @@ export default function HomeScreen() {
                   : 'Could not send message. Please try again.';
 
         setChatError(new Error(userMessage));
+
+        const fallbackAssistantMsg: AgentMessage = {
+          id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: userMessage }],
+          createdAt: Date.now(),
+        };
+        setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), fallbackAssistantMsg]);
       } finally {
         if (chatRequestIdRef.current === requestId) {
           setChatStatus('idle');
