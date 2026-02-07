@@ -814,14 +814,7 @@ export default function ScanDetailsScreen() {
     return lines.filter(l => l.length > 0).join('\n');
   }, [entry]);
 
-  const { messages: agentMessages, sendMessage, error: agentError, setMessages } = useRorkAgent({ tools: {} });
-
-  const systemPromptSetRef = useRef<boolean>(false);
-  useEffect(() => {
-    if (!systemPrompt || systemPromptSetRef.current) return;
-    systemPromptSetRef.current = true;
-    setMessages([{ id: 'system-0', role: 'system' as never, parts: [{ type: 'text', text: systemPrompt }] } as never]);
-  }, [systemPrompt, setMessages]);
+  const { messages: agentMessages, sendMessage, error: agentError } = useRorkAgent({ tools: {} });
 
   const [chatInput, setChatInput] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
@@ -837,7 +830,12 @@ export default function ScanDetailsScreen() {
     setChatInput('');
     setIsSending(true);
     try {
-      await sendMessage(text);
+      const contextPrefix = systemPrompt
+        ? `[SYSTEM CONTEXT - DO NOT REPEAT THIS TO THE USER]\n${systemPrompt}\n[END SYSTEM CONTEXT]\n\nUser question: `
+        : '';
+      const fullMessage = `${contextPrefix}${text}`;
+      console.log('[TuckaGuide] sending with context, user text:', text);
+      await sendMessage(fullMessage);
       console.log('[TuckaGuide] message sent successfully');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -845,7 +843,7 @@ export default function ScanDetailsScreen() {
     } finally {
       setIsSending(false);
     }
-  }, [chatInput, isSending, sendMessage]);
+  }, [chatInput, isSending, sendMessage, systemPrompt]);
 
   const persistedCountRef = useRef<number>(0);
   useEffect(() => {
@@ -856,7 +854,14 @@ export default function ScanDetailsScreen() {
     const newHistory: ScanJournalChatMessage[] = filtered
       .map((m) => {
         const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
-        const text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+        let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+        if (m.role === 'user') {
+          const marker = 'User question: ';
+          const idx = text.indexOf(marker);
+          if (idx !== -1) {
+            text = text.substring(idx + marker.length);
+          }
+        }
         return {
           id: m.id,
           role: m.role as 'user' | 'assistant',
@@ -1171,9 +1176,16 @@ export default function ScanDetailsScreen() {
                   <View style={styles.chatMessagesWrap}>
                     {visibleMessages.map((m) => {
                       const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
-                      const text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+                      let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
                       if (!text.trim()) return null;
                       const isUser = m.role === 'user';
+                      if (isUser) {
+                        const marker = 'User question: ';
+                        const idx = text.indexOf(marker);
+                        if (idx !== -1) {
+                          text = text.substring(idx + marker.length);
+                        }
+                      }
                       return (
                         <View
                           key={m.id}
