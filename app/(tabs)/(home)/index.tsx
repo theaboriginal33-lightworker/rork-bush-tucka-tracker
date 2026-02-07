@@ -300,7 +300,7 @@ export default function HomeScreen() {
       ''
     ).trim();
   const hasOpenAiKey = openAiKey.length > 0;
-  const useRorkBackend = false;
+  const useRorkBackend = true;
   const chatContextKeyRef = useRef<string | null>(null);
   const systemPromptRef = useRef<string | null>(null);
   const chatRequestIdRef = useRef<number>(0);
