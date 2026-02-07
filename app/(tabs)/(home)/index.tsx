@@ -990,6 +990,26 @@ export default function HomeScreen() {
     }
 
     if (busyRetryRef.current.attempts >= 2) {
+      console.log('[TuckaGuide] all retries exhausted, adding failure message');
+      const failureMsg: AgentMessage = {
+        id: `assistant-retry-failed-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Tucka Guide is temporarily unavailable. Please try again in a moment by tapping the send button or typing a new question.' }],
+        createdAt: Date.now(),
+      };
+      setChatMessages((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const hasRecentFailure = base.some(
+          (m) => m.role === 'assistant' && 
+            typeof m.id === 'string' && 
+            m.id.startsWith('assistant-retry-failed-') &&
+            Date.now() - (m.createdAt ?? 0) < 10000
+        );
+        if (hasRecentFailure) return base;
+        return [...base, failureMsg];
+      });
+      clearChatError();
+      busyRetryRef.current.attempts = 0;
       return;
     }
 
@@ -1015,7 +1035,7 @@ export default function HomeScreen() {
         busyRetry.timer = null;
       }
     };
-  }, [chatError, isBusyChatError, retryChatNow]);
+  }, [chatError, clearChatError, isBusyChatError, retryChatNow, setChatMessages]);
 
   const chatCreatedAtByIdRef = useRef<Record<string, number>>({});
 
