@@ -823,6 +823,8 @@ export default function ScanDetailsScreen() {
     return agentMessages.filter(m => m.role !== 'system');
   }, [agentMessages]);
 
+  const messageCountRef = useRef<number>(0);
+
   const handleSendMessage = useCallback(async () => {
     const text = chatInput.trim();
     if (text.length === 0 || isSending) return;
@@ -830,10 +832,23 @@ export default function ScanDetailsScreen() {
     setChatInput('');
     setIsSending(true);
     try {
-      const contextPrefix = systemPrompt
-        ? `[SYSTEM CONTEXT - DO NOT REPEAT THIS TO THE USER]\n${systemPrompt}\n[END SYSTEM CONTEXT]\n\nUser question: `
-        : '';
-      const fullMessage = `${contextPrefix}${text}`;
+      const isFirstMessage = messageCountRef.current === 0;
+      let fullMessage: string;
+      if (isFirstMessage && systemPrompt) {
+        fullMessage = [
+          `INSTRUCTIONS: You are "Tucka Guide", a friendly Australian bush food AI companion. Below is context about a scanned plant. The user will ask you a question — answer their question directly and helpfully. Do NOT repeat the plant identification info back. Just answer the question.`,
+          ``,
+          `PLANT CONTEXT:`,
+          systemPrompt,
+          ``,
+          `USER QUESTION: ${text}`,
+        ].join('\n');
+      } else if (systemPrompt) {
+        fullMessage = `Remember: you are Tucka Guide. The user previously scanned a plant (context was provided earlier). Now answer this follow-up question directly and helpfully.\n\nUSER QUESTION: ${text}`;
+      } else {
+        fullMessage = text;
+      }
+      messageCountRef.current += 1;
       console.log('[TuckaGuide] sending with context, user text:', text);
       await sendMessage(fullMessage);
       console.log('[TuckaGuide] message sent successfully');
@@ -856,10 +871,13 @@ export default function ScanDetailsScreen() {
         const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
         let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
         if (m.role === 'user') {
-          const marker = 'User question: ';
-          const idx = text.indexOf(marker);
-          if (idx !== -1) {
-            text = text.substring(idx + marker.length);
+          const markers = ['USER QUESTION: ', 'User question: '];
+          for (const marker of markers) {
+            const idx = text.lastIndexOf(marker);
+            if (idx !== -1) {
+              text = text.substring(idx + marker.length);
+              break;
+            }
           }
         }
         return {
@@ -1180,10 +1198,13 @@ export default function ScanDetailsScreen() {
                       if (!text.trim()) return null;
                       const isUser = m.role === 'user';
                       if (isUser) {
-                        const marker = 'User question: ';
-                        const idx = text.indexOf(marker);
-                        if (idx !== -1) {
-                          text = text.substring(idx + marker.length);
+                        const markers = ['USER QUESTION: ', 'User question: '];
+                        for (const marker of markers) {
+                          const idx = text.lastIndexOf(marker);
+                          if (idx !== -1) {
+                            text = text.substring(idx + marker.length);
+                            break;
+                          }
                         }
                       }
                       return (
