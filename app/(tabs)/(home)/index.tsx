@@ -1266,6 +1266,20 @@ ${scanContext}`;
 
   const chatBusy = chatStatus === 'submitted' || chatStatus === 'streaming';
 
+  const lastAssistantMessageIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!Array.isArray(chatDisplayMessages)) return;
+    const last = [...chatDisplayMessages].reverse().find((m) => m.role === 'assistant');
+    if (!last) return;
+    if (lastAssistantMessageIdRef.current === last.id) return;
+    lastAssistantMessageIdRef.current = last.id;
+    if (isBusyChatError(chatError)) {
+      console.log('[TuckaGuide] clearing busy error after assistant response', { messageId: last.id });
+      clearChatError();
+    }
+  }, [chatDisplayMessages, chatError, clearChatError, isBusyChatError]);
+
   useEffect(() => {
     if (!chatBusy) {
       setChatTimeout(false);
