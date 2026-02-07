@@ -572,7 +572,8 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       setErrorMessage(null);
 
       let updated: ScanJournalEntry | null = null;
-      let nextSnapshot: ScanJournalEntry[] | null = null;
+      let nextSnapshot: ScanJournalEntry[] = [];
+      let hasSnapshot = false;
       setEntries((prev) => {
         const next = prev.map((e) => {
           if (e.id !== id) return e;
@@ -597,10 +598,11 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
         const sorted = sortEntries(next);
         nextSnapshot = sorted;
+        hasSnapshot = true;
         return sorted;
       });
 
-      if (nextSnapshot) {
+      if (hasSnapshot) {
         try {
           await persist(nextSnapshot);
           console.log('[ScanJournal] updateEntry persisted', { id, count: nextSnapshot.length });
