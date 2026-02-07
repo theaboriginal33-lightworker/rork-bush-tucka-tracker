@@ -556,13 +556,6 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     await refetch();
   }, [refetch]);
 
-  const refresh = useCallback(async () => {
-    console.log('[ScanJournal] refresh');
-    setErrorMessage(null);
-    loadedOnceRef.current = false;
-    await refetch();
-  }, [refetch]);
-
   const sortEntries = useCallback((list: ScanJournalEntry[]): ScanJournalEntry[] => {
     return [...list].sort((a, b) => {
       const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
