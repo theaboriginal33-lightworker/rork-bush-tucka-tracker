@@ -190,7 +190,8 @@ function stripLargeNativeImages(entry: ScanJournalEntry): ScanJournalEntry {
     if (!uri) return uri;
     const trimmed = uri.trim();
     if (!trimmed) return undefined;
-    if (trimmed.startsWith('data:') && trimmed.length > MAX_NATIVE_DATA_URI_LENGTH) return undefined;
+    if (trimmed.startsWith('data:')) return undefined;
+    if (trimmed.length > MAX_NATIVE_DATA_URI_LENGTH) return undefined;
     return trimmed;
   };
 
