@@ -668,9 +668,8 @@ export default function HomeScreen() {
 
       type AssistantMessage = { role: 'assistant'; content: string };
       type UserMessage = { role: 'user'; content: string };
-      type BackendChatMessage = AssistantMessage | UserMessage | { role: 'system'; content: string };
-      const backendMessages = messages as BackendChatMessage[];
-      const toolkitMessages: (AssistantMessage | UserMessage)[] = (shouldAppendUser
+      type ToolkitMessage = AssistantMessage | UserMessage;
+      const toolkitMessages: ToolkitMessage[] = (shouldAppendUser
         ? [
             ...history,
             {
@@ -678,8 +677,8 @@ export default function HomeScreen() {
               content: trimmed,
             },
           ]
-        : history).map((m) => ({
-        role: m.role,
+        : history).map((m): ToolkitMessage => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
         content: m.content ?? '',
       }));
 
