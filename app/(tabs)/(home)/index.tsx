@@ -245,6 +245,8 @@ export default function HomeScreen() {
   const [scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState<string>('');
+  const [chatTimeout, setChatTimeout] = useState<boolean>(false);
+  const chatBusySinceRef = useRef<number | null>(null);
 
   type ConfidenceGate = {
     level: 'confident' | 'likely' | 'observe';
@@ -1251,9 +1253,6 @@ ${scanContext}`;
       return [] as { id: string; role: 'user' | 'assistant'; text: string; createdAt: number }[];
     }
   }, [chatMessages]);
-
-  const [chatTimeout, setChatTimeout] = useState<boolean>(false);
-  const chatBusySinceRef = useRef<number | null>(null);
 
   const resetChatToGreeting = useCallback(() => {
     if (!scanResult || !systemPrompt || !scanContextKey) {
