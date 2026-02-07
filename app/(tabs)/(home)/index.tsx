@@ -21,6 +21,11 @@ import {
 import { COLORS } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRorkAgent } from '@rork-ai/toolkit-sdk';
+import {
+  createScanEntryId,
+  useScanJournal,
+  type GeminiScanResult as JournalGeminiScanResult,
+} from '@/app/providers/ScanJournalProvider';
 
 type SafetyEdibility = {
   status: 'safe' | 'unsafe' | 'uncertain';
@@ -90,6 +95,12 @@ export default function HomeScreen() {
 
   const apiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
   const chatContextKeyRef = useRef<string | null>(null);
+  const lastUserMessageRef = useRef<string | null>(null);
+  const chatRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatRetryCountRef = useRef<number>(0);
+  const MAX_WEB_PREVIEW_LENGTH = 650_000;
+
+  const { addEntry } = useScanJournal();
 
   const canScan = useMemo(() => {
     return Boolean(imageBase64) && Boolean(apiKey);
@@ -204,6 +215,50 @@ export default function HomeScreen() {
   const chatDisabled = !scanResult || chatBusy;
   const sendDisabled = chatDisabled || chatInput.trim().length === 0;
 
+  const isBusyChatError = useCallback((error: Error | null | undefined) => {
+    if (!error) return false;
+    const message = String(error.message ?? '');
+    return /busy|overloaded|try again|temporarily|rate|quota|timeout/i.test(message);
+  }, []);
+
+  const retryChatNow = useCallback(() => {
+    const last = lastUserMessageRef.current;
+    if (!last || chatBusy) return;
+    chatRetryCountRef.current += 1;
+    clearChatError();
+    sendMessage(last);
+  }, [chatBusy, clearChatError, sendMessage]);
+
+  useEffect(() => {
+    if (!chatError || !isBusyChatError(chatError)) {
+      chatRetryCountRef.current = 0;
+      if (chatRetryTimeoutRef.current) {
+        clearTimeout(chatRetryTimeoutRef.current);
+        chatRetryTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (chatBusy || chatRetryCountRef.current >= 2) return;
+
+    const delayMs = chatRetryCountRef.current === 0 ? 900 : 2200;
+    if (chatRetryTimeoutRef.current) {
+      clearTimeout(chatRetryTimeoutRef.current);
+    }
+    chatRetryTimeoutRef.current = setTimeout(() => {
+      chatRetryTimeoutRef.current = null;
+      retryChatNow();
+    }, delayMs);
+  }, [chatBusy, chatError, isBusyChatError, retryChatNow]);
+
+  useEffect(() => {
+    return () => {
+      if (chatRetryTimeoutRef.current) {
+        clearTimeout(chatRetryTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const suggestedQuestions = useMemo(() => {
     if (!scanResult) return [];
     return [
@@ -221,6 +276,12 @@ export default function HomeScreen() {
     if (chatError) {
       clearChatError();
     }
+    lastUserMessageRef.current = trimmed;
+    chatRetryCountRef.current = 0;
+    if (chatRetryTimeoutRef.current) {
+      clearTimeout(chatRetryTimeoutRef.current);
+      chatRetryTimeoutRef.current = null;
+    }
     sendMessage(trimmed);
     setChatInput('');
   }, [chatError, chatInput, clearChatError, sendDisabled, sendMessage]);
@@ -230,6 +291,12 @@ export default function HomeScreen() {
       if (chatDisabled) return;
       if (chatError) {
         clearChatError();
+      }
+      lastUserMessageRef.current = prompt;
+      chatRetryCountRef.current = 0;
+      if (chatRetryTimeoutRef.current) {
+        clearTimeout(chatRetryTimeoutRef.current);
+        chatRetryTimeoutRef.current = null;
       }
       sendMessage(prompt);
     },
@@ -560,6 +627,33 @@ Return JSON with keys:
 
           setScanResult(parsed);
 
+          try {
+            const entryId = createScanEntryId({
+              commonName: parsed.commonName ?? 'Unconfirmed Plant',
+              scientificName: parsed.scientificName,
+              confidence: parsed.confidence,
+              imageBase64: imageBase64 ?? undefined,
+              imageUri: image ?? undefined,
+            });
+            const title = parsed.commonName?.trim().length ? parsed.commonName : 'Unconfirmed Plant';
+            const previewData =
+              imageBase64 && imageBase64.length <= MAX_WEB_PREVIEW_LENGTH
+                ? `data:${imageMimeType || 'image/jpeg'};base64,${imageBase64}`
+                : undefined;
+
+            await addEntry({
+              id: entryId,
+              title,
+              imageUri: image ?? undefined,
+              imagePreviewUri: previewData,
+              scan: parsed as unknown as JournalGeminiScanResult,
+            });
+            console.log('[Scan] saved scan to collection', { entryId, title });
+          } catch (saveError) {
+            const message = saveError instanceof Error ? saveError.message : String(saveError);
+            console.log('[Scan] failed to save scan to collection', { message });
+          }
+
           if (parsed.safety.status !== 'safe' && parsed.warnings.length === 0) {
             setScanError('Could not confidently confirm this is safe to eat. Please verify with a trusted local guide.');
           }
@@ -585,7 +679,7 @@ Return JSON with keys:
     } finally {
       setAnalyzing(false);
     }
-  }, [apiKey, image, imageBase64, imageMimeType, getGeminiText, parseGeminiResult]);
+  }, [MAX_WEB_PREVIEW_LENGTH, addEntry, apiKey, image, imageBase64, imageMimeType, getGeminiText, parseGeminiResult]);
 
   const pickImage = useCallback(async () => {
     if (Platform.OS !== 'web') {
@@ -998,9 +1092,18 @@ Return JSON with keys:
                 {chatError ? (
                   <View style={styles.chatErrorRow}>
                     <AlertTriangle size={16} color="#B91C1C" />
-                    <Text style={styles.chatErrorText}>{chatError.message}</Text>
-                    <TouchableOpacity style={styles.chatErrorDismiss} onPress={clearChatError}>
-                      <Text style={styles.chatErrorDismissText}>Dismiss</Text>
+                    <Text style={styles.chatErrorText}>
+                      {isBusyChatError(chatError)
+                        ? 'Tucka Guide is busy right now. Retrying…'
+                        : chatError.message}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.chatErrorDismiss}
+                      onPress={isBusyChatError(chatError) ? retryChatNow : clearChatError}
+                    >
+                      <Text style={styles.chatErrorDismissText}>
+                        {isBusyChatError(chatError) ? 'Retry now' : 'Dismiss'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 ) : null}

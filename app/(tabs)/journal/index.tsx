@@ -1,86 +1,131 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, MapPin, MoreHorizontal } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { useScanJournal, type ScanJournalEntry } from '@/app/providers/ScanJournalProvider';
 
-const JOURNAL_ENTRIES = [
-  { 
-    id: '1', 
-    title: 'Found Warrigal Greens', 
-    date: '2025-01-28', 
-    location: 'Royal National Park', 
-    image: 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
-    tags: ['Leaf', 'Edible']
-  },
-  { 
-    id: '2', 
-    title: 'Banksia Harvest', 
-    date: '2025-01-25', 
-    location: 'Blue Mountains', 
-    image: 'https://images.unsplash.com/photo-1596726540679-0df8e8e7a61d?q=80&w=2787&auto=format&fit=crop',
-    tags: ['Flower', 'Nectar']
-  },
-  { 
-    id: '3', 
-    title: 'Saltbush Discovery', 
-    date: '2025-01-20', 
-    location: 'Backyard', 
-    image: 'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop',
-    tags: ['Leaf', 'Salty']
-  },
-];
+function safeImageUri(uri: string | undefined): string | null {
+  const raw0 = typeof uri === 'string' ? uri.trim() : '';
+  if (raw0.length === 0 || raw0 === 'null' || raw0 === 'undefined') return null;
+
+  let raw = raw0;
+  if (raw.startsWith('/')) {
+    raw = `file://${raw}`;
+  }
+  if (raw.startsWith('file:/') && !raw.startsWith('file://')) {
+    raw = `file:///${raw.replace(/^file:\/*/i, '')}`;
+  }
+  if (raw.includes(' ')) {
+    raw = raw.replace(/ /g, '%20');
+  }
+  try {
+    return encodeURI(raw);
+  } catch {
+    return raw;
+  }
+}
 
 export default function JournalScreen() {
-  const entries = JOURNAL_ENTRIES;
+  const { entries, isLoading, errorMessage, refresh } = useScanJournal();
+
+  const emptyCopy = useMemo(() => {
+    if (isLoading) return 'Loading your scans…';
+    if (errorMessage) return errorMessage;
+    return 'Your scanned plants will appear here. Scan something from the Home tab to start building your collection.';
+  }, [errorMessage, isLoading]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: ScanJournalEntry }) => {
+      const date = new Date(item.createdAt);
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'] as const;
+      const month = monthNames[date.getMonth()] ?? '---';
+      const day = String(date.getDate()).padStart(2, '0');
+
+      const resolvedUri = safeImageUri(item.imagePreviewUri ?? item.imageUri);
+      const tags = [
+        item.scan?.safety?.status ? `Safety: ${item.scan.safety.status}` : null,
+        ...(Array.isArray(item.scan?.categories) ? item.scan.categories.slice(0, 2) : []),
+      ].filter(Boolean) as string[];
+
+      return (
+        <TouchableOpacity style={styles.entryCard} testID={`journal-entry-${item.id}`}>
+          <View style={styles.cardHeader}>
+            <Image
+              source={{
+                uri:
+                  resolvedUri ??
+                  'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop',
+              }}
+              style={styles.entryImage}
+            />
+            <View style={styles.metaOverlay}>
+              <View style={styles.dateBadge}>
+                <Text style={styles.dateText}>{day} {month}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.cardBody}>
+            <View style={styles.titleRow}>
+              <Text style={styles.entryTitle}>{item.title}</Text>
+              <MoreHorizontal size={20} color={COLORS.textSecondary} />
+            </View>
+
+            {item.locationName ? (
+              <View style={styles.locationRow}>
+                <MapPin size={14} color={COLORS.primary} />
+                <Text style={styles.locationText}>{item.locationName}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.tagsRow}>
+              {tags.map((tag) => (
+                <View key={tag} style={styles.tag}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [],
+  );
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Collection</Text>
-          <TouchableOpacity style={styles.addButton} testID="journal-add">
+          <TouchableOpacity
+            style={styles.addButton}
+            testID="journal-refresh"
+            onPress={() => {
+              refresh().catch(() => {
+                return;
+              });
+            }}
+          >
             <Plus size={24} color={COLORS.background} />
           </TouchableOpacity>
         </View>
 
         <FlatList
           data={entries}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.entryCard}>
-              <View style={styles.cardHeader}>
-                <Image source={{ uri: item.image }} style={styles.entryImage} />
-                <View style={styles.metaOverlay}>
-                   <View style={styles.dateBadge}>
-                    <Text style={styles.dateText}>{item.date.split('-')[2]} JAN</Text>
-                  </View>
-                </View>
+          renderItem={renderItem}
+          ListEmptyComponent={
+            <View style={styles.emptyState} testID="journal-empty">
+              <View style={styles.emptyIcon}>
+                <Plus size={20} color={COLORS.textSecondary} />
               </View>
-              
-              <View style={styles.cardBody}>
-                <View style={styles.titleRow}>
-                  <Text style={styles.entryTitle}>{item.title}</Text>
-                  <MoreHorizontal size={20} color={COLORS.textSecondary} />
-                </View>
-                
-                <View style={styles.locationRow}>
-                  <MapPin size={14} color={COLORS.primary} />
-                  <Text style={styles.locationText}>{item.location}</Text>
-                </View>
-
-                <View style={styles.tagsRow}>
-                  {item.tags.map(tag => (
-                    <View key={tag} style={styles.tag}>
-                      <Text style={styles.tagText}>{tag}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
+              <Text style={styles.emptyTitle}>No scans yet</Text>
+              <Text style={styles.emptyText}>{emptyCopy}</Text>
+            </View>
+          }
         />
       </SafeAreaView>
     </View>
@@ -211,5 +256,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.secondary,
     fontWeight: '700',
+  },
+  emptyState: {
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 });
