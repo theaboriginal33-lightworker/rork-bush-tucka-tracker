@@ -324,7 +324,6 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     queryFn: async () => {
       console.log('[ScanJournal] loading from storage');
 
-      const timeoutMs = 2500;
       const startedAt = Date.now();
 
       let rawPayload: string | null = null;
@@ -352,16 +351,16 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       }
 
       if (rawPayload === null) {
-        const raw = await Promise.race<string | null>([
-          AsyncStorage.getItem(STORAGE_KEY),
-          new Promise<string | null>((resolve) => {
-            setTimeout(() => resolve(null), timeoutMs);
-          }),
-        ]);
-
-        const durationMs = Date.now() - startedAt;
-        console.log('[ScanJournal] load finished (AsyncStorage)', { durationMs, timedOut: raw === null });
-        rawPayload = raw;
+        try {
+          const raw = await AsyncStorage.getItem(STORAGE_KEY);
+          const durationMs = Date.now() - startedAt;
+          console.log('[ScanJournal] load finished (AsyncStorage)', { durationMs, hasData: typeof raw === 'string' && raw.length > 0 });
+          rawPayload = raw;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanJournal] load failed (AsyncStorage)', { message });
+          rawPayload = null;
+        }
       }
 
       const parsed = safeParseJson<ScanJournalEntry[]>(rawPayload) ?? [];
@@ -525,7 +524,6 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
           webMemoryCache = next;
         }
         nextSnapshot = next;
-        persist(next);
         return next;
       });
 
@@ -574,6 +572,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       setErrorMessage(null);
 
       let updated: ScanJournalEntry | null = null;
+      let nextSnapshot: ScanJournalEntry[] | null = null;
       setEntries((prev) => {
         const next = prev.map((e) => {
           if (e.id !== id) return e;
@@ -583,6 +582,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
             locationName: typeof patch.locationName === 'string' ? patch.locationName : e.locationName,
             location: patch.location ?? e.location,
             imageUri: typeof patch.imageUri === 'string' ? patch.imageUri : e.imageUri,
+            imagePreviewUri: typeof patch.imagePreviewUri === 'string' ? patch.imagePreviewUri : e.imagePreviewUri,
             notes: typeof patch.notes === 'string' ? patch.notes : e.notes,
             chatHistory: Array.isArray(patch.chatHistory) ? patch.chatHistory : e.chatHistory,
             scan: e.scan,
@@ -596,9 +596,19 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         }
 
         const sorted = sortEntries(next);
-        persist(sorted);
+        nextSnapshot = sorted;
         return sorted;
       });
+
+      if (nextSnapshot) {
+        try {
+          await persist(nextSnapshot);
+          console.log('[ScanJournal] updateEntry persisted', { id, count: nextSnapshot.length });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanJournal] updateEntry persist failed', { message });
+        }
+      }
 
       return updated;
     },
@@ -609,11 +619,19 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     async (id: string) => {
       loadedOnceRef.current = true;
       setErrorMessage(null);
+      let nextSnapshot: ScanJournalEntry[] = [];
       setEntries((prev) => {
         const next = prev.filter((e) => e.id !== id);
-        persist(next);
+        nextSnapshot = next;
         return next;
       });
+      try {
+        await persist(nextSnapshot);
+        console.log('[ScanJournal] removeEntry persisted', { id, count: nextSnapshot.length });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[ScanJournal] removeEntry persist failed', { message });
+      }
       console.log('[ScanJournal] removeEntry', { id });
     },
     [persist],
@@ -622,11 +640,15 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
   const clearAll = useCallback(async () => {
     loadedOnceRef.current = true;
     setErrorMessage(null);
-    setEntries(() => {
-      const next: ScanJournalEntry[] = [];
-      persist(next);
-      return next;
-    });
+    const next: ScanJournalEntry[] = [];
+    setEntries(() => next);
+    try {
+      await persist(next);
+      console.log('[ScanJournal] clearAll persisted');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[ScanJournal] clearAll persist failed', { message });
+    }
     console.log('[ScanJournal] clearAll');
   }, [persist]);
 
