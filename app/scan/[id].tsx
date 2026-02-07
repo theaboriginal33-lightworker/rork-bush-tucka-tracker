@@ -881,6 +881,11 @@ export default function ScanDetailsScreen() {
         const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
         let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
         if (m.role === 'user') {
+          const endMarker = '[END OF SYSTEM INSTRUCTIONS]';
+          const endIdx = text.indexOf(endMarker);
+          if (endIdx !== -1) {
+            text = text.substring(endIdx + endMarker.length).trim();
+          }
           const markers = ['USER QUESTION: ', 'User question: '];
           for (const marker of markers) {
             const idx = text.lastIndexOf(marker);
@@ -1208,6 +1213,18 @@ export default function ScanDetailsScreen() {
                       if (!text.trim()) return null;
                       const isUser = m.role === 'user';
                       if (isUser) {
+                        const endMarker = '[END OF SYSTEM INSTRUCTIONS]';
+                        const endIdx = text.indexOf(endMarker);
+                        if (endIdx !== -1) {
+                          text = text.substring(endIdx + endMarker.length).trim();
+                        }
+                        const sysMarker = '[SYSTEM INSTRUCTIONS';
+                        if (text.startsWith(sysMarker)) {
+                          const endSys = text.indexOf(endMarker);
+                          if (endSys !== -1) {
+                            text = text.substring(endSys + endMarker.length).trim();
+                          }
+                        }
                         const markers = ['USER QUESTION: ', 'User question: '];
                         for (const marker of markers) {
                           const idx = text.lastIndexOf(marker);
