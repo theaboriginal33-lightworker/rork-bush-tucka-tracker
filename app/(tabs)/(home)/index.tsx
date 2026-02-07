@@ -2385,19 +2385,18 @@ Return JSON with keys:
                   const fs = await getLegacyFileSystem();
                   if (!fs) {
                     console.log('[Scan] FileSystem not available; skipping getInfoAsync', { uri: persistedImageUri });
-                    return;
-                  }
-
-                  const info = await fs.getInfoAsync(persistedImageUri);
-                  const size =
-                    info.exists && 'size' in info && typeof (info as unknown as { size?: number }).size === 'number' && Number.isFinite((info as unknown as { size?: number }).size)
-                      ? (info as unknown as { size?: number }).size
-                      : undefined;
-                  console.log('[Scan] persisted image file info', { exists: info.exists, size, uri: persistedImageUri });
-                  if (!info.exists && typeof base64 === 'string' && base64.length > 0) {
-                    const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
-                    persistedImageUri = `data:${mt};base64,${base64}`;
-                    console.log('[Scan] persisted image missing on disk; using data URI instead', { mt, base64Length: base64.length });
+                  } else {
+                    const info = await fs.getInfoAsync(persistedImageUri);
+                    const size =
+                      info.exists && 'size' in info && typeof (info as unknown as { size?: number }).size === 'number' && Number.isFinite((info as unknown as { size?: number }).size)
+                        ? (info as unknown as { size?: number }).size
+                        : undefined;
+                    console.log('[Scan] persisted image file info', { exists: info.exists, size, uri: persistedImageUri });
+                    if (!info.exists && typeof base64 === 'string' && base64.length > 0) {
+                      const mt = typeof mimeType === 'string' && mimeType.length > 0 ? mimeType : 'image/jpeg';
+                      persistedImageUri = `data:${mt};base64,${base64}`;
+                      console.log('[Scan] persisted image missing on disk; using data URI instead', { mt, base64Length: base64.length });
+                    }
                   }
                 } catch (e) {
                   const message = e instanceof Error ? e.message : String(e);
