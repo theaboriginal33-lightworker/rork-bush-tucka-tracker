@@ -670,9 +670,18 @@ export default function HomeScreen() {
       type UserMessage = { role: 'user'; content: string };
       type BackendChatMessage = AssistantMessage | UserMessage | { role: 'system'; content: string };
       const backendMessages = messages as BackendChatMessage[];
-      const toolkitMessages: (AssistantMessage | UserMessage)[] = backendMessages.filter(
-        (m): m is AssistantMessage | UserMessage => m.role === 'assistant' || m.role === 'user'
-      );
+      const toolkitMessages: (AssistantMessage | UserMessage)[] = (shouldAppendUser
+        ? [
+            ...history,
+            {
+              role: 'user' as const,
+              content: trimmed,
+            },
+          ]
+        : history).map((m) => ({
+        role: m.role,
+        content: m.content ?? '',
+      }));
 
       const toolkit = await getRorkToolkit();
       const hasToolkit = Boolean(toolkit?.generateText);
