@@ -1272,10 +1272,12 @@ ${scanContext}`;
     if (!Array.isArray(chatDisplayMessages)) return;
     const last = [...chatDisplayMessages].reverse().find((m) => m.role === 'assistant');
     if (!last) return;
-    if (lastAssistantMessageIdRef.current === last.id) return;
-    lastAssistantMessageIdRef.current = last.id;
+    const isSameMessage = lastAssistantMessageIdRef.current === last.id;
+    if (!isSameMessage) {
+      lastAssistantMessageIdRef.current = last.id;
+    }
     if (isBusyChatError(chatError)) {
-      console.log('[TuckaGuide] clearing busy error after assistant response', { messageId: last.id });
+      console.log('[TuckaGuide] clearing busy error after assistant response', { messageId: last.id, isSameMessage });
       clearChatError();
     }
   }, [chatDisplayMessages, chatError, clearChatError, isBusyChatError]);
