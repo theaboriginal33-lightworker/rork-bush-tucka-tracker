@@ -472,24 +472,32 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       };
 
       if (Platform.OS !== 'web') {
-        didPersist = await tryPersistNative(payload, 'full') || didPersist;
+        const compact = normalizedForStorage.map((entry) => ({
+          ...entry,
+          imageUri: entry.imageUri?.startsWith('data:') ? undefined : entry.imageUri,
+          imagePreviewUri: entry.imagePreviewUri?.startsWith('data:') ? undefined : entry.imagePreviewUri,
+          chatHistory: Array.isArray(entry.chatHistory) ? entry.chatHistory.slice(-12) : entry.chatHistory,
+          notes: typeof entry.notes === 'string' ? entry.notes.slice(0, 2400) : entry.notes,
+        }));
+        const compactPayload = JSON.stringify(compact);
+
+        didPersist = (await tryPersistNative(compactPayload, 'compact')) || didPersist;
 
         if (!didPersist) {
-          const stripped = normalizedForStorage.map((entry) => ({
+          const minimal = compact.map((entry) => ({
             ...entry,
-            imageUri: entry.imageUri?.startsWith('data:') ? undefined : entry.imageUri,
-            imagePreviewUri: entry.imagePreviewUri?.startsWith('data:') ? undefined : entry.imagePreviewUri,
-            chatHistory: Array.isArray(entry.chatHistory) ? entry.chatHistory.slice(-20) : entry.chatHistory,
+            imageUri: undefined,
+            imagePreviewUri: undefined,
+            chatHistory: [],
           }));
-          const strippedPayload = JSON.stringify(stripped);
-          const ok = await tryPersistNative(strippedPayload, 'stripped');
+          const minimalPayload = JSON.stringify(minimal);
+          const ok = await tryPersistNative(minimalPayload, 'minimal');
           if (ok) {
             didPersist = true;
-            if (Platform.OS === 'web') {
-              webMemoryCache = stripped;
-            }
-            return stripped;
+            return minimal;
           }
+        } else {
+          return compact;
         }
       } else {
         try {
@@ -522,7 +530,13 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         })
         .then(async () => {
           console.log('[ScanJournal] persist queued', { count: nextEntries.length });
-          await persistMutateAsync(nextEntries);
+          const stored = await persistMutateAsync(nextEntries);
+          if (Array.isArray(stored) && stored.length !== nextEntries.length) {
+            console.log('[ScanJournal] persist stored different snapshot', { before: nextEntries.length, after: stored.length });
+          }
+          if (Array.isArray(stored)) {
+            setEntries(() => stored);
+          }
         })
         .catch((e) => {
           const message = e instanceof Error ? e.message : String(e);
@@ -534,6 +548,13 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
     },
     [persistMutateAsync],
   );
+
+  const refresh = useCallback(async () => {
+    console.log('[ScanJournal] refresh');
+    setErrorMessage(null);
+    loadedOnceRef.current = false;
+    await refetch();
+  }, [refetch]);
 
   const refresh = useCallback(async () => {
     console.log('[ScanJournal] refresh');
