@@ -665,17 +665,18 @@ export default function HomeScreen() {
       type BackendChatMessage = { role: 'user' | 'assistant'; content: string };
       const backendMessages = messages.filter((m) => m.role !== 'system') as BackendChatMessage[];
 
-      const toolkit = useRorkBackend ? await getRorkToolkit() : null;
-      const shouldUseRorkBackend = Boolean(useRorkBackend && toolkit?.generateText);
+      const toolkit = await getRorkToolkit();
+      const hasToolkit = Boolean(toolkit?.generateText);
+      const shouldUseRorkBackend = Boolean(useRorkBackend && hasToolkit);
       console.log('[TuckaGuide] backend choice', {
         useRorkBackend,
         shouldUseRorkBackend,
-        hasToolkit: Boolean(toolkit),
+        hasToolkit,
         hasGenerateText: Boolean(toolkit?.generateText),
         platform: Platform.OS,
       });
 
-      if (useRorkBackend && !toolkit?.generateText) {
+      if (useRorkBackend && !hasToolkit) {
         setChatStatus('idle');
         setChatError(new Error('AI chat is unavailable right now. Please reload and try again.'));
         return;
@@ -789,7 +790,19 @@ export default function HomeScreen() {
           if (!hasOpenAiKey) {
             throw new Error('OpenAI API key is missing.');
           }
-          return await runOpenAiDirect();
+
+          try {
+            return await runOpenAiDirect();
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            const shouldFallback = /timeout|network|unavailable|overloaded|rate|quota|busy|429|503/i.test(message);
+            if (shouldFallback && hasToolkit) {
+              console.log('[TuckaGuide] OpenAI failed, trying Rork toolkit', { message });
+              const res = await runRorkToolkit();
+              if (res.length > 0) return res;
+            }
+            throw e;
+          }
         })();
 
         try {
