@@ -300,7 +300,7 @@ export default function HomeScreen() {
       ''
     ).trim();
   const hasOpenAiKey = openAiKey.length > 0;
-  const useRorkBackend = Platform.OS === 'web' || !hasOpenAiKey;
+  const useRorkBackend = true;
   const chatContextKeyRef = useRef<string | null>(null);
   const systemPromptRef = useRef<string | null>(null);
 
@@ -662,8 +662,8 @@ export default function HomeScreen() {
           : history),
       ];
 
-      type BackendChatMessage = { role: 'user' | 'assistant'; content: string };
-      const backendMessages = messages.filter((m) => m.role !== 'system') as BackendChatMessage[];
+      type BackendChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
+      const backendMessages = messages as BackendChatMessage[];
 
       const toolkit = await getRorkToolkit();
       const hasToolkit = Boolean(toolkit?.generateText);
