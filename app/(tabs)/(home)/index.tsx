@@ -792,49 +792,82 @@ export default function HomeScreen() {
         };
 
         const runRorkToolkit = async (): Promise<string> => {
-          try {
-            console.log('[TuckaGuide] runRorkToolkit start', { messageCount: toolkitMessages.length, hasToolkit: Boolean(toolkit) });
-            const response = await (toolkit as RorkToolkitModule).generateText({ messages: toolkitMessages });
-            const result = String(response ?? '').trim();
-            console.log('[TuckaGuide] runRorkToolkit response', { responseLength: result.length, hasContent: result.length > 0 });
-            return result;
-          } catch (e) {
-            const errMsg = e instanceof Error ? e.message : String(e);
-            console.log('[TuckaGuide] runRorkToolkit error', { error: errMsg });
-            throw new Error(`Toolkit error: ${errMsg}`);
+          const maxRetries = 2;
+          let lastError: Error | null = null;
+          
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+              console.log('[TuckaGuide] runRorkToolkit attempt', { attempt, messageCount: toolkitMessages.length, hasToolkit: Boolean(toolkit) });
+              
+              const mod = toolkit ?? await getRorkToolkit();
+              if (!mod?.generateText) {
+                throw new Error('Toolkit generateText not available');
+              }
+              
+              const response = await mod.generateText({ messages: toolkitMessages });
+              const result = String(response ?? '').trim();
+              console.log('[TuckaGuide] runRorkToolkit response', { attempt, responseLength: result.length, hasContent: result.length > 0 });
+              
+              if (result.length > 0) {
+                return result;
+              }
+              
+              if (attempt < maxRetries) {
+                console.log('[TuckaGuide] runRorkToolkit empty response, retrying', { attempt });
+                await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+                continue;
+              }
+              
+              throw new Error('AI returned empty response');
+            } catch (e) {
+              lastError = e instanceof Error ? e : new Error(String(e));
+              console.log('[TuckaGuide] runRorkToolkit error', { attempt, error: lastError.message });
+              
+              if (attempt < maxRetries) {
+                await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+                continue;
+              }
+            }
           }
+          
+          throw new Error(`Toolkit error: ${lastError?.message ?? 'Unknown error'}`);
         };
 
         const requestPromise = (async () => {
+          // Always try toolkit first if available - it's more reliable
+          if (shouldUseRorkBackend) {
+            try {
+              console.log('[TuckaGuide] Trying Rork toolkit first');
+              const res = await runRorkToolkit();
+              if (res.length > 0) return res;
+            } catch (toolkitErr) {
+              const toolkitMsg = toolkitErr instanceof Error ? toolkitErr.message : String(toolkitErr);
+              console.log('[TuckaGuide] Rork toolkit failed, will try OpenAI', { toolkitMsg });
+            }
+          }
+
+          // Fallback to OpenAI if toolkit failed or unavailable
           if (hasOpenAiKey) {
             try {
+              console.log('[TuckaGuide] Trying OpenAI');
               return await runOpenAiDirect();
             } catch (e) {
               const message = e instanceof Error ? e.message : String(e);
-              const shouldFallback = /timeout|network|unavailable|overloaded|rate|quota|busy|429|503/i.test(message);
-              if (shouldFallback && shouldUseRorkBackend) {
-                console.log('[TuckaGuide] OpenAI failed, trying Rork toolkit', { message });
-                try {
-                  const res = await runRorkToolkit();
-                  if (res.length > 0) return res;
-                  console.log('[TuckaGuide] Rork toolkit returned empty after OpenAI failure');
-                } catch (toolkitErr) {
-                  const toolkitMsg = toolkitErr instanceof Error ? toolkitErr.message : String(toolkitErr);
-                  console.log('[TuckaGuide] Rork toolkit also failed', { toolkitMsg });
-                }
-                throw new Error('AI returned empty response. Please try again.');
+              console.log('[TuckaGuide] OpenAI also failed', { message });
+              
+              // If we already tried toolkit, throw more helpful error
+              if (shouldUseRorkBackend) {
+                throw new Error('AI service temporarily unavailable. Please try again.');
               }
               throw e;
             }
           }
 
+          // No backends available
           if (shouldUseRorkBackend) {
-            const res = await runRorkToolkit();
-            if (res.length > 0) return res;
-            throw new Error('AI returned empty response. Please try again.');
+            throw new Error('AI service temporarily unavailable. Please try again.');
           }
-
-          throw new Error('OpenAI API key is missing.');
+          throw new Error('AI chat is not configured. Please reload the app.');
         })();
 
         try {
@@ -931,7 +964,8 @@ export default function HomeScreen() {
         const isToolkitError = /toolkit error/i.test(rawMessage);
         const isEmptyResponse = /empty response/i.test(rawMessage);
         const isNetworkError = /network|unavailable|timeout|fetch failed|failed to fetch|aborted/i.test(rawMessage);
-        const isRateLimited = !isToolkitError && !isEmptyResponse && !isNetworkError && /rate|quota|busy|overloaded|429|503/i.test(rawMessage);
+        const isTemporarilyUnavailable = /temporarily unavailable|service.*unavailable/i.test(rawMessage);
+        const isRateLimited = !isToolkitError && !isEmptyResponse && !isNetworkError && !isTemporarilyUnavailable && /rate|quota|busy|overloaded|429|503/i.test(rawMessage);
 
         const userMessage = isMissingKey
           ? 'OpenAI API key is missing. Set EXPO_PUBLIC_OPENAI_API_KEY in Rork and reload the app.'
@@ -940,8 +974,10 @@ export default function HomeScreen() {
             : isModelAccess
               ? 'OpenAI model access error. This key may not have access to gpt-4o-mini.'
               : isRateLimited
-                ? 'Tucka Guide couldn\'t respond. Please try again.'
-                : isNetworkError
+                ? 'Tucka Guide is busy. Please wait a moment and try again.'
+                : isTemporarilyUnavailable
+                  ? 'Tucka Guide is temporarily unavailable. Please try again in a moment.'
+                  : isNetworkError
                   ? 'Network issue. Please check your connection and try again.'
                   : isEmptyResponse || isToolkitError
                     ? 'I couldn\'t generate a response. Please try rephrasing your question.'
