@@ -835,26 +835,7 @@ export default function ScanDetailsScreen() {
       const isFirstMessage = messageCountRef.current === 0;
       let fullMessage: string;
       if (isFirstMessage && systemPrompt) {
-        fullMessage = [
-          `[SYSTEM INSTRUCTIONS — follow these strictly]`,
-          `You are "Tucka Guide", a friendly Australian bush food AI companion.`,
-          `The user scanned a plant. Reference info is below. USE it to answer, but NEVER restate or summarize the identification back to the user.`,
-          ``,
-          `CRITICAL RULES:`,
-          `1. DIRECTLY answer the user's question. Do NOT repeat plant name, confidence, safety status, or identification details.`,
-          `2. If the user asks for a recipe, give them an actual recipe with ingredients and steps.`,
-          `3. If the user asks about seasonality, give specific seasonal info.`,
-          `4. Be conversational, helpful, and specific. Treat this like a knowledgeable friend answering a question.`,
-          `5. NEVER start your response with the plant identification or safety summary.`,
-          ``,
-          `REFERENCE DATA (use but do not repeat):`,
-          systemPrompt,
-          `[END OF SYSTEM INSTRUCTIONS]`,
-          ``,
-          text,
-        ].join('\n');
-      } else if (systemPrompt) {
-        fullMessage = text;
+        fullMessage = `[SYS_CTX_START]You are "Tucka Guide", a friendly Australian bush food AI companion. The user scanned a plant. Reference info is below. USE it to answer, but NEVER restate or summarize the identification back to the user. CRITICAL RULES: 1. DIRECTLY answer the user's question. Do NOT repeat plant name, confidence, safety status, or identification details. 2. If the user asks for a recipe, give them an actual recipe with ingredients and steps. 3. If the user asks about seasonality, give specific seasonal info. 4. Be conversational, helpful, and specific. Treat this like a knowledgeable friend answering a question. 5. NEVER start your response with the plant identification or safety summary. REFERENCE DATA (use but do not repeat): ${systemPrompt}[SYS_CTX_END] ${text}`;
       } else {
         fullMessage = text;
       }
@@ -881,10 +862,34 @@ export default function ScanDetailsScreen() {
         const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
         let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
         if (m.role === 'user') {
+          const sysCtxEndMarker = '[SYS_CTX_END]';
+          const sysCtxEndIdx = text.indexOf(sysCtxEndMarker);
+          if (sysCtxEndIdx !== -1) {
+            text = text.substring(sysCtxEndIdx + sysCtxEndMarker.length).trim();
+          }
           const endMarker = '[END OF SYSTEM INSTRUCTIONS]';
           const endIdx = text.indexOf(endMarker);
           if (endIdx !== -1) {
             text = text.substring(endIdx + endMarker.length).trim();
+          }
+          const sysMarker = '[SYSTEM INSTRUCTIONS';
+          const sysStart = text.indexOf(sysMarker);
+          if (sysStart !== -1) {
+            const endSys = text.indexOf(endMarker, sysStart);
+            if (endSys !== -1) {
+              text = text.substring(endSys + endMarker.length).trim();
+            } else {
+              text = text.substring(0, sysStart).trim();
+            }
+          }
+          const sysCtxStart = text.indexOf('[SYS_CTX_START]');
+          if (sysCtxStart !== -1) {
+            const sysCtxEnd2 = text.indexOf(sysCtxEndMarker, sysCtxStart);
+            if (sysCtxEnd2 !== -1) {
+              text = text.substring(sysCtxEnd2 + sysCtxEndMarker.length).trim();
+            } else {
+              text = text.substring(0, sysCtxStart).trim();
+            }
           }
           const markers = ['USER QUESTION: ', 'User question: '];
           for (const marker of markers) {
@@ -1213,16 +1218,33 @@ export default function ScanDetailsScreen() {
                       if (!text.trim()) return null;
                       const isUser = m.role === 'user';
                       if (isUser) {
+                        const sysCtxEndMarker = '[SYS_CTX_END]';
+                        const sysCtxEndIdx = text.indexOf(sysCtxEndMarker);
+                        if (sysCtxEndIdx !== -1) {
+                          text = text.substring(sysCtxEndIdx + sysCtxEndMarker.length).trim();
+                        }
                         const endMarker = '[END OF SYSTEM INSTRUCTIONS]';
                         const endIdx = text.indexOf(endMarker);
                         if (endIdx !== -1) {
                           text = text.substring(endIdx + endMarker.length).trim();
                         }
                         const sysMarker = '[SYSTEM INSTRUCTIONS';
-                        if (text.startsWith(sysMarker)) {
-                          const endSys = text.indexOf(endMarker);
+                        const sysStart = text.indexOf(sysMarker);
+                        if (sysStart !== -1) {
+                          const endSys = text.indexOf(endMarker, sysStart);
                           if (endSys !== -1) {
                             text = text.substring(endSys + endMarker.length).trim();
+                          } else {
+                            text = text.substring(0, sysStart).trim();
+                          }
+                        }
+                        const sysCtxStart = text.indexOf('[SYS_CTX_START]');
+                        if (sysCtxStart !== -1) {
+                          const sysCtxEnd2 = text.indexOf(sysCtxEndMarker, sysCtxStart);
+                          if (sysCtxEnd2 !== -1) {
+                            text = text.substring(sysCtxEnd2 + sysCtxEndMarker.length).trim();
+                          } else {
+                            text = text.substring(0, sysCtxStart).trim();
                           }
                         }
                         const markers = ['USER QUESTION: ', 'User question: '];
