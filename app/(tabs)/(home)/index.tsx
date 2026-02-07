@@ -666,8 +666,13 @@ export default function HomeScreen() {
           : history),
       ];
 
-      type BackendChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
+      type AssistantMessage = { role: 'assistant'; content: string };
+      type UserMessage = { role: 'user'; content: string };
+      type BackendChatMessage = AssistantMessage | UserMessage | { role: 'system'; content: string };
       const backendMessages = messages as BackendChatMessage[];
+      const toolkitMessages = backendMessages.filter(
+        (m): m is AssistantMessage | UserMessage => m.role === 'assistant' || m.role === 'user'
+      );
 
       const toolkit = await getRorkToolkit();
       const hasToolkit = Boolean(toolkit?.generateText);
@@ -768,7 +773,7 @@ export default function HomeScreen() {
         };
 
         const runRorkToolkit = async (): Promise<string> => {
-          const response = await (toolkit as RorkToolkitModule).generateText({ messages: backendMessages });
+          const response = await (toolkit as RorkToolkitModule).generateText({ messages: toolkitMessages });
           return String(response ?? '').trim();
         };
 
@@ -823,7 +828,7 @@ export default function HomeScreen() {
         try {
           const mod = toolkit ?? (await getRorkToolkit());
           if (!mod?.generateText) return null;
-          const response = await mod.generateText({ messages: backendMessages });
+          const response = await mod.generateText({ messages: toolkitMessages });
           const cleaned = String(response ?? '').trim();
           return cleaned.length > 0 ? cleaned : null;
         } catch (e) {
