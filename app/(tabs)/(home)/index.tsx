@@ -3181,13 +3181,6 @@ Return JSON with keys:
                 }}
                 testID="pocket-guide-card-cultural-respect"
               >
-                <LinearGradient
-                  colors={['rgba(56,217,137,0.26)', 'rgba(246,196,69,0.20)', 'rgba(255,140,60,0.14)']}
-                  start={{ x: 0.05, y: 0.0 }}
-                  end={{ x: 0.95, y: 1.0 }}
-                  style={styles.guideCardGlow}
-                />
-
                 <View style={styles.guideIconBrand}>
                   <Image
                     source={{
@@ -3208,11 +3201,11 @@ Return JSON with keys:
                   />
                 </View>
 
-                <Text style={styles.guideTitle} numberOfLines={2}>
+                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>
                   Cultural respect
                   {'\n'}On Country
                 </Text>
-                <Text style={styles.guideCount}>Pocket guide</Text>
+                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -3223,13 +3216,6 @@ Return JSON with keys:
                 }}
                 testID="pocket-guide-card-animal-care"
               >
-                <LinearGradient
-                  colors={['rgba(56,217,137,0.22)', 'rgba(246,196,69,0.20)', 'rgba(255,140,60,0.14)']}
-                  start={{ x: 0.05, y: 0.0 }}
-                  end={{ x: 0.95, y: 1.0 }}
-                  style={styles.guideCardGlow}
-                />
-
                 <View style={styles.guideIconBrand}>
                   <Image
                     source={{
@@ -3250,11 +3236,11 @@ Return JSON with keys:
                   />
                 </View>
 
-                <Text style={styles.guideTitle} numberOfLines={2}>
+                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>
                   Animal Care
                   {'\n'}& Share
                 </Text>
-                <Text style={styles.guideCount}>Pocket guide</Text>
+                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -3265,13 +3251,6 @@ Return JSON with keys:
                 }}
                 testID="pocket-guide-card-foraging-kids"
               >
-                <LinearGradient
-                  colors={['rgba(56,217,137,0.22)', 'rgba(246,196,69,0.20)', 'rgba(255,140,60,0.14)']}
-                  start={{ x: 0.05, y: 0.0 }}
-                  end={{ x: 0.95, y: 1.0 }}
-                  style={styles.guideCardGlow}
-                />
-
                 <View style={styles.guideIconBrand}>
                   <Image
                     source={{
@@ -3292,11 +3271,11 @@ Return JSON with keys:
                   />
                 </View>
 
-                <Text style={styles.guideTitle} numberOfLines={2}>
+                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>
                   Foraging
                   {'\n'}With Kids
                 </Text>
-                <Text style={styles.guideCount}>Pocket guide</Text>
+                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -3307,13 +3286,6 @@ Return JSON with keys:
                 }}
                 testID="pocket-guide-card-if-something-wrong"
               >
-                <LinearGradient
-                  colors={['rgba(56,217,137,0.18)', 'rgba(246,196,69,0.18)', 'rgba(255,140,60,0.18)']}
-                  start={{ x: 0.05, y: 0.0 }}
-                  end={{ x: 0.95, y: 1.0 }}
-                  style={styles.guideCardGlow}
-                />
-
                 <View style={styles.guideIconBrand}>
                   <Image
                     source={{
@@ -3334,11 +3306,11 @@ Return JSON with keys:
                   />
                 </View>
 
-                <Text style={styles.guideTitle} numberOfLines={2}>
+                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>
                   If Something
                   {'\n'}Goes Wrong
                 </Text>
-                <Text style={styles.guideCount}>Pocket guide</Text>
+                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -3689,24 +3661,32 @@ const styles = StyleSheet.create({
     height: 176,
   },
   guideCardBrand: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(56,217,137,0.22)',
+    borderColor: 'rgba(56,217,137,0.18)',
     overflow: 'hidden',
-  },
-  guideCardGlow: {
-    ...StyleSheet.absoluteFillObject,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 6,
   },
   guideIconBrand: {
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: 'rgba(7,10,8,0.52)',
+    backgroundColor: 'rgba(56,217,137,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(56,217,137,0.24)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+  },
+  guideTitleDark: {
+    color: '#0C1C14',
+  },
+  guideCountDark: {
+    color: 'rgba(12,28,20,0.65)',
   },
   guideIconArt: {
     width: 44,
