@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import { Animated, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
@@ -192,7 +191,7 @@ export default function ForagingWithKidsPocketGuideScreen() {
 
   return (
     <View style={styles.root} testID="pocket-guide-foraging-kids-screen">
-      <LinearGradient colors={['#07110B', '#07110B', 'rgba(246,196,69,0.10)']} style={StyleSheet.absoluteFillObject} />
+      <View style={styles.backgroundGlow} />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.topBar}>
           <Pressable
@@ -234,12 +233,7 @@ export default function ForagingWithKidsPocketGuideScreen() {
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} testID="pocket-guide-scroll">
           <View style={styles.heroCard} testID="pocket-guide-hero-card">
-            <LinearGradient
-              colors={['rgba(56,217,137,0.16)', 'rgba(246,196,69,0.18)', 'rgba(255,140,60,0.10)']}
-              start={{ x: 0.05, y: 0.0 }}
-              end={{ x: 0.95, y: 1.0 }}
-              style={StyleSheet.absoluteFillObject}
-            />
+            <View style={styles.heroGlow} />
 
             <View style={styles.heroTopRow}>
               <View style={styles.heroIconShell} testID="pocket-guide-hero-icon-shell">
@@ -414,6 +408,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
     backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
+  },
+  backgroundGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#07110B',
+  },
+  heroGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(56,217,137,0.10)',
   },
   heroTopRow: {
     flexDirection: 'row',
