@@ -303,6 +303,7 @@ export default function HomeScreen() {
   const useRorkBackend = true;
   const chatContextKeyRef = useRef<string | null>(null);
   const systemPromptRef = useRef<string | null>(null);
+  const chatRequestIdRef = useRef<number>(0);
 
   const canScan = useMemo(() => {
     return scanImages.length > 0 && Boolean(geminiApiKey);
@@ -600,6 +601,9 @@ export default function HomeScreen() {
       const trimmed = String(userText ?? '').trim();
       if (!trimmed) return;
       const isRetry = options?.retry === true;
+      const requestId = chatRequestIdRef.current + 1;
+      chatRequestIdRef.current = requestId;
+      console.log('[TuckaGuide] sendMessage start', { requestId, isRetry, platform: Platform.OS });
 
       if (!hasOpenAiKey && !useRorkBackend) {
         setChatStatus('idle');
@@ -863,11 +867,20 @@ export default function HomeScreen() {
           createdAt: Date.now(),
         };
 
+        if (chatRequestIdRef.current !== requestId) {
+          console.log('[TuckaGuide] stale success ignored', { requestId, current: chatRequestIdRef.current });
+          return;
+        }
         setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
         setChatError(null);
+        setChatTimeout(false);
       } catch (e) {
+        if (chatRequestIdRef.current !== requestId) {
+          console.log('[TuckaGuide] stale error ignored', { requestId, current: chatRequestIdRef.current });
+          return;
+        }
         const rawMessage = e instanceof Error ? e.message : String(e);
-        console.log('[TuckaGuide] sendMessage failed', { rawMessage });
+        console.log('[TuckaGuide] sendMessage failed', { rawMessage, requestId });
 
         if (!useRorkBackend) {
           const fallbackText = await fallbackToRork();
@@ -903,7 +916,9 @@ export default function HomeScreen() {
 
         setChatError(new Error(userMessage));
       } finally {
-        setChatStatus('idle');
+        if (chatRequestIdRef.current === requestId) {
+          setChatStatus('idle');
+        }
       }
     },
     [chatMessagesRaw, hasOpenAiKey, openAiKey, useRorkBackend],
@@ -1258,10 +1273,15 @@ ${scanContext}`;
       setChatTimeout(false);
     }
 
+    const activeRequestId = chatRequestIdRef.current;
     const handle = setTimeout(() => {
+      if (chatRequestIdRef.current !== activeRequestId) {
+        console.log('[TuckaGuide] watchdog ignored stale request', { activeRequestId, current: chatRequestIdRef.current });
+        return;
+      }
       const since = chatBusySinceRef.current;
       const elapsedMs = typeof since === 'number' ? Date.now() - since : 0;
-      console.log('[TuckaGuide] chat busy watchdog fired', { chatStatus, elapsedMs });
+      console.log('[TuckaGuide] chat busy watchdog fired', { chatStatus, elapsedMs, activeRequestId });
       setChatTimeout(true);
       setChatStatus('idle');
       setChatError(new Error('Tucka Guide timed out. Please try again.'));
