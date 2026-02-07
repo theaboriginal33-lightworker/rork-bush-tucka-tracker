@@ -836,15 +836,25 @@ export default function ScanDetailsScreen() {
       let fullMessage: string;
       if (isFirstMessage && systemPrompt) {
         fullMessage = [
-          `INSTRUCTIONS: You are "Tucka Guide", a friendly Australian bush food AI companion. Below is context about a scanned plant. The user will ask you a question — answer their question directly and helpfully. Do NOT repeat the plant identification info back. Just answer the question.`,
+          `[SYSTEM INSTRUCTIONS — follow these strictly]`,
+          `You are "Tucka Guide", a friendly Australian bush food AI companion.`,
+          `The user scanned a plant. Reference info is below. USE it to answer, but NEVER restate or summarize the identification back to the user.`,
           ``,
-          `PLANT CONTEXT:`,
+          `CRITICAL RULES:`,
+          `1. DIRECTLY answer the user's question. Do NOT repeat plant name, confidence, safety status, or identification details.`,
+          `2. If the user asks for a recipe, give them an actual recipe with ingredients and steps.`,
+          `3. If the user asks about seasonality, give specific seasonal info.`,
+          `4. Be conversational, helpful, and specific. Treat this like a knowledgeable friend answering a question.`,
+          `5. NEVER start your response with the plant identification or safety summary.`,
+          ``,
+          `REFERENCE DATA (use but do not repeat):`,
           systemPrompt,
+          `[END OF SYSTEM INSTRUCTIONS]`,
           ``,
-          `USER QUESTION: ${text}`,
+          text,
         ].join('\n');
       } else if (systemPrompt) {
-        fullMessage = `Remember: you are Tucka Guide. The user previously scanned a plant (context was provided earlier). Now answer this follow-up question directly and helpfully.\n\nUSER QUESTION: ${text}`;
+        fullMessage = text;
       } else {
         fullMessage = text;
       }
