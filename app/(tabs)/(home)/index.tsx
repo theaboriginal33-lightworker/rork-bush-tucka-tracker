@@ -844,6 +844,7 @@ export default function HomeScreen() {
         };
 
         setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), assistantMsg]);
+        setChatError(null);
       } catch (e) {
         const rawMessage = e instanceof Error ? e.message : String(e);
         console.log('[TuckaGuide] sendMessage failed', { rawMessage });
