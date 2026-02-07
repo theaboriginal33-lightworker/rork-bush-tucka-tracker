@@ -300,7 +300,7 @@ export default function HomeScreen() {
       ''
     ).trim();
   const hasOpenAiKey = openAiKey.length > 0;
-  const useRorkBackend = true;
+  const useRorkBackend = false;
   const chatContextKeyRef = useRef<string | null>(null);
   const systemPromptRef = useRef<string | null>(null);
   const chatRequestIdRef = useRef<number>(0);
@@ -782,40 +782,27 @@ export default function HomeScreen() {
         };
 
         const requestPromise = (async () => {
-          if (shouldUseRorkBackend) {
+          if (hasOpenAiKey) {
             try {
-              const res = await runRorkToolkit();
-              if (res.length > 0) return res;
+              return await runOpenAiDirect();
             } catch (e) {
               const message = e instanceof Error ? e.message : String(e);
-              const isOpenAiDetected = /openai\s+key\s+detected/i.test(message);
-              console.log('[TuckaGuide] toolkit generateText failed', { message, isOpenAiDetected });
-              if (!isOpenAiDetected) {
-                throw e;
+              const shouldFallback = /timeout|network|unavailable|overloaded|rate|quota|busy|429|503/i.test(message);
+              if (shouldFallback && shouldUseRorkBackend) {
+                console.log('[TuckaGuide] OpenAI failed, trying Rork toolkit', { message });
+                const res = await runRorkToolkit();
+                if (res.length > 0) return res;
               }
-              if (!hasOpenAiKey) {
-                throw e;
-              }
-              console.log('[TuckaGuide] Falling back to direct OpenAI after toolkit rejection');
+              throw e;
             }
           }
 
-          if (!hasOpenAiKey) {
-            throw new Error('OpenAI API key is missing.');
+          if (shouldUseRorkBackend) {
+            const res = await runRorkToolkit();
+            if (res.length > 0) return res;
           }
 
-          try {
-            return await runOpenAiDirect();
-          } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
-            const shouldFallback = /timeout|network|unavailable|overloaded|rate|quota|busy|429|503/i.test(message);
-            if (shouldFallback && hasToolkit) {
-              console.log('[TuckaGuide] OpenAI failed, trying Rork toolkit', { message });
-              const res = await runRorkToolkit();
-              if (res.length > 0) return res;
-            }
-            throw e;
-          }
+          throw new Error('OpenAI API key is missing.');
         })();
 
         try {
@@ -891,7 +878,7 @@ export default function HomeScreen() {
         const rawMessage = e instanceof Error ? e.message : String(e);
         console.log('[TuckaGuide] sendMessage failed', { rawMessage, requestId });
 
-        if (!useRorkBackend) {
+        if (shouldUseRorkBackend) {
           const fallbackText = await fallbackToRork();
           if (fallbackText) {
             const assistantMsg: AgentMessage = {
