@@ -159,6 +159,7 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
 }
 
 const MAX_WEB_DATA_URI_LENGTH = 650_000;
+const MAX_NATIVE_DATA_URI_LENGTH = 650_000;
 const WEB_IDB_DB = 'bush-tucka-tracka';
 const WEB_IDB_STORE = 'scan-journal';
 let webMemoryCache: ScanJournalEntry[] | null = null;
@@ -172,6 +173,24 @@ function stripLargeWebImages(entry: ScanJournalEntry): ScanJournalEntry {
     if (!trimmed) return undefined;
     if (trimmed.startsWith('blob:')) return undefined;
     if (trimmed.startsWith('data:') && trimmed.length > MAX_WEB_DATA_URI_LENGTH) return undefined;
+    return trimmed;
+  };
+
+  return {
+    ...entry,
+    imageUri: stripIfTooLarge(entry.imageUri),
+    imagePreviewUri: stripIfTooLarge(entry.imagePreviewUri),
+  };
+}
+
+function stripLargeNativeImages(entry: ScanJournalEntry): ScanJournalEntry {
+  if (Platform.OS === 'web') return entry;
+
+  const stripIfTooLarge = (uri?: string) => {
+    if (!uri) return uri;
+    const trimmed = uri.trim();
+    if (!trimmed) return undefined;
+    if (trimmed.startsWith('data:') && trimmed.length > MAX_NATIVE_DATA_URI_LENGTH) return undefined;
     return trimmed;
   };
 
@@ -365,7 +384,9 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
       const parsed = safeParseJson<ScanJournalEntry[]>(rawPayload) ?? [];
       const normalized = Array.isArray(parsed) ? parsed.map((e) => normalizeEntry(e)).filter(Boolean) : [];
-      const cleaned = Platform.OS === 'web' ? normalized.map((entry) => stripLargeWebImages(entry)) : normalized;
+      const cleaned = Platform.OS === 'web'
+        ? normalized.map((entry) => stripLargeWebImages(entry))
+        : normalized.map((entry) => stripLargeNativeImages(entry));
       if (Platform.OS === 'web') {
         webMemoryCache = cleaned;
       }
@@ -423,7 +444,9 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
   const { mutateAsync: persistMutateAsync } = useMutation({
     mutationFn: async (nextEntries: ScanJournalEntry[]) => {
       const normalizedForStorage =
-        Platform.OS === 'web' ? nextEntries.map((entry) => stripLargeWebImages(entry)) : nextEntries;
+        Platform.OS === 'web'
+          ? nextEntries.map((entry) => stripLargeWebImages(entry))
+          : nextEntries.map((entry) => stripLargeNativeImages(entry));
       const payload = JSON.stringify(normalizedForStorage);
       let didPersist = false;
 
@@ -435,12 +458,46 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         if (localOk) didPersist = true;
       }
 
-      try {
-        await AsyncStorage.setItem(STORAGE_KEY, payload);
-        didPersist = true;
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.log('[ScanJournal] AsyncStorage.setItem failed', { message });
+      const tryPersistNative = async (value: string, label: string): Promise<boolean> => {
+        try {
+          await AsyncStorage.setItem(STORAGE_KEY, value);
+          console.log('[ScanJournal] AsyncStorage.setItem ok', { label, length: value.length });
+          return true;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanJournal] AsyncStorage.setItem failed', { message, label, length: value.length });
+          return false;
+        }
+      };
+
+      if (Platform.OS !== 'web') {
+        didPersist = await tryPersistNative(payload, 'full') || didPersist;
+
+        if (!didPersist) {
+          const stripped = normalizedForStorage.map((entry) => ({
+            ...entry,
+            imageUri: entry.imageUri?.startsWith('data:') ? undefined : entry.imageUri,
+            imagePreviewUri: entry.imagePreviewUri?.startsWith('data:') ? undefined : entry.imagePreviewUri,
+            chatHistory: Array.isArray(entry.chatHistory) ? entry.chatHistory.slice(-20) : entry.chatHistory,
+          }));
+          const strippedPayload = JSON.stringify(stripped);
+          const ok = await tryPersistNative(strippedPayload, 'stripped');
+          if (ok) {
+            didPersist = true;
+            if (Platform.OS === 'web') {
+              webMemoryCache = stripped;
+            }
+            return stripped;
+          }
+        }
+      } else {
+        try {
+          await AsyncStorage.setItem(STORAGE_KEY, payload);
+          didPersist = true;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanJournal] AsyncStorage.setItem failed', { message });
+        }
       }
 
       if (!didPersist) {
