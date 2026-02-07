@@ -458,7 +458,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
   });
 
   const persist = useCallback(
-    (nextEntries: ScanJournalEntry[]) => {
+    (nextEntries: ScanJournalEntry[]): Promise<void> => {
       persistQueueRef.current = persistQueueRef.current
         .catch(() => {
           return;
@@ -470,7 +470,10 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         .catch((e) => {
           const message = e instanceof Error ? e.message : String(e);
           console.log('[ScanJournal] persist queue error', { message });
+          throw e;
         });
+
+      return persistQueueRef.current;
     },
     [persistMutateAsync],
   );
@@ -500,6 +503,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       let resolvedEntry: ScanJournalEntry | null = null;
 
       setErrorMessage(null);
+      let nextSnapshot: ScanJournalEntry[] = [];
       setEntries((prev) => {
         const entry: ScanJournalEntry = normalizeEntry({
           id,
@@ -520,9 +524,20 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         if (Platform.OS === 'web') {
           webMemoryCache = next;
         }
+        nextSnapshot = next;
         persist(next);
         return next;
       });
+
+      if (nextSnapshot.length > 0) {
+        try {
+          await persist(nextSnapshot);
+          console.log('[ScanJournal] addEntry persisted', { id, count: nextSnapshot.length });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[ScanJournal] addEntry persist failed', { message });
+        }
+      }
 
       const out =
         resolvedEntry ??
