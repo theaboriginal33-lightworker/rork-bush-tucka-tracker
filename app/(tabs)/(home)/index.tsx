@@ -923,13 +923,15 @@ export default function HomeScreen() {
 
         setChatError(new Error(userMessage));
 
-        const fallbackAssistantMsg: AgentMessage = {
-          id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          role: 'assistant',
-          parts: [{ type: 'text', text: userMessage }],
-          createdAt: Date.now(),
-        };
-        setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), fallbackAssistantMsg]);
+        if (!isRateLimited) {
+          const fallbackAssistantMsg: AgentMessage = {
+            id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            role: 'assistant',
+            parts: [{ type: 'text', text: userMessage }],
+            createdAt: Date.now(),
+          };
+          setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), fallbackAssistantMsg]);
+        }
       } finally {
         if (chatRequestIdRef.current === requestId) {
           setChatStatus('idle');
