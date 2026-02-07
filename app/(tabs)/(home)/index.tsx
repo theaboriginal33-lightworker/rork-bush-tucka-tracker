@@ -792,8 +792,17 @@ export default function HomeScreen() {
         };
 
         const runRorkToolkit = async (): Promise<string> => {
-          const response = await (toolkit as RorkToolkitModule).generateText({ messages: toolkitMessages });
-          return String(response ?? '').trim();
+          try {
+            console.log('[TuckaGuide] runRorkToolkit start', { messageCount: toolkitMessages.length, hasToolkit: Boolean(toolkit) });
+            const response = await (toolkit as RorkToolkitModule).generateText({ messages: toolkitMessages });
+            const result = String(response ?? '').trim();
+            console.log('[TuckaGuide] runRorkToolkit response', { responseLength: result.length, hasContent: result.length > 0 });
+            return result;
+          } catch (e) {
+            const errMsg = e instanceof Error ? e.message : String(e);
+            console.log('[TuckaGuide] runRorkToolkit error', { error: errMsg });
+            throw new Error(`Toolkit error: ${errMsg}`);
+          }
         };
 
         const requestPromise = (async () => {
@@ -815,6 +824,7 @@ export default function HomeScreen() {
           if (shouldUseRorkBackend) {
             const res = await runRorkToolkit();
             if (res.length > 0) return res;
+            throw new Error('AI returned empty response. Please try again.');
           }
 
           throw new Error('OpenAI API key is missing.');
@@ -911,7 +921,10 @@ export default function HomeScreen() {
         const isMissingKey = /provide an api key|no api key|api key missing|missing api key/i.test(rawMessage);
         const isInvalidKey = /invalid api key|api_key_invalid|incorrect api key|invalid_api_key/i.test(rawMessage);
         const isModelAccess = /model.*(not found|does not exist|not available|access)/i.test(rawMessage);
-        const isRateLimited = /rate|quota|busy|overloaded|429|503|unavailable|timeout/i.test(rawMessage);
+        const isToolkitError = /toolkit error/i.test(rawMessage);
+        const isEmptyResponse = /empty response/i.test(rawMessage);
+        const isRateLimited = !isToolkitError && !isEmptyResponse && /rate|quota|busy|overloaded|429|503/i.test(rawMessage);
+        const isNetworkError = /network|unavailable|timeout|fetch failed|failed to fetch/i.test(rawMessage);
 
         const userMessage = isMissingKey
           ? 'OpenAI API key is missing. Set EXPO_PUBLIC_OPENAI_API_KEY in Rork and reload the app.'
@@ -921,9 +934,13 @@ export default function HomeScreen() {
               ? 'OpenAI model access error. This key may not have access to gpt-4o-mini.'
               : isRateLimited
                 ? 'Tucka Guide is busy right now. Please try again in a moment.'
-                : rawMessage.trim().length > 0
-                  ? rawMessage
-                  : 'Could not send message. Please try again.';
+                : isNetworkError
+                  ? 'Network issue. Please check your connection and try again.'
+                  : isEmptyResponse || isToolkitError
+                    ? 'I couldn\'t generate a response. Please try rephrasing your question.'
+                    : rawMessage.trim().length > 0
+                      ? rawMessage
+                      : 'Could not send message. Please try again.';
 
         setChatError(new Error(userMessage));
 
@@ -931,7 +948,7 @@ export default function HomeScreen() {
         const fallbackAssistantMsg: AgentMessage = {
           id: `assistant-error-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           role: 'assistant',
-          parts: [{ type: 'text', text: isRateLimited ? 'Tucka Guide is busy right now. Please wait a moment and try again.' : userMessage }],
+          parts: [{ type: 'text', text: userMessage }],
           createdAt: Date.now(),
         };
         setChatMessages((prev) => {
