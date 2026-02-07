@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRorkAgent } from '@rork-ai/toolkit-sdk';
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import type * as LocationType from 'expo-location';
-import { ChevronLeft, CookingPot, Download, MapPin, Navigation, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, CookingPot, Download, MapPin, MessageCircle, Navigation, Send, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { buildShareUrl } from '@/constants/shareLinks';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
@@ -783,6 +784,94 @@ export default function ScanDetailsScreen() {
     return Array.isArray(ch) ? ch : [];
   }, [entry?.chatHistory]);
 
+  const systemPrompt = useMemo(() => {
+    if (!entry) return '';
+    const s = entry.scan;
+    const lines: string[] = [
+      `You are "Tucka Guide", a friendly and knowledgeable Australian bush food companion.`,
+      `The user has scanned a plant/item. Here is everything known about it:`,
+      `Common Name: ${s.commonName}`,
+      s.scientificName ? `Scientific Name: ${s.scientificName}` : '',
+      `Confidence: ${Math.round(s.confidence * 100)}%`,
+      `Safety Status: ${s.safety.status}`,
+      `Safety Summary: ${s.safety.summary}`,
+      s.safety.keyRisks.length > 0 ? `Key Risks: ${s.safety.keyRisks.join('; ')}` : '',
+      s.categories.length > 0 ? `Categories: ${s.categories.join(', ')}` : '',
+      `Bush Tucker Likely: ${s.bushTuckerLikely ? 'Yes' : 'No'}`,
+      `Preparation Ease: ${s.preparation.ease}`,
+      s.preparation.steps.length > 0 ? `Preparation Steps: ${s.preparation.steps.join('; ')}` : '',
+      s.seasonality.bestMonths.length > 0 ? `Best Months: ${s.seasonality.bestMonths.join(', ')}` : '',
+      s.seasonality.notes ? `Seasonality Notes: ${s.seasonality.notes}` : '',
+      s.culturalKnowledge.notes ? `Cultural Notes: ${s.culturalKnowledge.notes}` : '',
+      s.culturalKnowledge.respect.length > 0 ? `Cultural Respect: ${s.culturalKnowledge.respect.join('; ')}` : '',
+      s.warnings.length > 0 ? `Warnings: ${s.warnings.join('; ')}` : '',
+      s.suggestedUses.length > 0 ? `Suggested Uses: ${s.suggestedUses.join('; ')}` : '',
+      '',
+      'Answer the user\'s questions about this item using the information above and your general knowledge.',
+      'Be helpful, specific, and safety-conscious. If you are unsure, say so.',
+      'Keep answers concise but thorough. Use plain language.',
+    ];
+    return lines.filter(l => l.length > 0).join('\n');
+  }, [entry]);
+
+  const { messages: agentMessages, sendMessage, error: agentError, setMessages } = useRorkAgent({ tools: {} });
+
+  const systemPromptSetRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (!systemPrompt || systemPromptSetRef.current) return;
+    systemPromptSetRef.current = true;
+    setMessages([{ id: 'system-0', role: 'system' as never, parts: [{ type: 'text', text: systemPrompt }] } as never]);
+  }, [systemPrompt, setMessages]);
+
+  const [chatInput, setChatInput] = useState<string>('');
+  const [isSending, setIsSending] = useState<boolean>(false);
+
+  const visibleMessages = useMemo(() => {
+    return agentMessages.filter(m => m.role !== 'system');
+  }, [agentMessages]);
+
+  const handleSendMessage = useCallback(async () => {
+    const text = chatInput.trim();
+    if (text.length === 0 || isSending) return;
+    console.log('[TuckaGuide] sending message', { text });
+    setChatInput('');
+    setIsSending(true);
+    try {
+      await sendMessage(text);
+      console.log('[TuckaGuide] message sent successfully');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.log('[TuckaGuide] sendMessage failed', { message });
+    } finally {
+      setIsSending(false);
+    }
+  }, [chatInput, isSending, sendMessage]);
+
+  const persistedCountRef = useRef<number>(0);
+  useEffect(() => {
+    if (!entry) return;
+    const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
+    if (filtered.length === 0 || filtered.length === persistedCountRef.current) return;
+    persistedCountRef.current = filtered.length;
+    const newHistory: ScanJournalChatMessage[] = filtered
+      .map((m) => {
+        const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
+        const text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+        return {
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          text,
+          createdAt: Date.now(),
+        };
+      })
+      .filter(m => m.text.trim().length > 0);
+    if (newHistory.length > 0) {
+      updateEntry(entry.id, { chatHistory: newHistory }).catch((e) => {
+        console.log('[TuckaGuide] persist chat failed', e instanceof Error ? e.message : String(e));
+      });
+    }
+  }, [entry, visibleMessages, updateEntry]);
+
   if (!entry) {
     return (
       <View style={styles.container} testID="scan-details-missing">
@@ -1070,6 +1159,71 @@ export default function ScanDetailsScreen() {
                 <Text style={styles.culturalFooter} testID="cultural-footer">
                   {CULTURAL_FOOTER}
                 </Text>
+              </View>
+
+              <View style={styles.chatSection} testID="tucka-guide-chat">
+                <View style={styles.insightHeaderRow}>
+                  <MessageCircle size={18} color={COLORS.action} />
+                  <Text style={styles.insightHeaderText}>Ask Tucka Guide</Text>
+                </View>
+
+                {visibleMessages.length > 0 ? (
+                  <View style={styles.chatMessagesWrap}>
+                    {visibleMessages.map((m) => {
+                      const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
+                      const text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+                      if (!text.trim()) return null;
+                      const isUser = m.role === 'user';
+                      return (
+                        <View
+                          key={m.id}
+                          style={[styles.chatMsg, isUser ? styles.chatMsgUser : styles.chatMsgAssistant]}
+                        >
+                          <Text style={styles.chatMsgRole}>{isUser ? 'You' : 'Tucka Guide'}</Text>
+                          <Text style={styles.chatMsgText}>{text}</Text>
+                        </View>
+                      );
+                    })}
+                    {isSending ? (
+                      <View style={[styles.chatMsg, styles.chatMsgAssistant]}>
+                        <Text style={styles.chatMsgRole}>Tucka Guide</Text>
+                        <Text style={[styles.chatMsgText, { opacity: 0.5 }]}>Thinking...</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={[styles.bodyText, { marginBottom: 12, opacity: 0.7 }]}>
+                    Ask anything about this {entry.scan.commonName} — preparation, safety, uses, seasonality, or anything else.
+                  </Text>
+                )}
+
+                {agentError ? (
+                  <Text style={{ color: COLORS.error, fontSize: 13, marginBottom: 8 }}>
+                    Error: {agentError.message ?? 'Could not get a response. Try again.'}
+                  </Text>
+                ) : null}
+
+                <View style={styles.chatInputRow}>
+                  <TextInput
+                    style={styles.chatInputField}
+                    value={chatInput}
+                    onChangeText={setChatInput}
+                    placeholder="Ask a question..."
+                    placeholderTextColor={COLORS.textSecondary}
+                    multiline
+                    returnKeyType="send"
+                    onSubmitEditing={handleSendMessage}
+                    testID="tucka-guide-input"
+                  />
+                  <TouchableOpacity
+                    style={[styles.chatSendBtn, (chatInput.trim().length === 0 || isSending) ? styles.chatSendBtnDisabled : null]}
+                    onPress={handleSendMessage}
+                    disabled={chatInput.trim().length === 0 || isSending}
+                    testID="tucka-guide-send"
+                  >
+                    <Send size={18} color={chatInput.trim().length > 0 && !isSending ? '#06120B' : COLORS.textSecondary} />
+                  </TouchableOpacity>
+                </View>
               </View>
             </>
           ) : (
@@ -1677,6 +1831,80 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  chatSection: {
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.20)',
+    marginBottom: 14,
+    marginTop: 6,
+  },
+  chatMessagesWrap: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  chatMsg: {
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  chatMsgUser: {
+    backgroundColor: COLORS.statusSoft,
+    borderColor: COLORS.statusBorder,
+    alignSelf: 'flex-end' as const,
+    maxWidth: '85%' as unknown as number,
+  },
+  chatMsgAssistant: {
+    backgroundColor: 'rgba(155,179,164,0.08)',
+    borderColor: 'rgba(155,179,164,0.22)',
+    alignSelf: 'flex-start' as const,
+    maxWidth: '92%' as unknown as number,
+  },
+  chatMsgRole: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: COLORS.secondary,
+    marginBottom: 4,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  chatMsgText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600' as const,
+    color: COLORS.text,
+  },
+  chatInputRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-end' as const,
+    gap: 10,
+  },
+  chatInputField: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 100,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.18)',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
+  chatSendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: COLORS.action,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  chatSendBtnDisabled: {
+    backgroundColor: 'rgba(155,179,164,0.12)',
   },
   textArea: {
     minHeight: 120,
