@@ -814,8 +814,15 @@ export default function HomeScreen() {
               const shouldFallback = /timeout|network|unavailable|overloaded|rate|quota|busy|429|503/i.test(message);
               if (shouldFallback && shouldUseRorkBackend) {
                 console.log('[TuckaGuide] OpenAI failed, trying Rork toolkit', { message });
-                const res = await runRorkToolkit();
-                if (res.length > 0) return res;
+                try {
+                  const res = await runRorkToolkit();
+                  if (res.length > 0) return res;
+                  console.log('[TuckaGuide] Rork toolkit returned empty after OpenAI failure');
+                } catch (toolkitErr) {
+                  const toolkitMsg = toolkitErr instanceof Error ? toolkitErr.message : String(toolkitErr);
+                  console.log('[TuckaGuide] Rork toolkit also failed', { toolkitMsg });
+                }
+                throw new Error('AI returned empty response. Please try again.');
               }
               throw e;
             }
@@ -923,8 +930,8 @@ export default function HomeScreen() {
         const isModelAccess = /model.*(not found|does not exist|not available|access)/i.test(rawMessage);
         const isToolkitError = /toolkit error/i.test(rawMessage);
         const isEmptyResponse = /empty response/i.test(rawMessage);
-        const isRateLimited = !isToolkitError && !isEmptyResponse && /rate|quota|busy|overloaded|429|503/i.test(rawMessage);
-        const isNetworkError = /network|unavailable|timeout|fetch failed|failed to fetch/i.test(rawMessage);
+        const isNetworkError = /network|unavailable|timeout|fetch failed|failed to fetch|aborted/i.test(rawMessage);
+        const isRateLimited = !isToolkitError && !isEmptyResponse && !isNetworkError && /rate|quota|busy|overloaded|429|503/i.test(rawMessage);
 
         const userMessage = isMissingKey
           ? 'OpenAI API key is missing. Set EXPO_PUBLIC_OPENAI_API_KEY in Rork and reload the app.'
@@ -933,7 +940,7 @@ export default function HomeScreen() {
             : isModelAccess
               ? 'OpenAI model access error. This key may not have access to gpt-4o-mini.'
               : isRateLimited
-                ? 'Tucka Guide is busy right now. Please try again in a moment.'
+                ? 'Tucka Guide couldn\'t respond. Please try again.'
                 : isNetworkError
                   ? 'Network issue. Please check your connection and try again.'
                   : isEmptyResponse || isToolkitError
