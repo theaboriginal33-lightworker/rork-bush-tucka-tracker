@@ -517,6 +517,13 @@ export default function HomeScreen() {
     setChatError(null);
   }, []);
 
+  useEffect(() => {
+    if (!chatError) return;
+    if (chatStatus !== 'idle') return;
+    if (chatInput.trim().length === 0) return;
+    clearChatError();
+  }, [chatError, chatInput, chatStatus, clearChatError]);
+
   const buildRegionClarifier = useCallback((): string => {
     return 'What state or region are you in? Is it coastal, inland, bush, rainforest, arid, tropical, or temperate?';
   }, []);
@@ -618,7 +625,7 @@ export default function HomeScreen() {
       }
       setChatError(null);
 
-      const model = 'gpt-4.1-mini';
+      const model = 'gpt-4o-mini';
       const endpoint = 'https://api.openai.com/v1/chat/completions';
 
       const promptText = systemPromptRef.current ?? 'You are a helpful assistant.';
@@ -872,9 +879,9 @@ export default function HomeScreen() {
         const userMessage = isMissingKey
           ? 'OpenAI API key is missing. Set EXPO_PUBLIC_OPENAI_API_KEY in Rork and reload the app.'
           : isInvalidKey
-            ? 'OpenAI API key was rejected. Confirm the key is correct and has access to gpt-4.1-mini.'
+            ? 'OpenAI API key was rejected. Confirm the key is correct and has access to gpt-4o-mini.'
             : isModelAccess
-              ? 'OpenAI model access error. This key may not have access to gpt-4.1-mini.'
+              ? 'OpenAI model access error. This key may not have access to gpt-4o-mini.'
               : isRateLimited
                 ? 'Tucka Guide is busy right now. Please try again in a moment.'
                 : rawMessage.trim().length > 0
