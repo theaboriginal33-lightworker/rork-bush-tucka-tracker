@@ -666,9 +666,10 @@ export default function HomeScreen() {
           : history),
       ];
 
-      type AssistantMessage = { role: 'assistant'; content: string };
-      type UserMessage = { role: 'user'; content: string };
-      type ToolkitMessage = AssistantMessage | UserMessage;
+      type ToolkitUserMessage = { role: 'user'; content: string };
+      type ToolkitAssistantMessage = { role: 'assistant'; content: string };
+      type ToolkitMessage = ToolkitUserMessage | ToolkitAssistantMessage;
+
       const toolkitMessages: ToolkitMessage[] = (shouldAppendUser
         ? [
             ...history,
@@ -677,10 +678,12 @@ export default function HomeScreen() {
               content: trimmed,
             },
           ]
-        : history).map((m): ToolkitMessage => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content ?? '',
-      }));
+        : history)
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m): ToolkitMessage => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: String(m.content ?? ''),
+        }));
 
       const toolkit = await getRorkToolkit();
       const hasToolkit = Boolean(toolkit?.generateText);
