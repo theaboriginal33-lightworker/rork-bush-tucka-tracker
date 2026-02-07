@@ -197,6 +197,109 @@ type GeminiScanResult = {
   suggestedUses: string[];
 };
 
+function generateLocalFallbackResponse(scan: GeminiScanResult | null, userQuestion: string, region: string | null): string | null {
+  if (!scan) return null;
+  const q = userQuestion.toLowerCase();
+  const lines: string[] = [];
+  const name = scan.commonName || 'this plant';
+  const confidence = Math.round(scan.confidence * 100);
+  const isConfident = scan.confidence >= 0.8;
+
+  const wantsRecipe = /recipe|cook|eating|eat|prepare|preparation|how to make|salad|soup|jam|chutney|sauce|roast|fry|boil/i.test(q);
+  const wantsSafety = /safe|danger|toxic|poison|risk|edible|warning|lookalike/i.test(q);
+  const wantsSeason = /season|month|when|harvest|time of year|best time/i.test(q);
+  const wantsUses = /use|benefit|purpose|what can|good for/i.test(q);
+  const wantsCulture = /cultur|indigenous|aboriginal|traditional|first nations|respect/i.test(q);
+  const wantsRegion = /region|state|area|where|location|coastal|inland|bush|rainforest/i.test(q);
+
+  lines.push(`Best Identification (${confidence}% Confidence)`);
+  lines.push(`${name}${scan.scientificName ? ` (${scan.scientificName})` : ''}`);
+  lines.push(`Safety: ${scan.safety.status.toUpperCase()}`);
+  if (scan.safety.summary) lines.push(scan.safety.summary);
+  lines.push('');
+
+  if (wantsSafety || (!wantsRecipe && !wantsSeason && !wantsUses && !wantsCulture)) {
+    if (scan.safety.keyRisks.length > 0) {
+      lines.push('Key Risks');
+      scan.safety.keyRisks.forEach(r => lines.push(`• ${r}`));
+      lines.push('');
+    }
+    if (scan.warnings.length > 0) {
+      lines.push('Lookalikes + Warnings');
+      scan.warnings.forEach(w => lines.push(`• ${w}`));
+      lines.push('');
+    }
+  }
+
+  if (wantsRecipe || wantsUses) {
+    if (!isConfident) {
+      lines.push('Uses (Food / Medicine)');
+      lines.push(`Confidence is ${confidence}% — too low to recommend preparation or consumption. Please get a local expert to confirm this ID first.`);
+      lines.push('');
+    } else if (scan.safety.status === 'caution') {
+      lines.push('Uses (Food / Medicine)');
+      lines.push('This plant has a CAUTION safety status. Do not prepare or eat without expert confirmation of safe handling.');
+      lines.push('');
+    } else {
+      if (scan.suggestedUses.length > 0) {
+        lines.push('Uses (Food / Medicine)');
+        scan.suggestedUses.forEach(u => lines.push(`• ${u}`));
+        lines.push('');
+      }
+      if (scan.preparation.steps.length > 0) {
+        lines.push('Preparation');
+        scan.preparation.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`));
+        lines.push('');
+      }
+      if (wantsRecipe && scan.suggestedUses.length === 0 && scan.preparation.steps.length === 0) {
+        lines.push('Bush Tucker Recipe');
+        lines.push(`No specific recipe data is available for ${name}. Try searching for "${name} bush tucker recipe" for community-shared ideas. Always verify safety locally before consuming.`);
+        lines.push('');
+      }
+    }
+  }
+
+  if (wantsSeason) {
+    lines.push('Region + Seasonality');
+    if (scan.seasonality.bestMonths.length > 0) {
+      lines.push(`Best months: ${scan.seasonality.bestMonths.join(', ')}`);
+    } else {
+      lines.push('No specific seasonal data available — may be available year-round.');
+    }
+    if (scan.seasonality.notes) lines.push(scan.seasonality.notes);
+    if (region) lines.push(`Your region: ${region}`);
+    lines.push('');
+  }
+
+  if (wantsCulture) {
+    lines.push('Traditional Context (Respectful + General)');
+    if (scan.culturalKnowledge.notes) {
+      lines.push(scan.culturalKnowledge.notes);
+    } else {
+      lines.push('No general cultural notes available for this plant.');
+    }
+    if (scan.culturalKnowledge.respect.length > 0) {
+      scan.culturalKnowledge.respect.forEach(r => lines.push(`• ${r}`));
+    }
+    lines.push('');
+  }
+
+  if (wantsRegion && !wantsSeason) {
+    if (region) {
+      lines.push(`Region noted: ${region}. Guidance above is tailored where possible.`);
+    } else {
+      lines.push('Tell me your state/region and habitat (coastal, bush, rainforest, arid) for more tailored guidance.');
+    }
+    lines.push('');
+  }
+
+  lines.push('Next Safe Step');
+  lines.push('Always verify this identification with a local expert or field guide before consuming. If unsure, observe only.');
+
+  const result = lines.join('\n').trim();
+  return result.length > 0 ? result : null;
+}
+
 type GeminiApiResponse = {
   candidates?: {
     content?: {
@@ -985,34 +1088,44 @@ export default function HomeScreen() {
                       ? rawMessage
                       : 'Could not send message. Please try again.';
 
-        setChatError(new Error(userMessage));
-
-        // Always add error message to chat so user sees feedback
-        const fallbackAssistantMsg: AgentMessage = {
-          id: `assistant-error-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          role: 'assistant',
-          parts: [{ type: 'text', text: userMessage }],
-          createdAt: Date.now(),
-        };
-        setChatMessages((prev) => {
-          const base = Array.isArray(prev) ? prev : [];
-          // Avoid duplicate error messages within 5 seconds
-          const hasRecentError = base.some(
-            (m) => m.role === 'assistant' &&
-              typeof m.id === 'string' &&
-              m.id.startsWith('assistant-error-') &&
-              Date.now() - (m.createdAt ?? 0) < 5000
-          );
-          if (hasRecentError) return base;
-          return [...base, fallbackAssistantMsg];
-        });
+        const localFallback = generateLocalFallbackResponse(scanResult, trimmed, regionContext);
+        if (localFallback) {
+          console.log('[TuckaGuide] using local scan-data fallback response', { questionLength: trimmed.length, responseLength: localFallback.length });
+          const localMsg: AgentMessage = {
+            id: `assistant-local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            role: 'assistant',
+            parts: [{ type: 'text', text: localFallback }],
+            createdAt: Date.now(),
+          };
+          setChatMessages((prev) => [...(Array.isArray(prev) ? prev : []), localMsg]);
+          setChatError(null);
+        } else {
+          setChatError(new Error(userMessage));
+          const fallbackAssistantMsg: AgentMessage = {
+            id: `assistant-error-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            role: 'assistant',
+            parts: [{ type: 'text', text: userMessage }],
+            createdAt: Date.now(),
+          };
+          setChatMessages((prev) => {
+            const base = Array.isArray(prev) ? prev : [];
+            const hasRecentError = base.some(
+              (m) => m.role === 'assistant' &&
+                typeof m.id === 'string' &&
+                m.id.startsWith('assistant-error-') &&
+                Date.now() - (m.createdAt ?? 0) < 5000
+            );
+            if (hasRecentError) return base;
+            return [...base, fallbackAssistantMsg];
+          });
+        }
       } finally {
         if (chatRequestIdRef.current === requestId) {
           setChatStatus('idle');
         }
       }
     },
-    [chatMessagesRaw, hasOpenAiKey, openAiKey, useRorkBackend],
+    [chatMessagesRaw, hasOpenAiKey, openAiKey, regionContext, scanResult, useRorkBackend],
   );
 
   const chatMessages = useMemo((): unknown[] => {
@@ -1023,90 +1136,6 @@ export default function HomeScreen() {
     return chatMessagesRaw as unknown[];
   }, [chatMessagesRaw]);
 
-  const busyRetryRef = useRef<{ attempts: number; timer: ReturnType<typeof setTimeout> | null }>({
-    attempts: 0,
-    timer: null,
-  });
-
-  const isBusyChatError = useCallback((error: Error | null): boolean => {
-    if (!error) return false;
-    const message = error.message?.toLowerCase?.() ?? '';
-    return (
-      message.includes('busy right now') ||
-      message.includes('temporarily unavailable') ||
-      message.includes('overloaded') ||
-      message.includes('rate limit') ||
-      message.includes('quota') ||
-      message.includes('429') ||
-      message.includes('503')
-    );
-  }, []);
-
-  const retryChatNow = useCallback(async () => {
-    if (!isBusyChatError(chatError)) return;
-    clearChatError();
-    if (chatStatus !== 'idle') return;
-    if (!lastUserMessageRef.current) return;
-    await sendMessage(lastUserMessageRef.current, { retry: true });
-  }, [chatError, chatStatus, clearChatError, isBusyChatError, sendMessage]);
-
-  useEffect(() => {
-    if (!isBusyChatError(chatError)) {
-      busyRetryRef.current.attempts = 0;
-      if (busyRetryRef.current.timer) {
-        clearTimeout(busyRetryRef.current.timer);
-        busyRetryRef.current.timer = null;
-      }
-      return;
-    }
-
-    if (busyRetryRef.current.attempts >= 2) {
-      console.log('[TuckaGuide] all retries exhausted, adding failure message');
-      const failureMsg: AgentMessage = {
-        id: `assistant-retry-failed-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        role: 'assistant',
-        parts: [{ type: 'text', text: 'Tucka Guide is temporarily unavailable. Please try again in a moment by tapping the send button or typing a new question.' }],
-        createdAt: Date.now(),
-      };
-      setChatMessages((prev) => {
-        const base = Array.isArray(prev) ? prev : [];
-        const hasRecentFailure = base.some(
-          (m) => m.role === 'assistant' && 
-            typeof m.id === 'string' && 
-            m.id.startsWith('assistant-retry-failed-') &&
-            Date.now() - (m.createdAt ?? 0) < 10000
-        );
-        if (hasRecentFailure) return base;
-        return [...base, failureMsg];
-      });
-      clearChatError();
-      busyRetryRef.current.attempts = 0;
-      return;
-    }
-
-    const attempt = busyRetryRef.current.attempts + 1;
-    busyRetryRef.current.attempts = attempt;
-    const delayMs = attempt === 1 ? 1500 : 3000;
-
-    if (busyRetryRef.current.timer) {
-      clearTimeout(busyRetryRef.current.timer);
-    }
-
-    busyRetryRef.current.timer = setTimeout(() => {
-      retryChatNow().catch(() => undefined);
-    }, delayMs);
-
-    const busyRetry = busyRetryRef.current;
-    const timerToClear = busyRetry.timer;
-    return () => {
-      if (timerToClear) {
-        clearTimeout(timerToClear);
-      }
-      if (busyRetry.timer === timerToClear) {
-        busyRetry.timer = null;
-      }
-    };
-  }, [chatError, clearChatError, isBusyChatError, retryChatNow, setChatMessages]);
 
   const chatCreatedAtByIdRef = useRef<Record<string, number>>({});
 
@@ -1378,11 +1407,11 @@ ${scanContext}`;
     if (!isSameMessage) {
       lastAssistantMessageIdRef.current = last.id;
     }
-    if (isBusyChatError(chatError)) {
-      console.log('[TuckaGuide] clearing busy error after assistant response', { messageId: last.id, isSameMessage });
+    if (chatError) {
+      console.log('[TuckaGuide] clearing error after assistant response', { messageId: last.id, isSameMessage });
       clearChatError();
     }
-  }, [chatDisplayMessages, chatError, clearChatError, isBusyChatError]);
+  }, [chatDisplayMessages, chatError, clearChatError]);
 
   useEffect(() => {
     if (!chatBusy) {
@@ -3189,16 +3218,14 @@ Return JSON with keys:
                   <View style={styles.chatErrorRow}>
                     <AlertTriangle size={16} color="#B91C1C" />
                     <Text style={styles.chatErrorText}>
-                      {isBusyChatError(chatError)
-                        ? 'Tucka Guide is busy right now. Retrying…'
-                        : chatError.message}
+                      {chatError.message}
                     </Text>
                     <TouchableOpacity
                       style={styles.chatErrorDismiss}
-                      onPress={isBusyChatError(chatError) ? retryChatNow : clearChatError}
+                      onPress={clearChatError}
                     >
                       <Text style={styles.chatErrorDismissText}>
-                        {isBusyChatError(chatError) ? 'Retry now' : 'Dismiss'}
+                        {'Dismiss'}
                       </Text>
                     </TouchableOpacity>
                   </View>
