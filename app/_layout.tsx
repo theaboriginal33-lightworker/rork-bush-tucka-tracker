@@ -3,7 +3,7 @@ import 'react-native-url-polyfill/auto';
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router, usePathname, useSegments } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { LearnImageProvider } from "@/app/providers/LearnImageProvider";
@@ -11,8 +11,6 @@ import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "@/app/providers/AuthProvider";
 
-
-const queryClient = new QueryClient();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { session, isReady, hasConfig } = useAuth();
@@ -73,6 +71,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [queryClient] = useState(() => new QueryClient());
   console.log('[RootLayout] render');
 
   return (
