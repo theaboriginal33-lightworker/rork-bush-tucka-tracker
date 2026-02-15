@@ -5,10 +5,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import type * as LocationType from 'expo-location';
-import { ChevronLeft, CookingPot, Download, MapPin, MessageCircle, Navigation, Send, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
+import { BookmarkPlus, Check, ChevronLeft, CookingPot, Download, FileDown, MapPin, MessageCircle, Navigation, Send, Share2, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { buildShareUrl } from '@/constants/shareLinks';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
+import { useCookbook } from '@/app/providers/CookbookProvider';
 
 type ExpoSharingModule = typeof import('expo-sharing');
 type ExpoPrintModule = typeof import('expo-print');
@@ -195,6 +196,7 @@ export default function ScanDetailsScreen() {
   const entryId = typeof id === 'string' ? id : '';
 
   const { getEntryById, updateEntry, removeEntry } = useScanJournal();
+  const { saveGuideEntry } = useCookbook();
   const entry = getEntryById(entryId);
   const entryDisplayImageUri = useMemo(() => {
     if (!entry) return null;
@@ -818,6 +820,7 @@ export default function ScanDetailsScreen() {
 
   const [chatInput, setChatInput] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [savedConvoToCook, setSavedConvoToCook] = useState<boolean>(false);
 
   const visibleMessages = useMemo(() => {
     return agentMessages.filter(m => m.role !== 'system');
@@ -850,6 +853,147 @@ export default function ScanDetailsScreen() {
       setIsSending(false);
     }
   }, [chatInput, isSending, sendMessage, systemPrompt]);
+
+  const buildConversationText = useCallback((): string => {
+    if (!entry) return '';
+    const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
+    const lines: string[] = [
+      `Tucka Guide — ${entry.scan.commonName}`,
+      entry.scan.scientificName ? `(${entry.scan.scientificName})` : '',
+      '',
+    ].filter(l => l !== undefined);
+    filtered.forEach(m => {
+      const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
+      let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+      if (m.role === 'user') {
+        const sysCtxEndMarker = '[SYS_CTX_END]';
+        const sysCtxEndIdx = text.indexOf(sysCtxEndMarker);
+        if (sysCtxEndIdx !== -1) text = text.substring(sysCtxEndIdx + sysCtxEndMarker.length).trim();
+        const sysCtxStart = text.indexOf('[SYS_CTX_START]');
+        if (sysCtxStart !== -1) {
+          const sysCtxEnd2 = text.indexOf(sysCtxEndMarker, sysCtxStart);
+          if (sysCtxEnd2 !== -1) text = text.substring(sysCtxEnd2 + sysCtxEndMarker.length).trim();
+          else text = text.substring(0, sysCtxStart).trim();
+        }
+      }
+      lines.push(`${m.role === 'user' ? 'You' : 'Tucka Guide'}:`);
+      lines.push(text);
+      lines.push('');
+    });
+    lines.push('—');
+    lines.push('Always verify locally before consuming.');
+    return lines.join('\n');
+  }, [entry, visibleMessages]);
+
+  const buildConversationPdfHtml = useCallback((): string => {
+    if (!entry) return '';
+    const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
+    if (filtered.length === 0) return '';
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    const common = esc(entry.scan.commonName);
+    const scientific = entry.scan.scientificName ? esc(entry.scan.scientificName) : '';
+    const messagesHtml = filtered.map(m => {
+      const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
+      let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+      if (m.role === 'user') {
+        const sysCtxEndMarker = '[SYS_CTX_END]';
+        const sysCtxEndIdx = text.indexOf(sysCtxEndMarker);
+        if (sysCtxEndIdx !== -1) text = text.substring(sysCtxEndIdx + sysCtxEndMarker.length).trim();
+        const sysCtxStart = text.indexOf('[SYS_CTX_START]');
+        if (sysCtxStart !== -1) {
+          const sysCtxEnd2 = text.indexOf(sysCtxEndMarker, sysCtxStart);
+          if (sysCtxEnd2 !== -1) text = text.substring(sysCtxEnd2 + sysCtxEndMarker.length).trim();
+          else text = text.substring(0, sysCtxStart).trim();
+        }
+      }
+      const isUser = m.role === 'user';
+      const bgColor = isUser ? 'rgba(127,227,168,0.12)' : 'rgba(245,246,244,0.70)';
+      const borderColor = isUser ? 'rgba(127,227,168,0.28)' : 'rgba(15,36,24,0.10)';
+      const roleLabel = isUser ? 'You' : 'Tucka Guide';
+      const roleColor = isUser ? '#38D989' : '#0c1411';
+      return `<div class="msg" style="background:${bgColor};border-color:${borderColor}">
+        <div class="role" style="color:${roleColor}">${roleLabel}</div>
+        <div class="text">${esc(text)}</div>
+      </div>`;
+    }).join('');
+    return `<!doctype html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tucka Guide — ${common}</title>
+<style>
+*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;margin:0;color:#0c1411;background:#f5f6f4}
+.page{padding:22px 18px 28px}.card{background:#fff;border-radius:18px;overflow:hidden;border:1px solid rgba(15,36,24,0.10);box-shadow:0 14px 30px rgba(12,20,17,0.10)}
+.header{padding:18px 16px;border-bottom:1px solid rgba(15,36,24,0.10)}
+.header h1{font-size:20px;font-weight:800;margin:0 0 4px}.header p{font-size:13px;color:rgba(12,20,17,0.60);margin:0}
+.messages{padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{padding:12px;border-radius:14px;border:1px solid;}
+.role{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px}
+.text{font-size:14px;line-height:1.5;white-space:pre-wrap}
+.footer{padding:14px 16px;border-top:1px dashed rgba(15,36,24,0.18);font-size:12px;color:rgba(12,20,17,0.55)}
+</style></head><body>
+<div class="page"><div class="card">
+<div class="header"><h1>Tucka Guide — ${common}</h1>${scientific ? `<p>${scientific}</p>` : ''}</div>
+<div class="messages">${messagesHtml}</div>
+<div class="footer">Always verify locally before consuming.</div>
+</div></div></body></html>`;
+  }, [entry, visibleMessages]);
+
+  const exportConversationPdf = useCallback(async () => {
+    if (!entry) return;
+    const html = buildConversationPdfHtml();
+    if (!html) return;
+    const safeName = `tucka-guide-chat-${entry.id}.pdf`;
+    try {
+      console.log('[TuckaGuide] exportConversationPdf start', { entryId: entry.id });
+      const print = await loadExpoPrint();
+      if (!print) throw new Error('Printing not available');
+      if (Platform.OS === 'web') {
+        try {
+          const result = await print.printToFileAsync({ html, base64: false });
+          if (typeof document !== 'undefined') {
+            const resp = await fetch(result.uri);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = safeName; a.rel = 'noopener'; a.target = '_blank';
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+            return;
+          }
+        } catch (e) {
+          console.log('[TuckaGuide] exportConversationPdf web fallback', e instanceof Error ? e.message : String(e));
+        }
+        await print.printAsync({ html });
+        return;
+      }
+      const result = await print.printToFileAsync({ html, base64: false });
+      const sharing = await loadExpoSharing();
+      const canShare = (await sharing?.isAvailableAsync()) ?? false;
+      if (canShare) {
+        await sharing?.shareAsync(result.uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share Conversation PDF', UTI: 'com.adobe.pdf' });
+        return;
+      }
+      await Share.share({ message: buildConversationText() });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.log('[TuckaGuide] exportConversationPdf failed', { msg });
+      Alert.alert('Could not export PDF', 'Please try again.');
+    }
+  }, [buildConversationPdfHtml, buildConversationText, entry]);
+
+  const shareConversationText = useCallback(async () => {
+    if (!entry) return;
+    const text = buildConversationText();
+    if (!text) return;
+    try {
+      console.log('[TuckaGuide] shareConversationText', { entryId: entry.id });
+      await Share.share({ message: text, title: `Tucka Guide — ${entry.scan.commonName}` });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.log('[TuckaGuide] shareConversationText failed', { msg });
+      Alert.alert('Share not available', text);
+    }
+  }, [buildConversationText, entry]);
 
   const persistedCountRef = useRef<number>(0);
   useEffect(() => {
@@ -1283,6 +1427,83 @@ export default function ScanDetailsScreen() {
                   <Text style={{ color: COLORS.error, fontSize: 13, marginBottom: 8 }}>
                     Error: {agentError.message ?? 'Could not get a response. Try again.'}
                   </Text>
+                ) : null}
+
+                {visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant').length >= 2 ? (
+                  <View style={styles.chatActionsRow} testID="tucka-guide-chat-actions">
+                    <TouchableOpacity
+                      style={[styles.chatActionBtn, savedConvoToCook && styles.chatActionBtnDone]}
+                      onPress={() => {
+                        if (savedConvoToCook || !entry) return;
+                        const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
+                        const textParts = filtered.map(m => {
+                          const parts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
+                          let text = parts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+                          if (m.role === 'user') {
+                            const sysCtxEndMarker = '[SYS_CTX_END]';
+                            const sysCtxEndIdx = text.indexOf(sysCtxEndMarker);
+                            if (sysCtxEndIdx !== -1) text = text.substring(sysCtxEndIdx + sysCtxEndMarker.length).trim();
+                            const sysCtxStart = text.indexOf('[SYS_CTX_START]');
+                            if (sysCtxStart !== -1) {
+                              const sysCtxEnd2 = text.indexOf(sysCtxEndMarker, sysCtxStart);
+                              if (sysCtxEnd2 !== -1) text = text.substring(sysCtxEnd2 + sysCtxEndMarker.length).trim();
+                              else text = text.substring(0, sysCtxStart).trim();
+                            }
+                          }
+                          return `${m.role === 'user' ? 'You' : 'Tucka Guide'}: ${text}`;
+                        }).join('\n\n');
+                        const firstQuestion = filtered.find(m => m.role === 'user');
+                        const firstQuestionParts = firstQuestion?.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
+                        let titleText = firstQuestionParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
+                        const sysEnd = titleText.indexOf('[SYS_CTX_END]');
+                        if (sysEnd !== -1) titleText = titleText.substring(sysEnd + '[SYS_CTX_END]'.length).trim();
+                        const sysStart = titleText.indexOf('[SYS_CTX_START]');
+                        if (sysStart !== -1) titleText = titleText.substring(0, sysStart).trim();
+                        const title = titleText.length > 60 ? titleText.substring(0, 57) + '...' : (titleText || 'Tucka Guide Chat');
+                        saveGuideEntry({
+                          title,
+                          guideText: textParts,
+                          commonName: entry.scan.commonName,
+                          scientificName: entry.scan.scientificName,
+                          imageUri: entry.imageUri ?? entry.imagePreviewUri,
+                          confidence: entry.scan.confidence,
+                          safetyStatus: entry.scan.safety.status as 'safe' | 'caution' | 'unknown',
+                          scanEntryId: entry.id,
+                          suggestedUses: entry.scan.suggestedUses,
+                        }).then(() => {
+                          setSavedConvoToCook(true);
+                          console.log('[TuckaGuide] conversation saved to Cook');
+                        }).catch(e => {
+                          const msg = e instanceof Error ? e.message : String(e);
+                          console.log('[TuckaGuide] save to cook failed', { msg });
+                          Alert.alert('Could not save', 'Please try again.');
+                        });
+                      }}
+                      disabled={savedConvoToCook}
+                      testID="tucka-guide-save-convo"
+                    >
+                      {savedConvoToCook ? <Check size={16} color={COLORS.status} /> : <BookmarkPlus size={16} color={COLORS.text} />}
+                      <Text style={[styles.chatActionText, savedConvoToCook && styles.chatActionTextDone]}>
+                        {savedConvoToCook ? 'Saved' : 'Save to Cook'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.chatActionBtn}
+                      onPress={() => void exportConversationPdf()}
+                      testID="tucka-guide-export-pdf"
+                    >
+                      <FileDown size={16} color={COLORS.text} />
+                      <Text style={styles.chatActionText}>PDF</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.chatActionBtn}
+                      onPress={() => void shareConversationText()}
+                      testID="tucka-guide-share-convo"
+                    >
+                      <Share2 size={16} color={COLORS.text} />
+                      <Text style={styles.chatActionText}>Share</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : null}
 
                 <View style={styles.chatInputRow}>
@@ -1987,6 +2208,37 @@ const styles = StyleSheet.create({
   },
   chatSendBtnDisabled: {
     backgroundColor: 'rgba(155,179,164,0.12)',
+  },
+  chatActionsRow: {
+    flexDirection: 'row' as const,
+    gap: 8,
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  chatActionBtn: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(11,25,17,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.25)',
+  },
+  chatActionBtnDone: {
+    backgroundColor: 'rgba(56,217,137,0.12)',
+    borderColor: 'rgba(56,217,137,0.35)',
+  },
+  chatActionText: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: COLORS.text,
+    letterSpacing: 0.2,
+  },
+  chatActionTextDone: {
+    color: COLORS.status,
   },
   textArea: {
     minHeight: 120,
