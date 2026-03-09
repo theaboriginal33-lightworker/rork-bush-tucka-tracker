@@ -454,10 +454,7 @@ Return JSON with keys:
                   </View>
                 )}
                 <View style={styles.focusFrame} pointerEvents="none">
-                  <View style={[styles.focusCorner, styles.focusCornerTL]} />
-                  <View style={[styles.focusCorner, styles.focusCornerTR]} />
-                  <View style={[styles.focusCorner, styles.focusCornerBL]} />
-                  <View style={[styles.focusCorner, styles.focusCornerBR]} />
+                  <View style={styles.focusCircle} />
                 </View>
                 {analyzing ? (
                   <View style={styles.scanBusyPill} testID="scan-analyzing-badge">
