@@ -2,11 +2,11 @@ import { StyleSheet } from 'react-native';
 import { COLORS } from '@/constants/colors';
 
 export const DARK = {
-  bg: '#E6EFE7',
-  text: '#223127',
-  subtext: 'rgba(34,49,39,0.64)',
-  border: 'rgba(111,143,116,0.18)',
-  accent: '#6F8F74',
+  bg: '#070A08',
+  text: '#F2F5F2',
+  subtext: 'rgba(242,245,242,0.70)',
+  border: 'rgba(255,255,255,0.12)',
+  accent: '#2DD37C',
 } as const;
 
 export const styles = StyleSheet.create({
@@ -97,9 +97,9 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.18)',
+    borderColor: 'rgba(45,211,124,0.20)',
   },
   focusArea: {
     flex: 1,
@@ -107,8 +107,8 @@ export const styles = StyleSheet.create({
     borderRadius: 22,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.14)',
-    backgroundColor: 'rgba(255,252,247,0.68)',
+    borderColor: 'rgba(45,211,124,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   focusImage: {
     width: '100%',
@@ -131,7 +131,7 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     width: 46,
     height: 46,
-    borderColor: 'rgba(34,49,39,0.58)',
+    borderColor: 'rgba(242,245,242,0.85)',
   },
   focusCornerTL: {
     top: 0,
@@ -171,7 +171,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(250,246,238,0.88)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
@@ -195,9 +195,9 @@ export const styles = StyleSheet.create({
   modeRow: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.18)',
+    borderColor: 'rgba(45,211,124,0.20)',
     borderRadius: 999,
     padding: 4,
     gap: 6,
@@ -209,10 +209,10 @@ export const styles = StyleSheet.create({
     borderRadius: 999,
   },
   modePillActive: {
-    backgroundColor: 'rgba(111,143,116,0.18)',
+    backgroundColor: 'rgba(45,211,124,0.20)',
   },
   modeText: {
-    color: 'rgba(34,49,39,0.56)',
+    color: 'rgba(242,245,242,0.65)',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -231,9 +231,9 @@ export const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.18)',
+    borderColor: 'rgba(45,211,124,0.20)',
   },
   shutterOuter: {
     width: 86,
@@ -241,7 +241,7 @@ export const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(111,143,116,0.18)',
+    backgroundColor: 'rgba(45,211,124,0.20)',
     borderWidth: 3,
     borderColor: DARK.accent,
     shadowColor: DARK.accent,
@@ -294,9 +294,9 @@ export const styles = StyleSheet.create({
     height: 176,
   },
   guideCardBrand: {
-    backgroundColor: '#FBF7F0',
+    backgroundColor: '#0B1712',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.20)',
+    borderColor: 'rgba(56,217,137,0.22)',
     overflow: 'hidden',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 12 },
@@ -308,18 +308,18 @@ export const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: 'rgba(111,143,116,0.16)',
+    backgroundColor: 'rgba(56,217,137,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.30)',
+    borderColor: 'rgba(56,217,137,0.38)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   guideTitleDark: {
-    color: '#223127',
+    color: '#F5FFF9',
   },
   guideCountDark: {
-    color: 'rgba(34,49,39,0.62)',
+    color: 'rgba(235,255,244,0.72)',
   },
   guideIconArt: {
     width: 44,
@@ -347,7 +347,7 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
   },
   resultCard: {
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 22,
     padding: 16,
     marginBottom: 18,
@@ -374,10 +374,10 @@ export const styles = StyleSheet.create({
   rescanButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'rgba(111,143,116,0.14)',
+    backgroundColor: 'rgba(45,211,124,0.16)',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.20)',
+    borderColor: 'rgba(56,217,137,0.22)',
   },
   rescanText: {
     color: DARK.accent,
@@ -421,18 +421,18 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.18)',
+    borderColor: 'rgba(45,211,124,0.20)',
   },
   pillGood: {
-    backgroundColor: '#E5EEE7',
+    backgroundColor: '#ECFDF5',
   },
   pillBad: {
-    backgroundColor: '#F7E8DC',
+    backgroundColor: '#FFF7ED',
   },
   pillNeutral: {
-    backgroundColor: '#EEF3EE',
+    backgroundColor: '#EFF6FF',
   },
   pillText: {
     fontSize: 12,
@@ -440,13 +440,13 @@ export const styles = StyleSheet.create({
     color: DARK.subtext,
   },
   pillTextGood: {
-    color: '#496451',
+    color: '#065F46',
   },
   pillTextBad: {
-    color: '#A66339',
+    color: '#9A3412',
   },
   pillTextNeutral: {
-    color: '#5F7D69',
+    color: '#1D4ED8',
   },
   resultNotes: {
     fontSize: 13,
@@ -465,12 +465,12 @@ export const styles = StyleSheet.create({
   },
   infoTile: {
     flex: 1,
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.18)',
+    borderColor: 'rgba(45,211,124,0.20)',
   },
   infoTileTitle: {
     fontSize: 11,
@@ -503,11 +503,11 @@ export const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 11,
     lineHeight: 16,
-    color: 'rgba(34,49,39,0.56)',
+    color: 'rgba(242,245,242,0.65)',
     fontWeight: '800',
   },
   chatCard: {
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 22,
     padding: 16,
     marginBottom: 24,
@@ -538,9 +538,9 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(111,143,116,0.14)',
+    backgroundColor: 'rgba(45,211,124,0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.22)',
+    borderColor: 'rgba(45,211,124,0.25)',
   },
   chatHeaderButtonText: {
     fontSize: 11,
@@ -596,7 +596,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.14)',
+    borderColor: 'rgba(45,211,124,0.16)',
     maxWidth: '92%',
   },
   chatBubbleAssistant: {
@@ -605,8 +605,8 @@ export const styles = StyleSheet.create({
   },
   chatBubbleUser: {
     alignSelf: 'flex-end',
-    backgroundColor: 'rgba(111,143,116,0.16)',
-    borderColor: 'rgba(111,143,116,0.24)',
+    backgroundColor: 'rgba(56,217,137,0.18)',
+    borderColor: 'rgba(45,211,124,0.28)',
   },
   chatBubbleText: {
     fontSize: 13,
@@ -624,7 +624,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
@@ -646,7 +646,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 34,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
@@ -667,14 +667,14 @@ export const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(111,143,116,0.18)',
+    borderTopColor: 'rgba(45,211,124,0.20)',
     gap: 10,
   },
   chatTimeoutText: {
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '700',
-    color: 'rgba(34,49,39,0.60)',
+    color: 'rgba(242,245,242,0.72)',
   },
   chatTimeoutActions: {
     flexDirection: 'row',
@@ -685,9 +685,9 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 34,
     borderRadius: 999,
-    backgroundColor: 'rgba(111,143,116,0.14)',
+    backgroundColor: 'rgba(45,211,124,0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.22)',
+    borderColor: 'rgba(45,211,124,0.25)',
     justifyContent: 'center',
   },
   chatTimeoutButtonText: {
@@ -700,7 +700,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -730,12 +730,12 @@ export const styles = StyleSheet.create({
   },
   collectionCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,248,240,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 20,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(111,143,116,0.18)',
+    borderColor: 'rgba(45,211,124,0.20)',
   },
   collectionImage: {
     width: 70,
@@ -763,7 +763,7 @@ export const styles = StyleSheet.create({
     gap: 8,
   },
   tag: {
-    backgroundColor: 'rgba(111,143,116,0.14)',
+    backgroundColor: 'rgba(45,211,124,0.16)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
