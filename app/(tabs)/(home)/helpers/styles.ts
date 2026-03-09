@@ -62,7 +62,7 @@ export const styles = StyleSheet.create({
     marginBottom: 18,
   },
   scanStageBg: {
-    minHeight: 520,
+    minHeight: 640,
   },
   scanStageTopBar: {
     paddingHorizontal: 18,
