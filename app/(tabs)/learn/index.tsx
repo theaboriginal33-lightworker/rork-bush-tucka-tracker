@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,8 +16,9 @@ import { LearnRemoteImage } from '@/components/LearnRemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Filter, ImagePlus, Search, Trash2, X } from 'lucide-react-native';
+import { ArrowRight, Filter, ImagePlus, Search, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
+import { Image } from 'expo-image';
 import { LEARN_HERO_IMAGE_OVERRIDES } from '@/constants/learnImageOverrides';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
 import { useLearnImages } from '@/app/providers/LearnImageProvider';
@@ -785,6 +787,46 @@ export default function LearnScreen() {
           </View>
         ) : null}
 
+        <View style={styles.pocketGuidesSection}>
+          <View style={styles.pocketGuidesHeader}>
+            <Text style={styles.pocketGuidesTitle}>Handy Pocket Guides</Text>
+            <Pressable style={styles.pocketGuidesSeeAll} onPress={() => Alert.alert('Coming soon', 'More Handy Pocket Guides are being added.')} testID="pocket-guides-see-all">
+              <Text style={styles.pocketGuidesSeeAllText}>See All</Text>
+              <ArrowRight size={16} color={COLORS.primary} />
+            </Pressable>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pocketGuidesScroll}>
+            <Pressable style={styles.pocketGuideCard} onPress={() => router.push('/pocket-guides/cultural-respect-on-country')} testID="pocket-guide-card-cultural-respect">
+              <View style={styles.pocketGuideIcon}>
+                <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/r5y6q5zltfpde776ienrb' }} style={styles.pocketGuideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} />
+              </View>
+              <Text style={styles.pocketGuideLabel} numberOfLines={2}>Cultural respect{`\n`}On Country</Text>
+              <Text style={styles.pocketGuideBadge}>Pocket guide</Text>
+            </Pressable>
+            <Pressable style={styles.pocketGuideCard} onPress={() => router.push('/pocket-guides/animal-care-and-share')} testID="pocket-guide-card-animal-care">
+              <View style={styles.pocketGuideIcon}>
+                <Image source={{ uri: 'https://r2-pub.rork.com/generated-images/fe0dfa28-4dd0-4574-b256-a3bc44b69f81.png' }} style={styles.pocketGuideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} />
+              </View>
+              <Text style={styles.pocketGuideLabel} numberOfLines={2}>Animal Care{`\n`}& Share</Text>
+              <Text style={styles.pocketGuideBadge}>Pocket guide</Text>
+            </Pressable>
+            <Pressable style={styles.pocketGuideCard} onPress={() => router.push('/pocket-guides/foraging-with-kids')} testID="pocket-guide-card-foraging-kids">
+              <View style={styles.pocketGuideIcon}>
+                <Image source={{ uri: 'https://r2-pub.rork.com/generated-images/50835e04-6a03-4f4c-87c8-eee59a6447ce.png' }} style={styles.pocketGuideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} />
+              </View>
+              <Text style={styles.pocketGuideLabel} numberOfLines={2}>Foraging{`\n`}With Kids</Text>
+              <Text style={styles.pocketGuideBadge}>Pocket guide</Text>
+            </Pressable>
+            <Pressable style={styles.pocketGuideCard} onPress={() => router.push('/pocket-guides/if-something-goes-wrong')} testID="pocket-guide-card-if-something-wrong">
+              <View style={styles.pocketGuideIcon}>
+                <Image source={{ uri: 'https://r2-pub.rork.com/generated-images/c97fe2cf-35fc-456c-b184-b1e64301acb7.png' }} style={styles.pocketGuideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} />
+              </View>
+              <Text style={styles.pocketGuideLabel} numberOfLines={2}>If Something{`\n`}Goes Wrong</Text>
+              <Text style={styles.pocketGuideBadge}>Pocket guide</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+
         <FlatList
           data={plants}
           renderItem={renderItem}
@@ -1054,5 +1096,79 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  pocketGuidesSection: {
+    paddingHorizontal: 24,
+    marginBottom: 8,
+  },
+  pocketGuidesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pocketGuidesTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  pocketGuidesSeeAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  pocketGuidesSeeAllText: {
+    color: COLORS.primary,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+  pocketGuidesScroll: {
+    paddingRight: 24,
+    gap: 16,
+  },
+  pocketGuideCard: {
+    width: 152,
+    padding: 16,
+    borderRadius: 24,
+    justifyContent: 'space-between',
+    height: 176,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  pocketGuideIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(45,211,124,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(45,211,124,0.30)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  pocketGuideIconArt: {
+    width: 44,
+    height: 44,
+    backgroundColor: 'transparent',
+  },
+  pocketGuideLabel: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.text,
+    marginBottom: 4,
+    letterSpacing: -0.1,
+  },
+  pocketGuideBadge: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '800',
   },
 });

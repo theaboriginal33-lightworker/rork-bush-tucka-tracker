@@ -7,13 +7,11 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import {
   AlertTriangle,
-  ArrowRight,
   HelpCircle,
   Image as ImageIcon,
   RefreshCcw,
   Scan,
 } from 'lucide-react-native';
-import { COLORS } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   createScanEntryId,
@@ -493,46 +491,6 @@ Return JSON with keys:
                 </View>
               </View>
             </LinearGradient>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Handy Pocket Guides</Text>
-              <TouchableOpacity style={styles.seeAllButton} onPress={() => Alert.alert('Coming soon', 'More Handy Pocket Guides are being added.')} testID="pocket-guides-see-all">
-                <Text style={styles.seeAllText}>See All</Text>
-                <ArrowRight size={16} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.guidesScroll}>
-              <TouchableOpacity style={[styles.guideCard, styles.guideCardBrand]} onPress={() => router.push('/pocket-guides/cultural-respect-on-country')} testID="pocket-guide-card-cultural-respect">
-                <View style={styles.guideIconBrand}>
-                  <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/r5y6q5zltfpde776ienrb' }} style={styles.guideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} testID="pocket-guide-icon-cultural-respect" />
-                </View>
-                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>Cultural respect{'\n'}On Country</Text>
-                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.guideCard, styles.guideCardBrand]} onPress={() => router.push('/pocket-guides/animal-care-and-share')} testID="pocket-guide-card-animal-care">
-                <View style={styles.guideIconBrand}>
-                  <Image source={{ uri: 'https://r2-pub.rork.com/generated-images/fe0dfa28-4dd0-4574-b256-a3bc44b69f81.png' }} style={styles.guideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} testID="pocket-guide-icon-animal-care" />
-                </View>
-                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>Animal Care{'\n'}& Share</Text>
-                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.guideCard, styles.guideCardBrand]} onPress={() => router.push('/pocket-guides/foraging-with-kids')} testID="pocket-guide-card-foraging-kids">
-                <View style={styles.guideIconBrand}>
-                  <Image source={{ uri: 'https://r2-pub.rork.com/generated-images/50835e04-6a03-4f4c-87c8-eee59a6447ce.png' }} style={styles.guideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} testID="pocket-guide-icon-foraging-kids" />
-                </View>
-                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>Foraging{'\n'}With Kids</Text>
-                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.guideCard, styles.guideCardBrand]} onPress={() => router.push('/pocket-guides/if-something-goes-wrong')} testID="pocket-guide-card-if-something-wrong">
-                <View style={styles.guideIconBrand}>
-                  <Image source={{ uri: 'https://r2-pub.rork.com/generated-images/c97fe2cf-35fc-456c-b184-b1e64301acb7.png' }} style={styles.guideIconArt} contentFit="contain" cachePolicy="memory-disk" transition={140} testID="pocket-guide-icon-if-something-wrong" />
-                </View>
-                <Text style={[styles.guideTitle, styles.guideTitleDark]} numberOfLines={2}>If Something{'\n'}Goes Wrong</Text>
-                <Text style={[styles.guideCount, styles.guideCountDark]}>Pocket guide</Text>
-              </TouchableOpacity>
-            </ScrollView>
           </View>
 
 
