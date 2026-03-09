@@ -51,8 +51,8 @@ export default function HomeScreen() {
 
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [scanPhase, setScanPhase] = useState<ScanPhase>('idle');
-  const [scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
+  const [_scanResult, setScanResult] = useState<GeminiScanResult | null>(null);
+  const [_scanError, setScanError] = useState<string | null>(null);
 
   const geminiApiKey = (process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '').trim();
 
@@ -403,7 +403,7 @@ Return JSON with keys:
 
   const onPressRescan = useCallback(() => {
     if (!canScan) { Alert.alert('Cannot scan', 'Please upload or take a new photo first.'); return; }
-    analyzeWithGemini(scanImages);
+    void analyzeWithGemini(scanImages);
   }, [analyzeWithGemini, canScan, scanImages]);
 
   const shutterScale = useRef<Animated.Value>(new Animated.Value(1)).current;
@@ -417,7 +417,7 @@ Return JSON with keys:
       ]).start();
       if (action === 'camera') await takePhoto(); else await pickImage();
     },
-    [mode, pickImage, shutterScale, takePhoto],
+    [pickImage, shutterScale, takePhoto],
   );
 
   return (
@@ -426,7 +426,7 @@ Return JSON with keys:
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.scanStage} testID="scan-stage">
             <LinearGradient
-              colors={[DARK.bg, '#0B150F', '#09110C']}
+              colors={[DARK.bg, '#EEF3E9', '#F6F1E7']}
               start={{ x: 0.2, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.scanStageBg}
@@ -451,7 +451,7 @@ Return JSON with keys:
                   <Image source={{ uri: primaryImageDisplayUri ?? primaryImage.uri }} style={styles.focusImage} contentFit="cover" transition={120} cachePolicy="memory-disk" testID="scan-primary-image" />
                 ) : (
                   <View style={styles.focusPlaceholder}>
-                    <Scan size={70} color="rgba(255,255,255,0.18)" />
+                    <Scan size={70} color="rgba(34,49,39,0.14)" />
                   </View>
                 )}
                 <View style={styles.focusFrame} pointerEvents="none">
