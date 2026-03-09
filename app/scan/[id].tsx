@@ -172,6 +172,10 @@ async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: 
 
   for (const uri of candidates) {
     const scheme = uri.split(':')[0] ?? '';
+    if (scheme === 'data') {
+      console.log('[resolveImageForPdf] using data URI directly', { len: uri.length });
+      return uri;
+    }
     if (scheme === 'http' || scheme === 'https') {
       const b64 = await imageToBase64DataUri(uri);
       if (b64) return b64;
