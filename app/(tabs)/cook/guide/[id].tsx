@@ -9,6 +9,7 @@ import { ChevronLeft, Edit3, FileDown, ImageUp, Share2, Trash2, X } from 'lucide
 import { COLORS } from '@/constants/colors';
 import { buildShareUrl } from '@/constants/shareLinks';
 import { useCookbook } from '@/app/providers/CookbookProvider';
+import { useScanJournal } from '@/app/providers/ScanJournalProvider';
 
 type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
 type ExpoPrintModule = typeof import('expo-print');
@@ -109,7 +110,13 @@ export default function CookGuideDetailsScreen() {
 
   const { getEntryById, removeEntry, setEntryImage, clearEntryImage, canEditImageForEntry, updateEntryTitle, canEditTitleForEntry } =
     useCookbook();
+  const { getEntryById: getScanEntryById } = useScanJournal();
   const entry = getEntryById(entryId);
+
+  const scanEntry = useMemo(() => {
+    if (!entry?.scanEntryId) return undefined;
+    return getScanEntryById(entry.scanEntryId);
+  }, [entry?.scanEntryId, getScanEntryById]);
 
   const imageUri = useMemo(() => {
     return safeImageUri(entry?.imageUri) ?? null;
@@ -249,6 +256,11 @@ export default function CookGuideDetailsScreen() {
     const imageScheme = (entryImageUri ?? '').split(':')[0] ?? '';
     const canEmbedImage = Boolean(entryImageUri) && imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph';
 
+    const scanImageRaw = scanEntry?.imagePreviewUri ?? scanEntry?.imageUri;
+    const scanImageUri = safeImageUri(scanImageRaw);
+    const scanImageScheme = (scanImageUri ?? '').split(':')[0] ?? '';
+    const canEmbedScanImage = Boolean(scanImageUri) && scanImageScheme !== 'file' && scanImageScheme !== 'content' && scanImageScheme !== 'ph';
+
     const title = escHtml(entry.title);
     const common = escHtml(entry.commonName);
     const scientific = entry.scientificName ? escHtml(entry.scientificName) : '';
@@ -267,9 +279,15 @@ export default function CookGuideDetailsScreen() {
     const body = markdownToHtml(rawBody);
     const suggestedUses = Array.isArray(entry.suggestedUses) ? entry.suggestedUses.map((u) => escHtml(String(u))).slice(0, 16) : [];
 
+    const scanBannerHtml = canEmbedScanImage
+      ? `<div class="scan-banner"><img src="${scanImageUri}" alt="Original Scan" /><div class="scan-banner-label">Original Scan</div></div>`
+      : '';
+
     const imageHtml = canEmbedImage
       ? `<div class="hero"><img src="${entryImageUri}" alt="Photo" /></div>`
-      : `<div class="hero hero-empty"><div class="hero-empty-inner">Photo not available for PDF export</div></div>`;
+      : !canEmbedScanImage
+        ? `<div class="hero hero-empty"><div class="hero-empty-inner">Photo not available for PDF export</div></div>`
+        : '';
 
     const usesHtml = suggestedUses.length
       ? `<ul>${suggestedUses.map((u) => `<li>${u}</li>`).join('')}</ul>`
@@ -286,6 +304,9 @@ export default function CookGuideDetailsScreen() {
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; color: #0c1411; background: #f5f6f4; }
   .page { padding: 22px 18px 28px; }
   .card { background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid rgba(15, 36, 24, 0.10); box-shadow: 0 14px 30px rgba(12, 20, 17, 0.10); }
+  .scan-banner { position: relative; height: 280px; background: #0a1a10; }
+  .scan-banner img { width: 100%; height: 280px; object-fit: cover; display: block; }
+  .scan-banner-label { position: absolute; top: 12px; left: 12px; padding: 5px 12px; border-radius: 8px; background: rgba(7,17,11,0.72); color: rgba(255,255,255,0.92); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; backdrop-filter: blur(6px); }
   .hero { height: 240px; background: #0f2418; }
   .hero img { width: 100%; height: 240px; object-fit: cover; display: block; }
   .hero-empty { display: flex; align-items: center; justify-content: center; }
@@ -308,6 +329,7 @@ export default function CookGuideDetailsScreen() {
 <body>
   <div class="page">
     <div class="card">
+      ${scanBannerHtml}
       ${imageHtml}
       <div class="content">
         <h1 class="title">${title}</h1>
@@ -335,7 +357,7 @@ export default function CookGuideDetailsScreen() {
   </div>
 </body>
 </html>`;
-  }, [entry]);
+  }, [entry, scanEntry]);
 
   const exportPdf = useCallback(async () => {
     if (!entry) return;
