@@ -97,6 +97,16 @@ async function loadExpoFileSystem(): Promise<ExpoFileSystemModule | null> {
 
 const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
 
+function getCacheDir(fs: ExpoFileSystemModule): string {
+  const fsAny = fs as unknown as MaybePaths;
+  return (
+    (typeof fsAny.Paths?.cache?.uri === 'string' ? fsAny.Paths.cache.uri : '') ||
+    (typeof fsAny.cacheDirectory === 'string' ? fsAny.cacheDirectory : '') ||
+    (typeof fsAny.documentDirectory === 'string' ? fsAny.documentDirectory : '') ||
+    (typeof fsAny.Paths?.document?.uri === 'string' ? fsAny.Paths.document.uri : '')
+  );
+}
+
 async function imageToBase64DataUri(uri: string | null): Promise<string | null> {
   if (!uri) return null;
   try {
@@ -107,26 +117,39 @@ async function imageToBase64DataUri(uri: string | null): Promise<string | null> 
     let localUri = uri;
     const scheme = uri.split(':')[0] ?? '';
 
+    if (scheme === 'http' || scheme === 'https') {
+      const cacheDir = getCacheDir(fs);
+      if (cacheDir) {
+        const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_dl_${Date.now()}.jpg` : `${cacheDir}/pdf_dl_${Date.now()}.jpg`;
+        try {
+          const dl = await fs.downloadAsync(uri, tmpDest);
+          const b64 = await fs.readAsStringAsync(dl.uri, { encoding: 'base64' as const });
+          if (b64 && b64.length > 0) {
+            console.log('[imageToBase64] http downloaded+converted', { uriLen: uri.length, base64Len: b64.length });
+            return `data:image/jpeg;base64,${b64}`;
+          }
+        } catch (dlErr) {
+          console.log('[imageToBase64] http download failed, returning raw URL', dlErr instanceof Error ? dlErr.message : String(dlErr));
+        }
+      }
+      return uri;
+    }
+
     if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
-      const fsAny = fs as unknown as MaybePaths;
-      const cacheDir =
-        (typeof fsAny.Paths?.cache?.uri === 'string' ? fsAny.Paths.cache.uri : '') ||
-        (typeof fsAny.cacheDirectory === 'string' ? fsAny.cacheDirectory : '') ||
-        (typeof fsAny.documentDirectory === 'string' ? fsAny.documentDirectory : '') ||
-        (typeof fsAny.Paths?.document?.uri === 'string' ? fsAny.Paths.document.uri : '');
-      if (!cacheDir) return null;
+      const cacheDir = getCacheDir(fs);
+      if (!cacheDir) {
+        console.log('[imageToBase64] no cache dir for copy');
+        return null;
+      }
       const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_img_${Date.now()}.jpg` : `${cacheDir}/pdf_img_${Date.now()}.jpg`;
       try {
         await fs.copyAsync({ from: uri, to: tmpDest });
         localUri = tmpDest;
+        console.log('[imageToBase64] copyAsync succeeded', { from: uri.substring(0, 40), to: tmpDest });
       } catch (copyErr) {
         console.log('[imageToBase64] copyAsync failed', copyErr instanceof Error ? copyErr.message : String(copyErr));
         return null;
       }
-    }
-
-    if (scheme === 'http' || scheme === 'https') {
-      return uri;
     }
 
     const base64 = await fs.readAsStringAsync(localUri, { encoding: 'base64' as const });
@@ -137,6 +160,34 @@ async function imageToBase64DataUri(uri: string | null): Promise<string | null> 
     console.log('[imageToBase64] failed', e instanceof Error ? e.message : String(e));
     return null;
   }
+}
+
+async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: string }): Promise<string | null> {
+  const candidates = [
+    entry.imagePreviewUri,
+    entry.imageUri,
+  ].filter((u): u is string => typeof u === 'string' && u.trim().length > 0 && u !== 'null' && u !== 'undefined');
+
+  console.log('[resolveImageForPdf] candidates', candidates.map(c => c.substring(0, 60)));
+
+  for (const uri of candidates) {
+    const scheme = uri.split(':')[0] ?? '';
+    if (scheme === 'http' || scheme === 'https') {
+      const b64 = await imageToBase64DataUri(uri);
+      if (b64) return b64;
+      return uri;
+    }
+    if (scheme === 'file') {
+      const b64 = await imageToBase64DataUri(uri);
+      if (b64) return b64;
+    }
+    if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
+      const b64 = await imageToBase64DataUri(uri);
+      if (b64) return b64;
+    }
+  }
+
+  return null;
 }
 
 function escHtml(s: string): string {
@@ -400,17 +451,10 @@ export default function ScanDetailsScreen() {
   const buildPdfHtml = useCallback(async (): Promise<string> => {
     if (!entry) return '';
 
-    const rawImageUri = safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
-    let imageUri = rawImageUri;
-    const imageScheme = (rawImageUri ?? '').split(':')[0] ?? '';
-    const isLocalImage = imageScheme === 'file' || imageScheme === 'content';
-
-    if (isLocalImage && rawImageUri) {
-      const b64 = await imageToBase64DataUri(rawImageUri);
-      if (b64) imageUri = b64;
-    }
-
-    const canEmbedImage = Boolean(imageUri) && (imageUri?.startsWith('data:') || (imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph'));
+    const resolvedImage = await resolveImageForPdf(entry);
+    console.log('[buildPdfHtml] resolvedImage', { hasImage: Boolean(resolvedImage), prefix: resolvedImage?.substring(0, 40) });
+    const canEmbedImage = Boolean(resolvedImage);
+    const imageUri = resolvedImage;
 
     const esc = (s: string) =>
       s
@@ -996,20 +1040,8 @@ export default function ScanDetailsScreen() {
     const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (filtered.length === 0) return '';
 
-    const rawScanImage = (entry.imageUri ?? entry.imagePreviewUri ?? '').trim();
-    let scanImageSrc: string | null = null;
-    if (rawScanImage.length > 0 && rawScanImage !== 'null' && rawScanImage !== 'undefined') {
-      const scheme = rawScanImage.split(':')[0] ?? '';
-      if (scheme === 'http' || scheme === 'https') {
-        scanImageSrc = rawScanImage;
-      } else {
-        const b64 = await imageToBase64DataUri(rawScanImage);
-        if (b64) {
-          scanImageSrc = b64;
-        }
-      }
-      console.log('[ConvoPDF] image resolution', { rawScanImage: rawScanImage.substring(0, 60), scheme, hasSrc: Boolean(scanImageSrc) });
-    }
+    const scanImageSrc = await resolveImageForPdf(entry);
+    console.log('[ConvoPDF] image resolution', { hasSrc: Boolean(scanImageSrc), prefix: scanImageSrc?.substring(0, 40) });
 
     const common = escHtml(entry.scan.commonName);
     const scientific = entry.scan.scientificName ? escHtml(entry.scan.scientificName) : '';
