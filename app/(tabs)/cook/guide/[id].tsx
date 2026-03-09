@@ -55,6 +55,53 @@ async function loadExpoPrint(): Promise<ExpoPrintModule | null> {
   }
 }
 
+type MaybePaths = {
+  Paths?: {
+    cache?: { uri?: string };
+    document?: { uri?: string };
+  };
+  cacheDirectory?: string;
+  documentDirectory?: string;
+};
+
+async function imageToBase64DataUri(uri: string | null): Promise<string | null> {
+  if (!uri) return null;
+  try {
+    if (Platform.OS === 'web') return null;
+    const fs = await getLegacyFileSystem();
+    if (!fs) return null;
+
+    let localUri = uri;
+    const scheme = uri.split(':')[0] ?? '';
+
+    if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
+      const fsAny = fs as unknown as MaybePaths;
+      const cacheDir =
+        (typeof fsAny.cacheDirectory === 'string' ? fsAny.cacheDirectory : '') ||
+        (typeof fsAny.documentDirectory === 'string' ? fsAny.documentDirectory : '');
+      if (!cacheDir) return null;
+      const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_img_${Date.now()}.jpg` : `${cacheDir}/pdf_img_${Date.now()}.jpg`;
+      try {
+        await fs.copyAsync({ from: uri, to: tmpDest });
+        localUri = tmpDest;
+      } catch (copyErr) {
+        console.log('[CookGuide:imageToBase64] copyAsync failed', copyErr instanceof Error ? copyErr.message : String(copyErr));
+        return null;
+      }
+    }
+
+    if (scheme === 'http' || scheme === 'https') return uri;
+
+    const base64 = await fs.readAsStringAsync(localUri, { encoding: 'base64' as const });
+    if (!base64 || base64.length === 0) return null;
+    console.log('[CookGuide:imageToBase64] converted', { uriLen: uri.length, base64Len: base64.length });
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (e) {
+    console.log('[CookGuide:imageToBase64] failed', e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 function escHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -249,17 +296,25 @@ export default function CookGuideDetailsScreen() {
     return lines.join('\n');
   }, [entry?.commonName, entry?.confidence, entry?.createdAt, entry?.guideText, entry?.id, entry?.safetyStatus, entry?.scientificName, entry?.suggestedUses]);
 
-  const buildPdfHtml = useCallback((): string => {
+  const buildPdfHtml = useCallback(async (): Promise<string> => {
     if (!entry) return '';
 
-    const entryImageUri = safeImageUri(entry.imageUri);
-    const imageScheme = (entryImageUri ?? '').split(':')[0] ?? '';
-    const canEmbedImage = Boolean(entryImageUri) && imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph';
+    const rawEntryImageUri = safeImageUri(entry.imageUri);
+    const entryImageScheme = (rawEntryImageUri ?? '').split(':')[0] ?? '';
+    let entryImageUri = rawEntryImageUri;
+    if (rawEntryImageUri && (entryImageScheme === 'file' || entryImageScheme === 'content')) {
+      entryImageUri = await imageToBase64DataUri(rawEntryImageUri);
+    }
+    const canEmbedImage = Boolean(entryImageUri) && (entryImageUri?.startsWith('data:') || (entryImageScheme !== 'file' && entryImageScheme !== 'content' && entryImageScheme !== 'ph'));
 
     const scanImageRaw = scanEntry?.imagePreviewUri ?? scanEntry?.imageUri;
-    const scanImageUri = safeImageUri(scanImageRaw);
-    const scanImageScheme = (scanImageUri ?? '').split(':')[0] ?? '';
-    const canEmbedScanImage = Boolean(scanImageUri) && scanImageScheme !== 'file' && scanImageScheme !== 'content' && scanImageScheme !== 'ph';
+    const rawScanImageUri = safeImageUri(scanImageRaw);
+    const scanImageScheme = (rawScanImageUri ?? '').split(':')[0] ?? '';
+    let scanImageUri = rawScanImageUri;
+    if (rawScanImageUri && (scanImageScheme === 'file' || scanImageScheme === 'content')) {
+      scanImageUri = await imageToBase64DataUri(rawScanImageUri);
+    }
+    const canEmbedScanImage = Boolean(scanImageUri) && (scanImageUri?.startsWith('data:') || (scanImageScheme !== 'file' && scanImageScheme !== 'content' && scanImageScheme !== 'ph'));
 
     const title = escHtml(entry.title);
     const common = escHtml(entry.commonName);
@@ -362,7 +417,7 @@ export default function CookGuideDetailsScreen() {
   const exportPdf = useCallback(async () => {
     if (!entry) return;
 
-    const html = buildPdfHtml();
+    const html = await buildPdfHtml();
     if (!html) return;
 
     const safeName = `tucka-guide-${entry.id}.pdf`;

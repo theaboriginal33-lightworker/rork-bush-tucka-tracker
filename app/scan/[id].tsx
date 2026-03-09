@@ -97,6 +97,48 @@ async function loadExpoFileSystem(): Promise<ExpoFileSystemModule | null> {
 
 const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
 
+async function imageToBase64DataUri(uri: string | null): Promise<string | null> {
+  if (!uri) return null;
+  try {
+    if (Platform.OS === 'web') return null;
+    const fs = await loadExpoFileSystem();
+    if (!fs) return null;
+
+    let localUri = uri;
+    const scheme = uri.split(':')[0] ?? '';
+
+    if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
+      const fsAny = fs as unknown as MaybePaths;
+      const cacheDir =
+        (typeof fsAny.Paths?.cache?.uri === 'string' ? fsAny.Paths.cache.uri : '') ||
+        (typeof fsAny.cacheDirectory === 'string' ? fsAny.cacheDirectory : '') ||
+        (typeof fsAny.documentDirectory === 'string' ? fsAny.documentDirectory : '') ||
+        (typeof fsAny.Paths?.document?.uri === 'string' ? fsAny.Paths.document.uri : '');
+      if (!cacheDir) return null;
+      const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_img_${Date.now()}.jpg` : `${cacheDir}/pdf_img_${Date.now()}.jpg`;
+      try {
+        await fs.copyAsync({ from: uri, to: tmpDest });
+        localUri = tmpDest;
+      } catch (copyErr) {
+        console.log('[imageToBase64] copyAsync failed', copyErr instanceof Error ? copyErr.message : String(copyErr));
+        return null;
+      }
+    }
+
+    if (scheme === 'http' || scheme === 'https') {
+      return uri;
+    }
+
+    const base64 = await fs.readAsStringAsync(localUri, { encoding: 'base64' as const });
+    if (!base64 || base64.length === 0) return null;
+    console.log('[imageToBase64] converted successfully', { uriLen: uri.length, base64Len: base64.length });
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (e) {
+    console.log('[imageToBase64] failed', e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 function escHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -355,12 +397,20 @@ export default function ScanDetailsScreen() {
     return lines.filter((l) => l.trim().length > 0).join('\n');
   }, [entry]);
 
-  const buildPdfHtml = useCallback((): string => {
+  const buildPdfHtml = useCallback(async (): Promise<string> => {
     if (!entry) return '';
 
-    const imageUri = safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
-    const imageScheme = (imageUri ?? '').split(':')[0] ?? '';
-    const canEmbedImage = Boolean(imageUri) && imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph';
+    const rawImageUri = safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
+    let imageUri = rawImageUri;
+    const imageScheme = (rawImageUri ?? '').split(':')[0] ?? '';
+    const isLocalImage = imageScheme === 'file' || imageScheme === 'content';
+
+    if (isLocalImage && rawImageUri) {
+      const b64 = await imageToBase64DataUri(rawImageUri);
+      if (b64) imageUri = b64;
+    }
+
+    const canEmbedImage = Boolean(imageUri) && (imageUri?.startsWith('data:') || (imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph'));
 
     const esc = (s: string) =>
       s
@@ -483,7 +533,7 @@ export default function ScanDetailsScreen() {
   const exportPdf = useCallback(async () => {
     if (!entry) return;
 
-    const html = buildPdfHtml();
+    const html = await buildPdfHtml();
     if (!html) return;
 
     const safeName = `collection-${entry.id}.pdf`;
@@ -941,10 +991,22 @@ export default function ScanDetailsScreen() {
     return lines.join('\n');
   }, [entry, visibleMessages]);
 
-  const buildConversationPdfHtml = useCallback((): string => {
+  const buildConversationPdfHtml = useCallback(async (): Promise<string> => {
     if (!entry) return '';
     const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (filtered.length === 0) return '';
+
+    const rawScanImage = safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
+    let scanImageSrc: string | null = null;
+    if (rawScanImage) {
+      const scheme = (rawScanImage).split(':')[0] ?? '';
+      if (scheme === 'file' || scheme === 'content') {
+        scanImageSrc = await imageToBase64DataUri(rawScanImage);
+      } else if (scheme === 'http' || scheme === 'https') {
+        scanImageSrc = rawScanImage;
+      }
+    }
+
     const common = escHtml(entry.scan.commonName);
     const scientific = entry.scan.scientificName ? escHtml(entry.scan.scientificName) : '';
     const messagesHtml = filtered.map(m => {
@@ -972,12 +1034,20 @@ export default function ScanDetailsScreen() {
         <div class="text">${htmlText}</div>
       </div>`;
     }).join('');
+
+    const scanBannerHtml = scanImageSrc
+      ? `<div class="scan-banner"><img src="${scanImageSrc}" /><div class="scan-label">Original Scan</div></div>`
+      : '';
+
     return `<!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Tucka Guide</title>
 <style>
 *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;margin:0;color:#0c1411;background:#f5f6f4}
 .page{padding:22px 18px 28px}.card{background:#fff;border-radius:18px;overflow:hidden;border:1px solid rgba(15,36,24,0.10);box-shadow:0 14px 30px rgba(12,20,17,0.10)}
+.scan-banner{position:relative;height:260px;background:#0a1a10}
+.scan-banner img{width:100%;height:260px;object-fit:cover;display:block}
+.scan-label{position:absolute;top:12px;left:12px;padding:5px 12px;border-radius:8px;background:rgba(7,17,11,0.72);color:rgba(255,255,255,0.92);font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
 .header{padding:18px 16px;border-bottom:1px solid rgba(15,36,24,0.10)}
 .header h1{font-size:20px;font-weight:800;margin:0 0 4px}.header p{font-size:13px;color:rgba(12,20,17,0.60);margin:0}
 .messages{padding:16px}
@@ -987,6 +1057,7 @@ export default function ScanDetailsScreen() {
 .footer{padding:14px 16px;border-top:1px dashed rgba(15,36,24,0.18);font-size:12px;color:rgba(12,20,17,0.55)}
 </style></head><body>
 <div class="page"><div class="card">
+${scanBannerHtml}
 <div class="header"><h1>Tucka Guide</h1><p>${scientific ? `${common} (${scientific})` : common}</p></div>
 <div class="messages">${messagesHtml}</div>
 <div class="footer">Always verify locally before consuming.</div>
@@ -995,7 +1066,7 @@ export default function ScanDetailsScreen() {
 
   const exportConversationPdf = useCallback(async () => {
     if (!entry) return;
-    const html = buildConversationPdfHtml();
+    const html = await buildConversationPdfHtml();
     if (!html) {
       console.log('[TuckaGuide] exportConversationPdf: empty html, nothing to export');
       Alert.alert('Nothing to export', 'Start a conversation first.');
