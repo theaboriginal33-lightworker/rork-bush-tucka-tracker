@@ -129,13 +129,43 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  focusCircle: {
+  focusCornerWrap: {
     width: '72%',
     aspectRatio: 1,
-    borderRadius: 9999,
-    borderWidth: 3,
+  },
+  focusCorner: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
     borderColor: 'rgba(242,245,242,0.70)',
-    borderStyle: 'dashed',
+  },
+  focusCornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 6,
+  },
+  focusCornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 6,
+  },
+  focusCornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 6,
+  },
+  focusCornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 6,
   },
   scanBusyPill: {
     position: 'absolute',
