@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRorkAgent } from '@rork-ai/toolkit-sdk';
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import type * as LocationType from 'expo-location';
@@ -231,6 +231,7 @@ export default function ScanDetailsScreen() {
   const [lngDraft, setLngDraft] = useState<string>(entry?.location ? String(entry.location.longitude) : '');
 
   const [activeTab, setActiveTab] = useState<'guide' | 'details'>('guide');
+  const bottomInsets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!entry) return;
@@ -1580,27 +1581,6 @@ export default function ScanDetailsScreen() {
                   </View>
                 ) : null}
 
-                <View style={styles.chatInputRow}>
-                  <TextInput
-                    style={styles.chatInputField}
-                    value={chatInput}
-                    onChangeText={setChatInput}
-                    placeholder="Ask a question..."
-                    placeholderTextColor={COLORS.textSecondary}
-                    multiline
-                    returnKeyType="send"
-                    onSubmitEditing={handleSendMessage}
-                    testID="tucka-guide-input"
-                  />
-                  <TouchableOpacity
-                    style={[styles.chatSendBtn, (chatInput.trim().length === 0 || isSending) ? styles.chatSendBtnDisabled : null]}
-                    onPress={handleSendMessage}
-                    disabled={chatInput.trim().length === 0 || isSending}
-                    testID="tucka-guide-send"
-                  >
-                    <Send size={18} color={chatInput.trim().length > 0 && !isSending ? '#06120B' : COLORS.textSecondary} />
-                  </TouchableOpacity>
-                </View>
               </View>
             </>
           ) : (
@@ -1706,8 +1686,34 @@ export default function ScanDetailsScreen() {
             </>
           )}
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: activeTab === 'guide' ? 100 : 40 }} />
         </ScrollView>
+
+        {activeTab === 'guide' ? (
+          <View style={[styles.floatingChatBar, { paddingBottom: Math.max(bottomInsets.bottom, 10) }]} testID="tucka-guide-floating-input">
+            <View style={styles.floatingChatInner}>
+              <TextInput
+                style={styles.floatingChatInput}
+                value={chatInput}
+                onChangeText={setChatInput}
+                placeholder="Ask Tucka Guide..."
+                placeholderTextColor={COLORS.textSecondary}
+                multiline
+                returnKeyType="send"
+                onSubmitEditing={handleSendMessage}
+                testID="tucka-guide-input"
+              />
+              <TouchableOpacity
+                style={[styles.floatingChatSendBtn, (chatInput.trim().length === 0 || isSending) ? styles.chatSendBtnDisabled : null]}
+                onPress={handleSendMessage}
+                disabled={chatInput.trim().length === 0 || isSending}
+                testID="tucka-guide-send"
+              >
+                <Send size={18} color={chatInput.trim().length > 0 && !isSending ? '#06120B' : COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </View>
   );
@@ -2282,6 +2288,44 @@ const styles = StyleSheet.create({
   },
   chatSendBtnDisabled: {
     backgroundColor: 'rgba(155,179,164,0.12)',
+  },
+  floatingChatBar: {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(6,18,11,0.92)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(56,217,137,0.18)',
+    paddingTop: 10,
+    paddingHorizontal: 16,
+  },
+  floatingChatInner: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-end' as const,
+    gap: 10,
+  },
+  floatingChatInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 100,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.22)',
+    backgroundColor: 'rgba(11,25,17,0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
+  floatingChatSendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.action,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   chatActionsRow: {
     flexDirection: 'row' as const,
