@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Keyboard } from 'react-native';
 import { useRorkAgent } from '@rork-ai/toolkit-sdk';
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -232,6 +233,18 @@ export default function ScanDetailsScreen() {
 
   const [activeTab, setActiveTab] = useState<'guide' | 'details'>('guide');
   const bottomInsets = useSafeAreaInsets();
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () => {
+      if (activeTab === 'guide' && scrollViewRef.current) {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    });
+    return () => sub.remove();
+  }, [activeTab]);
 
   useEffect(() => {
     if (!entry) return;
@@ -1194,8 +1207,8 @@ export default function ScanDetailsScreen() {
         </View>
       </SafeAreaView>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} testID="scan-details-scroll">
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+        <ScrollView ref={scrollViewRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" testID="scan-details-scroll">
           <View style={styles.heroCard}>
             <Image
               source={{
