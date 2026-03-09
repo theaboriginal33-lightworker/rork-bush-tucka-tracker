@@ -1207,7 +1207,7 @@ export default function ScanDetailsScreen() {
         </View>
       </SafeAreaView>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}>
         <ScrollView ref={scrollViewRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" testID="scan-details-scroll">
           <View style={styles.heroCard}>
             <Image
@@ -1699,11 +1699,11 @@ export default function ScanDetailsScreen() {
             </>
           )}
 
-          <View style={{ height: activeTab === 'guide' ? 100 : 40 }} />
+          <View style={{ height: activeTab === 'guide' ? 20 : 40 }} />
         </ScrollView>
 
         {activeTab === 'guide' ? (
-          <View style={[styles.floatingChatBar, { paddingBottom: Math.max(bottomInsets.bottom, 10) }]} testID="tucka-guide-floating-input">
+          <View style={[styles.chatBarContainer, { paddingBottom: Math.max(bottomInsets.bottom, 10) }]} testID="tucka-guide-floating-input">
             <View style={styles.floatingChatInner}>
               <TextInput
                 style={styles.floatingChatInput}
@@ -2302,11 +2302,7 @@ const styles = StyleSheet.create({
   chatSendBtnDisabled: {
     backgroundColor: 'rgba(155,179,164,0.12)',
   },
-  floatingChatBar: {
-    position: 'absolute' as const,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  chatBarContainer: {
     backgroundColor: 'rgba(6,18,11,0.97)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(56,217,137,0.28)',
