@@ -96,6 +96,27 @@ async function loadExpoFileSystem(): Promise<ExpoFileSystemModule | null> {
 
 const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
 
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function markdownToHtml(raw: string): string {
+  let text = escHtml(raw);
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/^## (.+)$/gm, '<h3 style="font-size:15px;font-weight:800;margin:12px 0 6px;">$1</h3>');
+  text = text.replace(/^# (.+)$/gm, '<h2 style="font-size:17px;font-weight:800;margin:14px 0 6px;">$1</h2>');
+  text = text.replace(/^[-•] (.+)$/gm, '<div style="padding-left:12px;margin:3px 0;">• $1</div>');
+  text = text.replace(/^(\d+)\. (.+)$/gm, '<div style="padding-left:12px;margin:3px 0;">$1. $2</div>');
+  text = text.replace(/\n/g, '<br/>');
+  return text;
+}
+
 type LocationModule = typeof LocationType;
 
 async function loadExpoLocation(): Promise<LocationModule | null> {
@@ -454,15 +475,19 @@ export default function ScanDetailsScreen() {
     const safeName = `collection-${entry.id}.pdf`;
 
     try {
-      console.log('[ScanDetails] exportPdf start', { entryId: entry.id, platform: Platform.OS });
+      console.log('[ScanDetails] exportPdf start', { entryId: entry.id, platform: Platform.OS, htmlLen: html.length });
+
+      const print = await loadExpoPrint();
+      if (!print) {
+        console.log('[ScanDetails] expo-print not available, falling back to share text');
+        await Share.share({ message: buildShareText(), title: entry.title });
+        return;
+      }
 
       if (Platform.OS === 'web') {
         try {
-          const print = await loadExpoPrint();
-          if (!print) throw new Error('Printing not available');
-          const result = await print.printToFileAsync({ html, base64: false });
+          const result = await print.printToFileAsync({ html });
           console.log('[ScanDetails] exportPdf web printToFileAsync result', { uri: result.uri });
-
           if (typeof document !== 'undefined') {
             const resp = await fetch(result.uri);
             const blob = await resp.blob();
@@ -478,36 +503,53 @@ export default function ScanDetailsScreen() {
             URL.revokeObjectURL(url);
             return;
           }
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
-          console.log('[ScanDetails] exportPdf web printToFileAsync failed', { message });
+        } catch (webErr) {
+          console.log('[ScanDetails] exportPdf web printToFileAsync failed', webErr instanceof Error ? webErr.message : String(webErr));
         }
-
-        {
-          const print = await loadExpoPrint();
-          if (!print) throw new Error('Printing not available');
+        try {
           await print.printAsync({ html });
+        } catch (printErr) {
+          console.log('[ScanDetails] exportPdf web printAsync failed', printErr instanceof Error ? printErr.message : String(printErr));
+          await Share.share({ message: buildShareText(), title: entry.title });
         }
         return;
       }
 
-      const print = await loadExpoPrint();
-      if (!print) throw new Error('Printing not available');
-      const { uri } = await print.printToFileAsync({ html, base64: false });
-      console.log('[ScanDetails] exportPdf file ready', { uri });
+      let fileUri: string | null = null;
+      try {
+        const result = await print.printToFileAsync({ html });
+        fileUri = result.uri;
+        console.log('[ScanDetails] exportPdf file ready', { uri: fileUri });
+      } catch (fileErr) {
+        console.log('[ScanDetails] printToFileAsync failed, trying printAsync fallback', fileErr instanceof Error ? fileErr.message : String(fileErr));
+        try {
+          await print.printAsync({ html });
+          return;
+        } catch (printErr) {
+          console.log('[ScanDetails] printAsync also failed', printErr instanceof Error ? printErr.message : String(printErr));
+          await Share.share({ message: buildShareText(), title: entry.title });
+          return;
+        }
+      }
 
-      const sharing = await loadExpoSharing();
-      const canShare = (await sharing?.isAvailableAsync()) ?? false;
-      if (canShare) {
-        await sharing?.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
-        return;
+      if (fileUri) {
+        const sharing = await loadExpoSharing();
+        const canShare = (await sharing?.isAvailableAsync()) ?? false;
+        if (canShare) {
+          await sharing?.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
+          return;
+        }
       }
 
       await Share.share({ message: buildShareText(), title: entry.title });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.log('[ScanDetails] exportPdf failed', { message });
-      Alert.alert('Could not export PDF', 'Please try again.');
+      console.log('[ScanDetails] exportPdf failed completely', { message });
+      try {
+        await Share.share({ message: buildShareText(), title: entry.title });
+      } catch {
+        Alert.alert('Could not export', message || 'Please try again.');
+      }
     }
   }, [buildPdfHtml, buildShareText, entry]);
 
@@ -539,7 +581,7 @@ export default function ScanDetailsScreen() {
       const message = buildShareText();
       try {
         console.log('[ScanDetails] sharePhoto(web): opening image', { imageUri });
-        Linking.openURL(imageUri);
+        void Linking.openURL(imageUri);
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
         console.log('[ScanDetails] sharePhoto(web) failed', { errMsg });
@@ -844,7 +886,7 @@ export default function ScanDetailsScreen() {
       }
       messageCountRef.current += 1;
       console.log('[TuckaGuide] sending with context, user text:', text);
-      await sendMessage(fullMessage);
+      sendMessage(fullMessage);
       console.log('[TuckaGuide] message sent successfully');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -889,10 +931,8 @@ export default function ScanDetailsScreen() {
     if (!entry) return '';
     const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (filtered.length === 0) return '';
-    const esc = (s: string) =>
-      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    const common = esc(entry.scan.commonName);
-    const scientific = entry.scan.scientificName ? esc(entry.scan.scientificName) : '';
+    const common = escHtml(entry.scan.commonName);
+    const scientific = entry.scan.scientificName ? escHtml(entry.scan.scientificName) : '';
     const messagesHtml = filtered.map(m => {
       const textParts = m.parts?.filter((p: { type: string }) => p.type === 'text') ?? [];
       let text = textParts.map((p: { type: string; text?: string }) => p.text ?? '').join('');
@@ -912,27 +952,28 @@ export default function ScanDetailsScreen() {
       const borderColor = isUser ? 'rgba(127,227,168,0.28)' : 'rgba(15,36,24,0.10)';
       const roleLabel = isUser ? 'You' : 'Tucka Guide';
       const roleColor = isUser ? '#38D989' : '#0c1411';
+      const htmlText = isUser ? escHtml(text) : markdownToHtml(text);
       return `<div class="msg" style="background:${bgColor};border-color:${borderColor}">
         <div class="role" style="color:${roleColor}">${roleLabel}</div>
-        <div class="text">${esc(text)}</div>
+        <div class="text">${htmlText}</div>
       </div>`;
     }).join('');
     return `<!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Tucka Guide — ${common}</title>
+<title>Tucka Guide</title>
 <style>
 *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;margin:0;color:#0c1411;background:#f5f6f4}
 .page{padding:22px 18px 28px}.card{background:#fff;border-radius:18px;overflow:hidden;border:1px solid rgba(15,36,24,0.10);box-shadow:0 14px 30px rgba(12,20,17,0.10)}
 .header{padding:18px 16px;border-bottom:1px solid rgba(15,36,24,0.10)}
 .header h1{font-size:20px;font-weight:800;margin:0 0 4px}.header p{font-size:13px;color:rgba(12,20,17,0.60);margin:0}
-.messages{padding:16px;display:flex;flex-direction:column;gap:12px}
-.msg{padding:12px;border-radius:14px;border:1px solid;}
+.messages{padding:16px}
+.msg{padding:12px;border-radius:14px;border:1px solid;margin-bottom:12px}
 .role{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px}
-.text{font-size:14px;line-height:1.5;white-space:pre-wrap}
+.text{font-size:14px;line-height:1.5}
 .footer{padding:14px 16px;border-top:1px dashed rgba(15,36,24,0.18);font-size:12px;color:rgba(12,20,17,0.55)}
 </style></head><body>
 <div class="page"><div class="card">
-<div class="header"><h1>Tucka Guide — ${common}</h1>${scientific ? `<p>${scientific}</p>` : ''}</div>
+<div class="header"><h1>Tucka Guide</h1><p>${scientific ? `${common} (${scientific})` : common}</p></div>
 <div class="messages">${messagesHtml}</div>
 <div class="footer">Always verify locally before consuming.</div>
 </div></div></body></html>`;
@@ -941,43 +982,76 @@ export default function ScanDetailsScreen() {
   const exportConversationPdf = useCallback(async () => {
     if (!entry) return;
     const html = buildConversationPdfHtml();
-    if (!html) return;
-    const safeName = `tucka-guide-chat-${entry.id}.pdf`;
+    if (!html) {
+      console.log('[TuckaGuide] exportConversationPdf: empty html, nothing to export');
+      Alert.alert('Nothing to export', 'Start a conversation first.');
+      return;
+    }
     try {
-      console.log('[TuckaGuide] exportConversationPdf start', { entryId: entry.id });
+      console.log('[TuckaGuide] exportConversationPdf start', { entryId: entry.id, platform: Platform.OS, htmlLen: html.length });
       const print = await loadExpoPrint();
-      if (!print) throw new Error('Printing not available');
+      if (!print) {
+        console.log('[TuckaGuide] expo-print module not available, falling back to share text');
+        await Share.share({ message: buildConversationText(), title: `Tucka Guide — ${entry.scan.commonName}` });
+        return;
+      }
       if (Platform.OS === 'web') {
         try {
-          const result = await print.printToFileAsync({ html, base64: false });
+          const result = await print.printToFileAsync({ html });
           if (typeof document !== 'undefined') {
             const resp = await fetch(result.uri);
             const blob = await resp.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = safeName; a.rel = 'noopener'; a.target = '_blank';
+            a.href = url; a.download = `tucka-guide-chat-${entry.id}.pdf`; a.rel = 'noopener'; a.target = '_blank';
             document.body.appendChild(a); a.click(); a.remove();
             URL.revokeObjectURL(url);
             return;
           }
-        } catch (e) {
-          console.log('[TuckaGuide] exportConversationPdf web fallback', e instanceof Error ? e.message : String(e));
+        } catch (webErr) {
+          console.log('[TuckaGuide] exportConversationPdf web printToFile failed, trying printAsync', webErr instanceof Error ? webErr.message : String(webErr));
         }
-        await print.printAsync({ html });
+        try {
+          await print.printAsync({ html });
+        } catch (printErr) {
+          console.log('[TuckaGuide] exportConversationPdf web printAsync also failed', printErr instanceof Error ? printErr.message : String(printErr));
+          await Share.share({ message: buildConversationText(), title: `Tucka Guide — ${entry.scan.commonName}` });
+        }
         return;
       }
-      const result = await print.printToFileAsync({ html, base64: false });
-      const sharing = await loadExpoSharing();
-      const canShare = (await sharing?.isAvailableAsync()) ?? false;
-      if (canShare) {
-        await sharing?.shareAsync(result.uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share Conversation PDF', UTI: 'com.adobe.pdf' });
-        return;
+      let fileUri: string | null = null;
+      try {
+        const result = await print.printToFileAsync({ html });
+        fileUri = result.uri;
+        console.log('[TuckaGuide] exportConversationPdf file created', { uri: fileUri });
+      } catch (fileErr) {
+        console.log('[TuckaGuide] printToFileAsync failed, trying printAsync fallback', fileErr instanceof Error ? fileErr.message : String(fileErr));
+        try {
+          await print.printAsync({ html });
+          return;
+        } catch (printErr) {
+          console.log('[TuckaGuide] printAsync also failed', printErr instanceof Error ? printErr.message : String(printErr));
+          await Share.share({ message: buildConversationText(), title: `Tucka Guide — ${entry.scan.commonName}` });
+          return;
+        }
       }
-      await Share.share({ message: buildConversationText() });
+      if (fileUri) {
+        const sharing = await loadExpoSharing();
+        const canShare = (await sharing?.isAvailableAsync()) ?? false;
+        if (canShare) {
+          await sharing?.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share Conversation PDF', UTI: 'com.adobe.pdf' });
+          return;
+        }
+      }
+      await Share.share({ message: buildConversationText(), title: `Tucka Guide — ${entry.scan.commonName}` });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.log('[TuckaGuide] exportConversationPdf failed', { msg });
-      Alert.alert('Could not export PDF', 'Please try again.');
+      console.log('[TuckaGuide] exportConversationPdf failed completely', { msg });
+      try {
+        await Share.share({ message: buildConversationText(), title: `Tucka Guide — ${entry.scan.commonName}` });
+      } catch {
+        Alert.alert('Could not export', msg || 'Please try again.');
+      }
     }
   }, [buildConversationPdfHtml, buildConversationText, entry]);
 

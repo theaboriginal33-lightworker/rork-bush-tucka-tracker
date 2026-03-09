@@ -54,6 +54,27 @@ async function loadExpoPrint(): Promise<ExpoPrintModule | null> {
   }
 }
 
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function markdownToHtml(raw: string): string {
+  let text = escHtml(raw);
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/^## (.+)$/gm, '<h3 style="font-size:15px;font-weight:800;margin:12px 0 6px;">$1</h3>');
+  text = text.replace(/^# (.+)$/gm, '<h2 style="font-size:17px;font-weight:800;margin:14px 0 6px;">$1</h2>');
+  text = text.replace(/^[-\u2022] (.+)$/gm, '<div style="padding-left:12px;margin:3px 0;">\u2022 $1</div>');
+  text = text.replace(/^(\d+)\. (.+)$/gm, '<div style="padding-left:12px;margin:3px 0;">$1. $2</div>');
+  text = text.replace(/\n/g, '<br/>');
+  return text;
+}
+
 function safeImageUri(uri: string | undefined): string | null {
   const raw0 = typeof uri === 'string' ? uri.trim() : '';
   if (raw0.length === 0 || raw0 === 'null' || raw0 === 'undefined') return null;
@@ -224,37 +245,30 @@ export default function CookGuideDetailsScreen() {
   const buildPdfHtml = useCallback((): string => {
     if (!entry) return '';
 
-    const imageUri = safeImageUri(entry.imageUri);
-    const imageScheme = (imageUri ?? '').split(':')[0] ?? '';
-    const canEmbedImage = Boolean(imageUri) && imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph';
+    const entryImageUri = safeImageUri(entry.imageUri);
+    const imageScheme = (entryImageUri ?? '').split(':')[0] ?? '';
+    const canEmbedImage = Boolean(entryImageUri) && imageScheme !== 'file' && imageScheme !== 'content' && imageScheme !== 'ph';
 
-    const esc = (s: string) =>
-      s
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+    const title = escHtml(entry.title);
+    const common = escHtml(entry.commonName);
+    const scientific = entry.scientificName ? escHtml(entry.scientificName) : '';
 
-    const title = esc(entry.title);
-    const common = esc(entry.commonName);
-    const scientific = entry.scientificName ? esc(entry.scientificName) : '';
-
-    const safety = esc(String(entry.safetyStatus).toUpperCase());
-    const confidence = esc(`${Math.round(entry.confidence * 100)}%`);
+    const safety = escHtml(String(entry.safetyStatus).toUpperCase());
+    const confidence = escHtml(`${Math.round(entry.confidence * 100)}%`);
     const createdAtLabel = (() => {
       try {
-        return typeof entry.createdAt === 'number' ? esc(new Date(entry.createdAt).toLocaleString('en-AU')) : '';
+        return typeof entry.createdAt === 'number' ? escHtml(new Date(entry.createdAt).toLocaleString('en-AU')) : '';
       } catch {
         return '';
       }
     })();
 
-    const body = esc(String(entry.guideText ?? '').trim() || 'No text saved.');
-    const suggestedUses = Array.isArray(entry.suggestedUses) ? entry.suggestedUses.map((u) => esc(String(u))).slice(0, 16) : [];
+    const rawBody = String(entry.guideText ?? '').trim() || 'No text saved.';
+    const body = markdownToHtml(rawBody);
+    const suggestedUses = Array.isArray(entry.suggestedUses) ? entry.suggestedUses.map((u) => escHtml(String(u))).slice(0, 16) : [];
 
     const imageHtml = canEmbedImage
-      ? `<div class="hero"><img src="${imageUri}" alt="Photo" /></div>`
+      ? `<div class="hero"><img src="${entryImageUri}" alt="Photo" /></div>`
       : `<div class="hero hero-empty"><div class="hero-empty-inner">Photo not available for PDF export</div></div>`;
 
     const usesHtml = suggestedUses.length
@@ -285,7 +299,7 @@ export default function CookGuideDetailsScreen() {
   .section { padding: 12px 12px; border-radius: 14px; border: 1px solid rgba(15,36,24,0.10); background: rgba(245, 246, 244, 0.70); }
   .section h3 { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 8px; color: rgba(12, 20, 17, 0.55); }
   .section .muted { color: rgba(12, 20, 17, 0.55); font-size: 13px; }
-  .section p { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+  .section p { margin: 0; font-size: 14px; line-height: 1.45; }
   ul { margin: 0; padding: 0 0 0 18px; }
   li { margin: 0 0 6px; font-size: 14px; line-height: 1.4; }
   .footer { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(15,36,24,0.18); font-size: 12px; color: rgba(12, 20, 17, 0.55); }
@@ -307,7 +321,7 @@ export default function CookGuideDetailsScreen() {
         <div class="grid">
           <div class="section">
             <h3>Saved answer</h3>
-            <p>${body}</p>
+            <div style="font-size:14px;line-height:1.45;">${body}</div>
           </div>
           <div class="section">
             <h3>Suggested uses</h3>
@@ -332,16 +346,19 @@ export default function CookGuideDetailsScreen() {
     const safeName = `tucka-guide-${entry.id}.pdf`;
 
     try {
-      console.log('[CookGuide] exportPdf start', { entryId: entry.id, platform: Platform.OS });
+      console.log('[CookGuide] exportPdf start', { entryId: entry.id, platform: Platform.OS, htmlLen: html.length });
 
       const print = await loadExpoPrint();
-      if (!print) throw new Error('Printing not available');
+      if (!print) {
+        console.log('[CookGuide] expo-print not available, falling back to share text');
+        await Share.share({ message: exportText, title: entry.title });
+        return;
+      }
 
       if (Platform.OS === 'web') {
         try {
-          const result = await print.printToFileAsync({ html, base64: false });
+          const result = await print.printToFileAsync({ html });
           console.log('[CookGuide] exportPdf web printToFileAsync result', { uri: result.uri });
-
           if (typeof document !== 'undefined') {
             const resp = await fetch(result.uri);
             const blob = await resp.blob();
@@ -357,29 +374,52 @@ export default function CookGuideDetailsScreen() {
             URL.revokeObjectURL(url);
             return;
           }
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
-          console.log('[CookGuide] exportPdf web printToFileAsync failed', { message });
+        } catch (webErr) {
+          console.log('[CookGuide] exportPdf web printToFileAsync failed', webErr instanceof Error ? webErr.message : String(webErr));
         }
-
-        await print.printAsync({ html });
+        try {
+          await print.printAsync({ html });
+        } catch (printErr) {
+          console.log('[CookGuide] exportPdf web printAsync failed', printErr instanceof Error ? printErr.message : String(printErr));
+          await Share.share({ message: exportText, title: entry.title });
+        }
         return;
       }
 
-      const result = await print.printToFileAsync({ html, base64: false });
-      console.log('[CookGuide] exportPdf file ready', { uri: result.uri });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(result.uri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
-        return;
+      let fileUri: string | null = null;
+      try {
+        const result = await print.printToFileAsync({ html });
+        fileUri = result.uri;
+        console.log('[CookGuide] exportPdf file ready', { uri: fileUri });
+      } catch (fileErr) {
+        console.log('[CookGuide] printToFileAsync failed, trying printAsync fallback', fileErr instanceof Error ? fileErr.message : String(fileErr));
+        try {
+          await print.printAsync({ html });
+          return;
+        } catch (printErr) {
+          console.log('[CookGuide] printAsync also failed', printErr instanceof Error ? printErr.message : String(printErr));
+          await Share.share({ message: exportText, title: entry.title });
+          return;
+        }
       }
 
-      await Share.share({ message: exportText });
+      if (fileUri) {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
+          return;
+        }
+      }
+
+      await Share.share({ message: exportText, title: entry.title });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.log('[CookGuide] exportPdf failed', { message });
-      Alert.alert('Could not export PDF', 'Please try again.');
+      console.log('[CookGuide] exportPdf failed completely', { message });
+      try {
+        await Share.share({ message: exportText, title: entry.title });
+      } catch {
+        Alert.alert('Could not export', message || 'Please try again.');
+      }
     }
   }, [buildPdfHtml, entry, exportText]);
 
