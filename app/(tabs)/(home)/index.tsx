@@ -8,7 +8,6 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   AlertTriangle,
   ArrowRight,
-  ChevronRight,
   HelpCircle,
   Image as ImageIcon,
   RefreshCcw,
@@ -534,35 +533,7 @@ Return JSON with keys:
             </ScrollView>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Collection</Text>
-            <View style={styles.collectionList}>
-              <TouchableOpacity style={styles.collectionCard}>
-                <Image source={{ uri: 'https://images.unsplash.com/photo-1627916533550-c8f93e3d4899?q=80&w=2670&auto=format&fit=crop' }} style={styles.collectionImage} />
-                <View style={styles.collectionInfo}>
-                  <Text style={styles.collectionName}>Wattleseed</Text>
-                  <Text style={styles.collectionDate}>Today, 10:23 AM</Text>
-                  <View style={styles.tagRow}>
-                    <View style={styles.tag}><Text style={styles.tagText}>Seed</Text></View>
-                    <View style={styles.tag}><Text style={styles.tagText}>Edible</Text></View>
-                  </View>
-                </View>
-                <ChevronRight size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.collectionCard}>
-                <Image source={{ uri: 'https://images.unsplash.com/photo-1669279093414-061057c320d7?q=80&w=2787&auto=format&fit=crop' }} style={styles.collectionImage} />
-                <View style={styles.collectionInfo}>
-                  <Text style={styles.collectionName}>Finger Lime</Text>
-                  <Text style={styles.collectionDate}>Yesterday, 2:15 PM</Text>
-                  <View style={styles.tagRow}>
-                    <View style={styles.tag}><Text style={styles.tagText}>Fruit</Text></View>
-                    <View style={styles.tag}><Text style={styles.tagText}>Medicinal</Text></View>
-                  </View>
-                </View>
-                <ChevronRight size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          </View>
+
         </ScrollView>
       </SafeAreaView>
     </View>
