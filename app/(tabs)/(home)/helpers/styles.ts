@@ -18,8 +18,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 120,
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -55,14 +54,11 @@ export const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
   scanStage: {
-    borderRadius: 28,
+    flex: 1,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: DARK.border,
-    marginBottom: 18,
   },
   scanStageBg: {
-    minHeight: 640,
+    flex: 1,
   },
   scanStageTopBar: {
     paddingHorizontal: 18,

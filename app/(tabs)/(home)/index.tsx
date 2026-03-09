@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, View, Text, TouchableOpacity, ScrollView, Platform, Alert } from 'react-native';
+import { Animated, Easing, View, Text, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -420,7 +420,7 @@ Return JSON with keys:
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.scrollContent}>
           <View style={styles.scanStage} testID="scan-stage">
             <LinearGradient
               colors={[DARK.bg, '#0B150F', '#09110C']}
@@ -494,7 +494,7 @@ Return JSON with keys:
           </View>
 
 
-        </ScrollView>
+        </View>
       </SafeAreaView>
     </View>
   );
