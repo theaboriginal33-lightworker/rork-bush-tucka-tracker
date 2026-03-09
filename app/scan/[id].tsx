@@ -996,15 +996,19 @@ export default function ScanDetailsScreen() {
     const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (filtered.length === 0) return '';
 
-    const rawScanImage = safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
+    const rawScanImage = (entry.imageUri ?? entry.imagePreviewUri ?? '').trim();
     let scanImageSrc: string | null = null;
-    if (rawScanImage) {
-      const scheme = (rawScanImage).split(':')[0] ?? '';
-      if (scheme === 'file' || scheme === 'content') {
-        scanImageSrc = await imageToBase64DataUri(rawScanImage);
-      } else if (scheme === 'http' || scheme === 'https') {
+    if (rawScanImage.length > 0 && rawScanImage !== 'null' && rawScanImage !== 'undefined') {
+      const scheme = rawScanImage.split(':')[0] ?? '';
+      if (scheme === 'http' || scheme === 'https') {
         scanImageSrc = rawScanImage;
+      } else {
+        const b64 = await imageToBase64DataUri(rawScanImage);
+        if (b64) {
+          scanImageSrc = b64;
+        }
       }
+      console.log('[ConvoPDF] image resolution', { rawScanImage: rawScanImage.substring(0, 60), scheme, hasSrc: Boolean(scanImageSrc) });
     }
 
     const common = escHtml(entry.scan.commonName);
