@@ -82,20 +82,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="learn"
-        options={{
-          title: 'Learn',
-          tabBarIcon: ({ focused, size }) => (
-            <BookOpen
-              color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
-              size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
-              testID="tab-learn-icon"
-            />
-          ),
-          tabBarLabel: 'Learn',
-        }}
-      />
-      <Tabs.Screen
         name="community"
         options={{
           title: 'Community',
@@ -107,6 +93,20 @@ export default function TabLayout() {
             />
           ),
           tabBarLabel: 'Community',
+        }}
+      />
+      <Tabs.Screen
+        name="learn"
+        options={{
+          title: 'Learn',
+          tabBarIcon: ({ focused, size }) => (
+            <BookOpen
+              color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
+              size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
+              testID="tab-learn-icon"
+            />
+          ),
+          tabBarLabel: 'Learn',
         }}
       />
 
