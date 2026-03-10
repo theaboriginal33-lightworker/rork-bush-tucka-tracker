@@ -466,33 +466,37 @@ export default function CookGuideDetailsScreen() {
       console.log('[CookGuide] printToFileAsync result', { uri: result.uri });
 
       let pdfUri = result.uri;
-      if (!pdfUri.toLowerCase().endsWith('.pdf')) {
-        const fs = await getLegacyFileSystem();
-        if (fs) {
-          const cacheDir = fs.cacheDirectory ?? fs.documentDirectory ?? '';
-          if (cacheDir.length > 0) {
-            const dest = cacheDir.endsWith('/') ? `${cacheDir}${safeName}` : `${cacheDir}/${safeName}`;
-            try {
-              await fs.moveAsync({ from: pdfUri, to: dest });
-              pdfUri = dest;
-              console.log('[CookGuide] renamed PDF', { from: result.uri, to: dest });
-            } catch (mvErr) {
-              console.log('[CookGuide] rename failed, using original', mvErr instanceof Error ? mvErr.message : String(mvErr));
-            }
+
+      const fs = await getLegacyFileSystem();
+      if (fs) {
+        const cacheDir = fs.cacheDirectory ?? fs.documentDirectory ?? '';
+        if (cacheDir.length > 0) {
+          const dest = cacheDir.endsWith('/') ? `${cacheDir}${safeName}` : `${cacheDir}/${safeName}`;
+          try {
+            await fs.copyAsync({ from: pdfUri, to: dest });
+            pdfUri = dest;
+            console.log('[CookGuide] copied PDF to named file', { from: result.uri, to: dest });
+          } catch (cpErr) {
+            console.log('[CookGuide] copy failed, using original', cpErr instanceof Error ? cpErr.message : String(cpErr));
           }
         }
       }
 
-      const canShare = await Sharing.isAvailableAsync();
-      console.log('[CookGuide] sharing available:', canShare, 'pdfUri:', pdfUri);
-      if (canShare) {
-        await Sharing.shareAsync(pdfUri, {
-          mimeType: 'application/pdf',
-          dialogTitle: 'Save PDF',
-          UTI: 'com.adobe.pdf',
-        });
+      if (Platform.OS === 'ios') {
+        console.log('[CookGuide] using Share.share with url for iOS', { pdfUri });
+        await Share.share({ url: pdfUri, title: entry.title });
       } else {
-        await Share.share({ message: exportText, title: entry.title });
+        const canShare = await Sharing.isAvailableAsync();
+        console.log('[CookGuide] sharing available:', canShare, 'pdfUri:', pdfUri);
+        if (canShare) {
+          await Sharing.shareAsync(pdfUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Save PDF',
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          await Share.share({ message: exportText, title: entry.title });
+        }
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
