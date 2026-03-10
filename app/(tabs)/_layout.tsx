@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import { BookOpen, ChefHat, Camera, NotebookPen } from 'lucide-react-native';
+import { BookOpen, ChefHat, Camera, NotebookPen, Users } from 'lucide-react-native';
 
 
 export default function TabLayout() {
@@ -93,6 +93,20 @@ export default function TabLayout() {
             />
           ),
           tabBarLabel: 'Learn',
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ focused, size }) => (
+            <Users
+              color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
+              size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
+              testID="tab-community-icon"
+            />
+          ),
+          tabBarLabel: 'Community',
         }}
       />
 
