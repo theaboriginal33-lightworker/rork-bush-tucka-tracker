@@ -420,6 +420,8 @@ export default function CookGuideDetailsScreen() {
     const html = await buildPdfHtml();
     if (!html) return;
 
+    const safeName = `tucka-guide-${entry.id}.pdf`;
+
     try {
       console.log('[CookGuide] exportPdf start', { entryId: entry.id, platform: Platform.OS, htmlLen: html.length });
 
@@ -430,9 +432,68 @@ export default function CookGuideDetailsScreen() {
         return;
       }
 
-      console.log('[CookGuide] calling printAsync to open native print dialog');
-      await print.printAsync({ html });
-      console.log('[CookGuide] printAsync completed');
+      if (Platform.OS === 'web') {
+        try {
+          const result = await print.printToFileAsync({ html });
+          if (typeof document !== 'undefined') {
+            const resp = await fetch(result.uri);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeName;
+            a.rel = 'noopener';
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            return;
+          }
+        } catch (webErr) {
+          console.log('[CookGuide] web printToFileAsync failed', webErr instanceof Error ? webErr.message : String(webErr));
+        }
+        try {
+          await print.printAsync({ html });
+        } catch (printErr) {
+          console.log('[CookGuide] web printAsync failed', printErr instanceof Error ? printErr.message : String(printErr));
+          await Share.share({ message: exportText, title: entry.title });
+        }
+        return;
+      }
+
+      const result = await print.printToFileAsync({ html });
+      console.log('[CookGuide] printToFileAsync result', { uri: result.uri });
+
+      let pdfUri = result.uri;
+      if (!pdfUri.toLowerCase().endsWith('.pdf')) {
+        const fs = await getLegacyFileSystem();
+        if (fs) {
+          const cacheDir = fs.cacheDirectory ?? fs.documentDirectory ?? '';
+          if (cacheDir.length > 0) {
+            const dest = cacheDir.endsWith('/') ? `${cacheDir}${safeName}` : `${cacheDir}/${safeName}`;
+            try {
+              await fs.moveAsync({ from: pdfUri, to: dest });
+              pdfUri = dest;
+              console.log('[CookGuide] renamed PDF', { from: result.uri, to: dest });
+            } catch (mvErr) {
+              console.log('[CookGuide] rename failed, using original', mvErr instanceof Error ? mvErr.message : String(mvErr));
+            }
+          }
+        }
+      }
+
+      const canShare = await Sharing.isAvailableAsync();
+      console.log('[CookGuide] sharing available:', canShare, 'pdfUri:', pdfUri);
+      if (canShare) {
+        await Sharing.shareAsync(pdfUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Save PDF',
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        await Share.share({ message: exportText, title: entry.title });
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[CookGuide] exportPdf failed', { message });
@@ -650,7 +711,7 @@ export default function CookGuideDetailsScreen() {
           <View style={styles.actionsRow}>
             <TouchableOpacity style={styles.primaryAction} onPress={exportPdf} testID="cook-guide-export-pdf">
               <FileDown size={18} color={COLORS.background} />
-              <Text style={styles.primaryActionText}>Print / Save PDF</Text>
+              <Text style={styles.primaryActionText}>Save as PDF</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.secondaryAction} onPress={onExportText} testID="cook-guide-export-text">

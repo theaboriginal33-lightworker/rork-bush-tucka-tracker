@@ -642,6 +642,8 @@ export default function ScanDetailsScreen() {
     const html = await buildPdfHtml();
     if (!html) return;
 
+    const safeName = `collection-${entry.id}.pdf`;
+
     try {
       console.log('[ScanDetails] exportPdf start', { entryId: entry.id, platform: Platform.OS, htmlLen: html.length });
 
@@ -653,7 +655,6 @@ export default function ScanDetailsScreen() {
       }
 
       if (Platform.OS === 'web') {
-        const safeName = `collection-${entry.id}.pdf`;
         try {
           const result = await print.printToFileAsync({ html });
           console.log('[ScanDetails] exportPdf web printToFileAsync result', { uri: result.uri });
@@ -684,9 +685,39 @@ export default function ScanDetailsScreen() {
         return;
       }
 
-      console.log('[ScanDetails] exportPdf using printAsync (native print dialog)');
-      await print.printAsync({ html });
-      console.log('[ScanDetails] exportPdf printAsync completed');
+      const result = await print.printToFileAsync({ html });
+      console.log('[ScanDetails] exportPdf printToFileAsync result', { uri: result.uri });
+
+      let pdfUri = result.uri;
+      if (!pdfUri.toLowerCase().endsWith('.pdf')) {
+        const fs = await loadLegacyFileSystem();
+        if (fs) {
+          const cacheDir = fs.cacheDirectory ?? fs.documentDirectory ?? '';
+          if (cacheDir.length > 0) {
+            const dest = cacheDir.endsWith('/') ? `${cacheDir}${safeName}` : `${cacheDir}/${safeName}`;
+            try {
+              await fs.moveAsync({ from: pdfUri, to: dest });
+              pdfUri = dest;
+              console.log('[ScanDetails] renamed PDF', { from: result.uri, to: dest });
+            } catch (mvErr) {
+              console.log('[ScanDetails] rename failed, using original', mvErr instanceof Error ? mvErr.message : String(mvErr));
+            }
+          }
+        }
+      }
+
+      const sharing = await loadExpoSharing();
+      const canShare = (await sharing?.isAvailableAsync()) ?? false;
+      console.log('[ScanDetails] sharing available:', canShare, 'pdfUri:', pdfUri);
+      if (sharing && canShare) {
+        await sharing.shareAsync(pdfUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Save PDF',
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        await Share.share({ message: buildShareText(), title: entry.title });
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[ScanDetails] exportPdf failed completely', { message });
