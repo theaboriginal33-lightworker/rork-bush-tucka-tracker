@@ -642,8 +642,6 @@ export default function ScanDetailsScreen() {
     const html = await buildPdfHtml();
     if (!html) return;
 
-    const safeName = `collection-${entry.id}.pdf`;
-
     try {
       console.log('[ScanDetails] exportPdf start', { entryId: entry.id, platform: Platform.OS, htmlLen: html.length });
 
@@ -655,6 +653,7 @@ export default function ScanDetailsScreen() {
       }
 
       if (Platform.OS === 'web') {
+        const safeName = `collection-${entry.id}.pdf`;
         try {
           const result = await print.printToFileAsync({ html });
           console.log('[ScanDetails] exportPdf web printToFileAsync result', { uri: result.uri });
@@ -686,41 +685,23 @@ export default function ScanDetailsScreen() {
       }
 
       const result = await print.printToFileAsync({ html });
-      console.log('[ScanDetails] exportPdf printToFileAsync result', { uri: result.uri });
+      const originalUri = result.uri;
+      console.log('[ScanDetails] exportPdf printToFileAsync result', { uri: originalUri, endsWithPdf: originalUri.toLowerCase().endsWith('.pdf') });
 
-      let pdfUri = result.uri;
+      const sharing = await loadExpoSharing();
+      const canShare = (await sharing?.isAvailableAsync()) ?? false;
+      console.log('[ScanDetails] sharing available:', canShare);
 
-      const fs = await loadLegacyFileSystem();
-      if (fs) {
-        const cacheDir = fs.cacheDirectory ?? fs.documentDirectory ?? '';
-        if (cacheDir.length > 0) {
-          const dest = cacheDir.endsWith('/') ? `${cacheDir}${safeName}` : `${cacheDir}/${safeName}`;
-          try {
-            await fs.copyAsync({ from: pdfUri, to: dest });
-            pdfUri = dest;
-            console.log('[ScanDetails] copied PDF to named file', { from: result.uri, to: dest });
-          } catch (cpErr) {
-            console.log('[ScanDetails] copy failed, using original', cpErr instanceof Error ? cpErr.message : String(cpErr));
-          }
-        }
-      }
-
-      if (Platform.OS === 'ios') {
-        console.log('[ScanDetails] using Share.share with url for iOS', { pdfUri });
-        await Share.share({ url: pdfUri, title: entry.title });
+      if (sharing && canShare) {
+        console.log('[ScanDetails] sharing original printToFileAsync URI directly (no copy)', { uri: originalUri });
+        await sharing.shareAsync(originalUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: entry.title,
+          UTI: 'com.adobe.pdf',
+        });
       } else {
-        const sharing = await loadExpoSharing();
-        const canShare = (await sharing?.isAvailableAsync()) ?? false;
-        console.log('[ScanDetails] sharing available:', canShare, 'pdfUri:', pdfUri);
-        if (sharing && canShare) {
-          await sharing.shareAsync(pdfUri, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'Save PDF',
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          await Share.share({ message: buildShareText(), title: entry.title });
-        }
+        console.log('[ScanDetails] expo-sharing not available, falling back to Share.share');
+        await Share.share({ message: buildShareText(), title: entry.title });
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
