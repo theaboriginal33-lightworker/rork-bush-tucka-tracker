@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { LearnImageProvider } from "@/app/providers/LearnImageProvider";
 import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
+import { CommunityProvider } from "@/app/providers/CommunityProvider";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "@/app/providers/AuthProvider";
 
@@ -83,9 +84,11 @@ export default function RootLayout() {
             <ScanJournalProvider>
               <CookbookProvider>
                 <LearnImageProvider>
-                  <AuthGate>
-                    <RootLayoutNav />
-                  </AuthGate>
+                  <CommunityProvider>
+                    <AuthGate>
+                      <RootLayoutNav />
+                    </AuthGate>
+                  </CommunityProvider>
                 </LearnImageProvider>
               </CookbookProvider>
             </ScanJournalProvider>
