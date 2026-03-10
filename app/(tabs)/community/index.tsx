@@ -14,8 +14,31 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
+
+let MapView: any = null;
+let Marker: any = null;
+let PROVIDER_GOOGLE: any = null;
+let mapsAvailable = false;
+
+try {
+  const maps = require('react-native-maps');
+  MapView = maps.default;
+  Marker = maps.Marker;
+  PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+  mapsAvailable = true;
+  console.log('[Community] react-native-maps loaded successfully');
+} catch {
+  console.log('[Community] react-native-maps not available, using fallback');
+  mapsAvailable = false;
+}
+
+type Region = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
 import * as Haptics from 'expo-haptics';
 import { COLORS } from '@/constants/colors';
 import {
@@ -50,7 +73,7 @@ const DEFAULT_REGION: Region = {
 
 export default function CommunityScreen() {
   const { pins, addPin, removePin } = useCommunity();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
@@ -188,6 +211,76 @@ export default function CommunityScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Finding your location...</Text>
+      </View>
+    );
+  }
+
+  if (!mapsAvailable || !MapView) {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.fallbackContainer} edges={['top', 'bottom']}>
+          <View style={styles.fallbackContent}>
+            <Map color={COLORS.primary} size={48} />
+            <Text style={styles.fallbackTitle}>Maps Unavailable</Text>
+            <Text style={styles.fallbackDesc}>
+              Native maps require a custom development build. This feature is not available in Expo Go.
+            </Text>
+            <Text style={styles.fallbackHint}>
+              Run "npx expo run:ios" or "npx expo run:android" to use this feature.
+            </Text>
+          </View>
+
+          <View style={styles.fallbackPinsSection}>
+            <Text style={styles.fallbackPinsTitle}>Your Pins ({pins.length})</Text>
+            <ScrollView style={styles.fallbackPinsList}>
+              {pins.map((pin) => (
+                <View key={pin.id} style={styles.fallbackPinItem}>
+                  <Text style={styles.fallbackPinEmoji}>{PIN_CATEGORY_META[pin.category].emoji}</Text>
+                  <View style={styles.fallbackPinInfo}>
+                    <Text style={styles.fallbackPinName}>{pin.title}</Text>
+                    <Text style={styles.fallbackPinCoord}>
+                      {pin.latitude.toFixed(4)}, {pin.longitude.toFixed(4)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleDeletePin(pin.id)}>
+                    <Trash2 color={COLORS.error} size={16} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {pins.length === 0 && (
+                <Text style={styles.fallbackEmpty}>No pins yet</Text>
+              )}
+            </ScrollView>
+          </View>
+
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={handleFabPress}
+            activeOpacity={0.85}
+          >
+            <Plus color="#07110B" size={26} strokeWidth={2.5} />
+          </TouchableOpacity>
+        </SafeAreaView>
+
+        <CreatePinModal
+          visible={showCreateModal}
+          onClose={() => {
+            setShowCreateModal(false);
+            setLongPressCoord(null);
+          }}
+          onSubmit={(data) => {
+            const coord = longPressCoord ?? userLocation ?? { latitude: -25.2744, longitude: 133.7751 };
+            addPin({
+              ...data,
+              latitude: coord.latitude,
+              longitude: coord.longitude,
+              author: 'Me',
+            });
+            setShowCreateModal(false);
+            setLongPressCoord(null);
+          }}
+          coordinate={longPressCoord}
+        />
       </View>
     );
   }
@@ -563,6 +656,87 @@ const styles = StyleSheet.create({
   loadingText: {
     color: COLORS.textSecondary,
     fontSize: 15,
+  },
+  fallbackContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    padding: 20,
+  },
+  fallbackContent: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  fallbackTitle: {
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: COLORS.text,
+    marginTop: 8,
+  },
+  fallbackDesc: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  fallbackHint: {
+    fontSize: 13,
+    color: COLORS.primary,
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    backgroundColor: COLORS.highlight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  fallbackPinsSection: {
+    flex: 1,
+    marginTop: 8,
+  },
+  fallbackPinsTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  fallbackPinsList: {
+    flex: 1,
+  },
+  fallbackPinItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  fallbackPinEmoji: {
+    fontSize: 22,
+  },
+  fallbackPinInfo: {
+    flex: 1,
+  },
+  fallbackPinName: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: COLORS.text,
+  },
+  fallbackPinCoord: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  fallbackEmpty: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 20,
   },
   overlay: {
     position: 'absolute',
