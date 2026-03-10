@@ -684,61 +684,37 @@ export default function ScanDetailsScreen() {
         return;
       }
 
-      const safeName = `collection-${entry.id}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const result = await print.printToFileAsync({ html, base64: true });
-      console.log('[ScanDetails] printToFileAsync result', {
-        uri: result.uri,
-        hasBase64: Boolean((result as any).base64),
-        base64Len: ((result as any).base64 ?? '').length,
-      });
+      const safeName = `collection-${entry.id}.pdf`;
+      const result = await print.printToFileAsync({ html });
+      console.log('[ScanDetails] printToFileAsync result', { uri: result.uri });
 
       const fs = await loadLegacyFileSystem();
       const cacheDir = fs?.cacheDirectory;
+      let finalUri = result.uri;
 
       if (fs && cacheDir) {
         const destUri = `${cacheDir}${safeName}`;
-        console.log('[ScanDetails] target PDF path', { destUri });
-
         try {
           await fs.deleteAsync(destUri, { idempotent: true });
         } catch {}
-
-        const b64 = (result as any).base64 as string | undefined;
-        if (b64 && b64.length > 100) {
-          await fs.writeAsStringAsync(destUri, b64, {
-            encoding: fs.EncodingType.Base64,
-          });
-          console.log('[ScanDetails] wrote PDF from base64 to', destUri);
-        } else {
-          await fs.copyAsync({ from: result.uri, to: destUri });
-          console.log('[ScanDetails] copied PDF to', destUri);
-        }
-
-        const info = await fs.getInfoAsync(destUri);
-        console.log('[ScanDetails] PDF file info', { exists: info.exists, size: (info as any).size });
-
-        if (info.exists) {
-          const sharing = await loadExpoSharing();
-          const canShare = (await sharing?.isAvailableAsync()) ?? false;
-          if (sharing && canShare) {
-            await sharing.shareAsync(destUri, {
-              mimeType: 'application/pdf',
-              dialogTitle: entry.title,
-              UTI: 'com.adobe.pdf',
-            });
-            return;
-          }
+        try {
+          await fs.moveAsync({ from: result.uri, to: destUri });
+          finalUri = destUri;
+          console.log('[ScanDetails] moved PDF to', destUri);
+        } catch (moveErr) {
+          console.log('[ScanDetails] move failed, using original', moveErr instanceof Error ? moveErr.message : String(moveErr));
         }
       }
 
-      console.log('[ScanDetails] fallback: sharing original URI', result.uri);
+      console.log('[ScanDetails] sharing PDF', { finalUri });
+
       if (Platform.OS === 'ios') {
-        await Share.share({ url: result.uri, title: entry.title });
+        await Share.share({ url: finalUri, title: entry.title });
       } else {
         const sharing = await loadExpoSharing();
         const canShare = (await sharing?.isAvailableAsync()) ?? false;
         if (sharing && canShare) {
-          await sharing.shareAsync(result.uri, {
+          await sharing.shareAsync(finalUri, {
             mimeType: 'application/pdf',
             dialogTitle: entry.title,
             UTI: 'com.adobe.pdf',
