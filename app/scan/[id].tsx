@@ -684,25 +684,9 @@ export default function ScanDetailsScreen() {
         return;
       }
 
-      const result = await print.printToFileAsync({ html });
-      const originalUri = result.uri;
-      console.log('[ScanDetails] exportPdf printToFileAsync result', { uri: originalUri, endsWithPdf: originalUri.toLowerCase().endsWith('.pdf') });
-
-      const sharing = await loadExpoSharing();
-      const canShare = (await sharing?.isAvailableAsync()) ?? false;
-      console.log('[ScanDetails] sharing available:', canShare);
-
-      if (sharing && canShare) {
-        console.log('[ScanDetails] sharing original printToFileAsync URI directly (no copy)', { uri: originalUri });
-        await sharing.shareAsync(originalUri, {
-          mimeType: 'application/pdf',
-          dialogTitle: entry.title,
-          UTI: 'com.adobe.pdf',
-        });
-      } else {
-        console.log('[ScanDetails] expo-sharing not available, falling back to Share.share');
-        await Share.share({ message: buildShareText(), title: entry.title });
-      }
+      console.log('[ScanDetails] using printAsync for native PDF (opens print dialog)');
+      await print.printAsync({ html });
+      console.log('[ScanDetails] printAsync completed');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[ScanDetails] exportPdf failed completely', { message });
