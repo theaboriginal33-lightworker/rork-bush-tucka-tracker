@@ -485,19 +485,15 @@ export default function CookGuideDetailsScreen() {
 
       console.log('[CookGuide] sharing PDF', { finalUri });
 
-      if (Platform.OS === 'ios') {
-        await Share.share({ url: finalUri, title: entry.title });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(finalUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: entry.title,
+          UTI: 'com.adobe.pdf',
+        });
       } else {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(finalUri, {
-            mimeType: 'application/pdf',
-            dialogTitle: entry.title,
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          await Share.share({ message: exportText, title: entry.title });
-        }
+        await Share.share(Platform.OS === 'ios' ? { url: finalUri, title: entry.title } : { message: exportText, title: entry.title });
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

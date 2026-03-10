@@ -708,20 +708,16 @@ export default function ScanDetailsScreen() {
 
       console.log('[ScanDetails] sharing PDF', { finalUri });
 
-      if (Platform.OS === 'ios') {
-        await Share.share({ url: finalUri, title: entry.title });
+      const sharing = await loadExpoSharing();
+      const canShare = (await sharing?.isAvailableAsync()) ?? false;
+      if (sharing && canShare) {
+        await sharing.shareAsync(finalUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: entry.title,
+          UTI: 'com.adobe.pdf',
+        });
       } else {
-        const sharing = await loadExpoSharing();
-        const canShare = (await sharing?.isAvailableAsync()) ?? false;
-        if (sharing && canShare) {
-          await sharing.shareAsync(finalUri, {
-            mimeType: 'application/pdf',
-            dialogTitle: entry.title,
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          await Share.share({ message: buildShareText(), title: entry.title });
-        }
+        await Share.share(Platform.OS === 'ios' ? { url: finalUri, title: entry.title } : { message: buildShareText(), title: entry.title });
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
