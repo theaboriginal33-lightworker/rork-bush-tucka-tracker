@@ -703,10 +703,25 @@ export default function ScanDetailsScreen() {
       }
 
       if (fileUri) {
+        let pdfUri = fileUri;
+        if (!pdfUri.toLowerCase().endsWith('.pdf')) {
+          try {
+            const fs = await loadLegacyFileSystem();
+            if (fs && fs.cacheDirectory) {
+              const dest = `${fs.cacheDirectory}${safeName}`;
+              await fs.moveAsync({ from: pdfUri, to: dest });
+              pdfUri = dest;
+              console.log('[ScanDetails] renamed PDF file', { from: fileUri, to: pdfUri });
+            }
+          } catch (renameErr) {
+            console.log('[ScanDetails] rename PDF failed, using original', renameErr instanceof Error ? renameErr.message : String(renameErr));
+          }
+        }
+
         const sharing = await loadExpoSharing();
         const canShare = (await sharing?.isAvailableAsync()) ?? false;
         if (canShare) {
-          await sharing?.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
+          await sharing?.shareAsync(pdfUri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
           return;
         }
       }
