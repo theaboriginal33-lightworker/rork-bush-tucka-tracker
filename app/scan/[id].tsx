@@ -1111,8 +1111,8 @@ export default function ScanDetailsScreen() {
     const filtered = visibleMessages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (filtered.length === 0) return '';
 
-    const scanImageSrc = await resolveImageForPdf(entry);
-    console.log('[ConvoPDF] image resolution', { hasSrc: Boolean(scanImageSrc), prefix: scanImageSrc?.substring(0, 40) });
+    const scanImageSrc = await resolveImageForPdf(entry, entryDisplayImageUri);
+    console.log('[ConvoPDF] image resolution', { hasSrc: Boolean(scanImageSrc), prefix: scanImageSrc?.substring(0, 40), displayUri: entryDisplayImageUri?.substring(0, 60) });
 
     const common = escHtml(entry.scan.commonName);
     const scientific = entry.scan.scientificName ? escHtml(entry.scan.scientificName) : '';
@@ -1169,7 +1169,7 @@ ${scanBannerHtml}
 <div class="messages">${messagesHtml}</div>
 <div class="footer">Always verify locally before consuming.</div>
 </div></div></body></html>`;
-  }, [entry, visibleMessages]);
+  }, [entry, entryDisplayImageUri, visibleMessages]);
 
   const exportConversationPdf = useCallback(async () => {
     if (!entry) return;
