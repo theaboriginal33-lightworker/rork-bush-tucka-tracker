@@ -12,17 +12,11 @@ import {
   Animated,
   Alert,
   KeyboardAvoidingView,
+  FlatList,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-
-type Region = {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
-};
 import * as Haptics from 'expo-haptics';
 import { COLORS } from '@/constants/colors';
 import {
@@ -33,6 +27,8 @@ import {
   Map,
   Trash2,
   Clock,
+  Compass,
+  ExternalLink,
 } from 'lucide-react-native';
 import {
   useCommunity,
@@ -48,31 +44,58 @@ const CATEGORY_FILTERS: { key: PinCategory | 'all'; label: string; emoji: string
   { key: 'recipe', label: 'Recipes', emoji: '🍳' },
 ];
 
-const DEFAULT_REGION: Region = {
-  latitude: -25.2744,
-  longitude: 133.7751,
-  latitudeDelta: 30,
-  longitudeDelta: 30,
-};
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatDistance(km: number): string {
+  if (km < 1) return `${Math.round(km * 1000)}m away`;
+  return `${km.toFixed(1)}km away`;
+}
+
+function openInMaps(lat: number, lng: number, label: string) {
+  const url =
+    Platform.OS === 'ios'
+      ? `maps:0,0?q=${label}@${lat},${lng}`
+      : Platform.OS === 'android'
+        ? `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(label)})`
+        : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  void Linking.openURL(url).catch(() => {
+    void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+  });
+}
 
 export default function CommunityScreen() {
   const { pins, addPin, removePin } = useCommunity();
-  const mapRef = useRef<any>(null);
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<PinCategory | 'all'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPin, setSelectedPin] = useState<CommunityPin | null>(null);
-  const [longPressCoord, setLongPressCoord] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const fabScale = useRef(new Animated.Value(1)).current;
   const cardSlide = useRef(new Animated.Value(300)).current;
 
   const filteredPins = useMemo(() => {
-    if (activeFilter === 'all') return pins;
-    return pins.filter((p) => p.category === activeFilter);
-  }, [pins, activeFilter]);
+    const base = activeFilter === 'all' ? pins : pins.filter((p) => p.category === activeFilter);
+    if (!userLocation) return base;
+    return [...base].sort((a, b) => {
+      const distA = getDistanceKm(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude);
+      const distB = getDistanceKm(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude);
+      return distA - distB;
+    });
+  }, [pins, activeFilter, userLocation]);
 
   useEffect(() => {
     void (async () => {
@@ -116,45 +139,16 @@ export default function CommunityScreen() {
     })();
   }, []);
 
-  const initialRegion = useMemo<Region>(() => {
-    if (userLocation) {
-      return {
-        ...userLocation,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      };
-    }
-    return DEFAULT_REGION;
-  }, [userLocation]);
-
-  const goToMyLocation = useCallback(() => {
-    if (!userLocation || !mapRef.current) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    mapRef.current.animateToRegion(
-      { ...userLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-      600
-    );
-  }, [userLocation]);
-
   const handleFabPress = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Animated.sequence([
       Animated.timing(fabScale, { toValue: 0.85, duration: 80, useNativeDriver: true }),
       Animated.timing(fabScale, { toValue: 1, duration: 80, useNativeDriver: true }),
     ]).start();
-    if (userLocation) {
-      setLongPressCoord(userLocation);
-    }
     setShowCreateModal(true);
-  }, [fabScale, userLocation]);
+  }, [fabScale]);
 
-  const handleMapLongPress = useCallback((e: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setLongPressCoord(e.nativeEvent.coordinate);
-    setShowCreateModal(true);
-  }, []);
-
-  const handleMarkerPress = useCallback((pin: CommunityPin) => {
+  const handlePinPress = useCallback((pin: CommunityPin) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedPin(pin);
     cardSlide.setValue(300);
@@ -186,9 +180,50 @@ export default function CommunityScreen() {
     ]);
   }, [removePin, dismissPinCard]);
 
-  const getMarkerColor = useCallback((category: PinCategory) => {
-    return PIN_CATEGORY_META[category].color;
-  }, []);
+  const renderPinItem = useCallback(({ item }: { item: CommunityPin }) => {
+    const meta = PIN_CATEGORY_META[item.category];
+    const dist = userLocation
+      ? formatDistance(getDistanceKm(userLocation.latitude, userLocation.longitude, item.latitude, item.longitude))
+      : null;
+
+    return (
+      <TouchableOpacity
+        style={styles.pinItem}
+        onPress={() => handlePinPress(item)}
+        activeOpacity={0.7}
+        testID={`pin-item-${item.id}`}
+      >
+        <View style={[styles.pinItemIndicator, { backgroundColor: meta.color }]} />
+        <View style={styles.pinItemContent}>
+          <View style={styles.pinItemTop}>
+            <Text style={styles.pinItemEmoji}>{meta.emoji}</Text>
+            <View style={styles.pinItemInfo}>
+              <Text style={styles.pinItemTitle} numberOfLines={1}>{item.title}</Text>
+              <Text style={styles.pinItemCategory}>{meta.label}</Text>
+            </View>
+            {dist && (
+              <View style={styles.distBadge}>
+                <Navigation color={COLORS.primary} size={10} />
+                <Text style={styles.distText}>{dist}</Text>
+              </View>
+            )}
+          </View>
+          {item.description.length > 0 && (
+            <Text style={styles.pinItemDesc} numberOfLines={2}>{item.description}</Text>
+          )}
+          {item.tags.length > 0 && (
+            <View style={styles.pinItemTags}>
+              {item.tags.map((tag, i) => (
+                <View key={i} style={styles.miniTag}>
+                  <Text style={styles.miniTagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  }, [userLocation, handlePinPress]);
 
   if (locationLoading) {
     return (
@@ -201,83 +236,74 @@ export default function CommunityScreen() {
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        initialRegion={initialRegion}
-        showsUserLocation
-        showsMyLocationButton={false}
-        showsCompass={false}
-        onLongPress={handleMapLongPress}
-        onPress={() => selectedPin && dismissPinCard()}
-        mapType="standard"
-        testID="community-map"
-      >
-        {filteredPins.map((pin) => (
-          <Marker
-            key={pin.id}
-            coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-            onPress={() => handleMarkerPress(pin)}
-            pinColor={getMarkerColor(pin.category)}
-            title={pin.title}
-          />
-        ))}
-      </MapView>
-
-      <SafeAreaView style={styles.overlay} edges={['top']} pointerEvents="box-none">
-        <View style={styles.topBar} pointerEvents="box-none">
-          <View style={styles.headerRow}>
-            <View style={styles.titlePill}>
-              <Map color={COLORS.primary} size={18} />
-              <Text style={styles.headerTitle}>Community</Text>
-            </View>
-            <View style={styles.pinCount}>
-              <Text style={styles.pinCountText}>{filteredPins.length}</Text>
-            </View>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Map color={COLORS.primary} size={20} />
+            <Text style={styles.headerTitle}>Community</Text>
           </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterRow}
-          >
-            {CATEGORY_FILTERS.map((f) => {
-              const isActive = activeFilter === f.key;
-              return (
-                <TouchableOpacity
-                  key={f.key}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    setActiveFilter(f.key);
-                  }}
-                  activeOpacity={0.7}
-                  testID={`filter-${f.key}`}
-                >
-                  <Text style={styles.filterEmoji}>{f.emoji}</Text>
-                  <Text style={[styles.filterLabel, isActive && styles.filterLabelActive]}>
-                    {f.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <View style={styles.pinCountBadge}>
+            <Text style={styles.pinCountText}>{filteredPins.length}</Text>
+          </View>
         </View>
-      </SafeAreaView>
 
-      <SafeAreaView style={styles.bottomControls} edges={['bottom']} pointerEvents="box-none">
         {userLocation && (
-          <TouchableOpacity
-            style={styles.locationBtn}
-            onPress={goToMyLocation}
-            activeOpacity={0.8}
-            testID="my-location-btn"
-          >
-            <Navigation color={COLORS.text} size={20} />
-          </TouchableOpacity>
+          <View style={styles.locationBar}>
+            <Compass color={COLORS.primary} size={14} />
+            <Text style={styles.locationText}>
+              {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+            </Text>
+          </View>
         )}
 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+          style={styles.filterScroll}
+        >
+          {CATEGORY_FILTERS.map((f) => {
+            const isActive = activeFilter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setActiveFilter(f.key);
+                }}
+                activeOpacity={0.7}
+                testID={`filter-${f.key}`}
+              >
+                <Text style={styles.filterEmoji}>{f.emoji}</Text>
+                <Text style={[styles.filterLabel, isActive && styles.filterLabelActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <FlatList
+          data={filteredPins}
+          keyExtractor={(item) => item.id}
+          renderItem={renderPinItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MapPin color={COLORS.textSecondary} size={40} />
+              <Text style={styles.emptyTitle}>No pins yet</Text>
+              <Text style={styles.emptyDesc}>
+                Tap the + button to drop your first pin and share a finding, spot, or recipe with the community.
+              </Text>
+            </View>
+          }
+          testID="pins-list"
+        />
+      </SafeAreaView>
+
+      <SafeAreaView style={styles.fabContainer} edges={['bottom']} pointerEvents="box-none">
         <Animated.View style={{ transform: [{ scale: fabScale }] }}>
           <TouchableOpacity
             style={styles.fab}
@@ -300,7 +326,7 @@ export default function CommunityScreen() {
                 <View
                   style={[
                     styles.pinCategoryDot,
-                    { backgroundColor: getMarkerColor(selectedPin.category) },
+                    { backgroundColor: PIN_CATEGORY_META[selectedPin.category].color },
                   ]}
                 />
                 <View style={styles.pinCardTitleWrap}>
@@ -333,6 +359,15 @@ export default function CommunityScreen() {
                 </View>
               )}
 
+              <TouchableOpacity
+                style={styles.openMapBtn}
+                onPress={() => openInMaps(selectedPin.latitude, selectedPin.longitude, selectedPin.title)}
+                activeOpacity={0.7}
+              >
+                <ExternalLink color={COLORS.primary} size={14} />
+                <Text style={styles.openMapBtnText}>Open in Maps</Text>
+              </TouchableOpacity>
+
               <View style={styles.pinCardFooter}>
                 <View style={styles.pinCardMeta}>
                   <Clock color={COLORS.textSecondary} size={12} />
@@ -356,10 +391,9 @@ export default function CommunityScreen() {
         visible={showCreateModal}
         onClose={() => {
           setShowCreateModal(false);
-          setLongPressCoord(null);
         }}
         onSubmit={(data) => {
-          const coord = longPressCoord ?? userLocation ?? { latitude: -25.2744, longitude: 133.7751 };
+          const coord = userLocation ?? { latitude: -25.2744, longitude: 133.7751 };
           addPin({
             ...data,
             latitude: coord.latitude,
@@ -367,9 +401,8 @@ export default function CommunityScreen() {
             author: 'Me',
           });
           setShowCreateModal(false);
-          setLongPressCoord(null);
         }}
-        coordinate={longPressCoord}
+        coordinate={userLocation}
       />
     </View>
   );
@@ -557,8 +590,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  map: {
-    ...StyleSheet.absoluteFillObject,
+  safeArea: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -571,142 +604,69 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 15,
   },
-  fallbackContainer: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    padding: 20,
-  },
-  fallbackContent: {
-    alignItems: 'center',
-    paddingTop: 40,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  fallbackTitle: {
-    fontSize: 22,
-    fontWeight: '700' as const,
-    color: COLORS.text,
-    marginTop: 8,
-  },
-  fallbackDesc: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 20,
-  },
-  fallbackHint: {
-    fontSize: 13,
-    color: COLORS.primary,
-    textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    backgroundColor: COLORS.highlight,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  fallbackPinsSection: {
-    flex: 1,
-    marginTop: 8,
-  },
-  fallbackPinsTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  fallbackPinsList: {
-    flex: 1,
-  },
-  fallbackPinItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    gap: 12,
-  },
-  fallbackPinEmoji: {
-    fontSize: 22,
-  },
-  fallbackPinInfo: {
-    flex: 1,
-  },
-  fallbackPinName: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: COLORS.text,
-  },
-  fallbackPinCoord: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  fallbackEmpty: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  topBar: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  headerRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
-  titlePill: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(7,17,11,0.85)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    gap: 8,
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
+    fontSize: 22,
+    fontWeight: '800' as const,
     color: COLORS.text,
   },
-  pinCount: {
+  pinCountBadge: {
     backgroundColor: COLORS.primary,
-    width: 28,
+    minWidth: 28,
     height: 28,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 8,
   },
   pinCountText: {
     fontSize: 13,
     fontWeight: '800' as const,
     color: '#07110B',
   },
+  locationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  locationText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  filterScroll: {
+    marginBottom: 8,
+  },
   filterRow: {
     flexDirection: 'row',
     gap: 8,
+    paddingHorizontal: 20,
     paddingBottom: 4,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(7,17,11,0.8)',
+    backgroundColor: COLORS.card,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 16,
@@ -729,28 +689,110 @@ const styles = StyleSheet.create({
   filterLabelActive: {
     color: COLORS.primary,
   },
-  bottomControls: {
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
+  pinItem: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  pinItemIndicator: {
+    width: 4,
+  },
+  pinItemContent: {
+    flex: 1,
+    padding: 14,
+  },
+  pinItemTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pinItemEmoji: {
+    fontSize: 24,
+  },
+  pinItemInfo: {
+    flex: 1,
+  },
+  pinItemTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: COLORS.text,
+  },
+  pinItemCategory: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  pinItemDesc: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  pinItemTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 8,
+  },
+  miniTag: {
+    backgroundColor: COLORS.highlight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  miniTagText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '500' as const,
+  },
+  distBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(56,217,137,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  distText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600' as const,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: COLORS.text,
+  },
+  emptyDesc: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 40,
+  },
+  fabContainer: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    left: 0,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     zIndex: 10,
-  },
-  locationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(7,17,11,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   fab: {
     width: 56,
@@ -764,6 +806,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 8,
+  },
+  openMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(56,217,137,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  openMapBtnText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '600' as const,
   },
   pinCard: {
     position: 'absolute',
