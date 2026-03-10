@@ -642,8 +642,6 @@ export default function ScanDetailsScreen() {
     const html = await buildPdfHtml();
     if (!html) return;
 
-    const safeName = `collection-${entry.id}.pdf`;
-
     try {
       console.log('[ScanDetails] exportPdf start', { entryId: entry.id, platform: Platform.OS, htmlLen: html.length });
 
@@ -655,6 +653,7 @@ export default function ScanDetailsScreen() {
       }
 
       if (Platform.OS === 'web') {
+        const safeName = `collection-${entry.id}.pdf`;
         try {
           const result = await print.printToFileAsync({ html });
           console.log('[ScanDetails] exportPdf web printToFileAsync result', { uri: result.uri });
@@ -685,48 +684,9 @@ export default function ScanDetailsScreen() {
         return;
       }
 
-      let fileUri: string | null = null;
-      try {
-        const result = await print.printToFileAsync({ html });
-        fileUri = result.uri;
-        console.log('[ScanDetails] exportPdf file ready', { uri: fileUri });
-      } catch (fileErr) {
-        console.log('[ScanDetails] printToFileAsync failed, trying printAsync fallback', fileErr instanceof Error ? fileErr.message : String(fileErr));
-        try {
-          await print.printAsync({ html });
-          return;
-        } catch (printErr) {
-          console.log('[ScanDetails] printAsync also failed', printErr instanceof Error ? printErr.message : String(printErr));
-          await Share.share({ message: buildShareText(), title: entry.title });
-          return;
-        }
-      }
-
-      if (fileUri) {
-        let pdfUri = fileUri;
-        if (!pdfUri.toLowerCase().endsWith('.pdf')) {
-          try {
-            const fs = await loadLegacyFileSystem();
-            if (fs && fs.cacheDirectory) {
-              const dest = `${fs.cacheDirectory}${safeName}`;
-              await fs.moveAsync({ from: pdfUri, to: dest });
-              pdfUri = dest;
-              console.log('[ScanDetails] renamed PDF file', { from: fileUri, to: pdfUri });
-            }
-          } catch (renameErr) {
-            console.log('[ScanDetails] rename PDF failed, using original', renameErr instanceof Error ? renameErr.message : String(renameErr));
-          }
-        }
-
-        const sharing = await loadExpoSharing();
-        const canShare = (await sharing?.isAvailableAsync()) ?? false;
-        if (canShare) {
-          await sharing?.shareAsync(pdfUri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share PDF', UTI: 'com.adobe.pdf' });
-          return;
-        }
-      }
-
-      await Share.share({ message: buildShareText(), title: entry.title });
+      console.log('[ScanDetails] exportPdf using printAsync (native print dialog)');
+      await print.printAsync({ html });
+      console.log('[ScanDetails] exportPdf printAsync completed');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[ScanDetails] exportPdf failed completely', { message });
@@ -1212,31 +1172,10 @@ ${scanBannerHtml}
         }
         return;
       }
-      let fileUri: string | null = null;
-      try {
-        const result = await print.printToFileAsync({ html });
-        fileUri = result.uri;
-        console.log('[TuckaGuide] exportConversationPdf file created', { uri: fileUri });
-      } catch (fileErr) {
-        console.log('[TuckaGuide] printToFileAsync failed, trying printAsync fallback', fileErr instanceof Error ? fileErr.message : String(fileErr));
-        try {
-          await print.printAsync({ html });
-          return;
-        } catch (printErr) {
-          console.log('[TuckaGuide] printAsync also failed', printErr instanceof Error ? printErr.message : String(printErr));
-          await Share.share({ message: buildConversationText(), title: `Tucka Guide — ${entry.scan.commonName}` });
-          return;
-        }
-      }
-      if (fileUri) {
-        const sharing = await loadExpoSharing();
-        const canShare = (await sharing?.isAvailableAsync()) ?? false;
-        if (canShare) {
-          await sharing?.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Save / Share Conversation PDF', UTI: 'com.adobe.pdf' });
-          return;
-        }
-      }
-      await Share.share({ message: buildConversationText(), title: `Tucka Guide — ${entry.scan.commonName}` });
+
+      console.log('[TuckaGuide] exportConversationPdf using printAsync (native print dialog)');
+      await print.printAsync({ html });
+      console.log('[TuckaGuide] exportConversationPdf printAsync completed');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.log('[TuckaGuide] exportConversationPdf failed completely', { msg });
