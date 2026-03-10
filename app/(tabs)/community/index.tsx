@@ -15,23 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-
-let MapView: any = null;
-let Marker: any = null;
-let PROVIDER_GOOGLE: any = null;
-let mapsAvailable = false;
-
-try {
-  const maps = require('react-native-maps');
-  MapView = maps.default;
-  Marker = maps.Marker;
-  PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
-  mapsAvailable = true;
-  console.log('[Community] react-native-maps loaded successfully');
-} catch {
-  console.log('[Community] react-native-maps not available, using fallback');
-  mapsAvailable = false;
-}
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 type Region = {
   latitude: number;
@@ -211,76 +195,6 @@ export default function CommunityScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Finding your location...</Text>
-      </View>
-    );
-  }
-
-  if (!mapsAvailable || !MapView) {
-    return (
-      <View style={styles.container}>
-        <SafeAreaView style={styles.fallbackContainer} edges={['top', 'bottom']}>
-          <View style={styles.fallbackContent}>
-            <Map color={COLORS.primary} size={48} />
-            <Text style={styles.fallbackTitle}>Maps Unavailable</Text>
-            <Text style={styles.fallbackDesc}>
-              Native maps require a custom development build. This feature is not available in Expo Go.
-            </Text>
-            <Text style={styles.fallbackHint}>
-              Run "npx expo run:ios" or "npx expo run:android" to use this feature.
-            </Text>
-          </View>
-
-          <View style={styles.fallbackPinsSection}>
-            <Text style={styles.fallbackPinsTitle}>Your Pins ({pins.length})</Text>
-            <ScrollView style={styles.fallbackPinsList}>
-              {pins.map((pin) => (
-                <View key={pin.id} style={styles.fallbackPinItem}>
-                  <Text style={styles.fallbackPinEmoji}>{PIN_CATEGORY_META[pin.category].emoji}</Text>
-                  <View style={styles.fallbackPinInfo}>
-                    <Text style={styles.fallbackPinName}>{pin.title}</Text>
-                    <Text style={styles.fallbackPinCoord}>
-                      {pin.latitude.toFixed(4)}, {pin.longitude.toFixed(4)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleDeletePin(pin.id)}>
-                    <Trash2 color={COLORS.error} size={16} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {pins.length === 0 && (
-                <Text style={styles.fallbackEmpty}>No pins yet</Text>
-              )}
-            </ScrollView>
-          </View>
-
-          <TouchableOpacity
-            style={styles.fab}
-            onPress={handleFabPress}
-            activeOpacity={0.85}
-          >
-            <Plus color="#07110B" size={26} strokeWidth={2.5} />
-          </TouchableOpacity>
-        </SafeAreaView>
-
-        <CreatePinModal
-          visible={showCreateModal}
-          onClose={() => {
-            setShowCreateModal(false);
-            setLongPressCoord(null);
-          }}
-          onSubmit={(data) => {
-            const coord = longPressCoord ?? userLocation ?? { latitude: -25.2744, longitude: 133.7751 };
-            addPin({
-              ...data,
-              latitude: coord.latitude,
-              longitude: coord.longitude,
-              author: 'Me',
-            });
-            setShowCreateModal(false);
-            setLongPressCoord(null);
-          }}
-          coordinate={longPressCoord}
-        />
       </View>
     );
   }
