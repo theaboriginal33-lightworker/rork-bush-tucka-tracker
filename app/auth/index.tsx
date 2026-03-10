@@ -234,7 +234,7 @@ export default function AuthScreen() {
             testID="auth-submit"
           >
             {isBusy ? (
-              <ActivityIndicator color={"#06210F"} />
+              <ActivityIndicator color={'#FFFFFF'} />
             ) : (
               <Text style={styles.primaryButtonText} testID="auth-submit-text">
                 {mode === 'login' ? 'Log in' : 'Create account'}
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0.2,
-    color: '#06210F',
+    color: '#FFFFFF',
   },
   links: {
     marginTop: 14,
@@ -461,14 +461,14 @@ const styles = StyleSheet.create({
   linkText: {
     fontSize: 13,
     fontWeight: '800',
-    color: 'rgba(234,246,238,0.78)',
+    color: 'rgba(44,44,44,0.65)',
   },
   footnote: {
     marginTop: 16,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 16,
-    color: 'rgba(234,246,238,0.45)',
+    color: 'rgba(44,44,44,0.40)',
     textAlign: 'center',
   },
 });

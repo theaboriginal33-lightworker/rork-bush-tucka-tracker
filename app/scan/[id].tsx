@@ -2132,9 +2132,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 18,
-    backgroundColor: 'rgba(155,179,164,0.08)',
+    backgroundColor: 'rgba(74,107,83,0.06)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(155,179,164,0.22)',
+    borderColor: 'rgba(74,107,83,0.14)',
   },
   guideChipLabel: {
     fontSize: 11,

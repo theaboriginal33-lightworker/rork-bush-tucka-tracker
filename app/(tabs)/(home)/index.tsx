@@ -423,7 +423,7 @@ Return JSON with keys:
         <View style={styles.scrollContent}>
           <View style={styles.scanStage} testID="scan-stage">
             <LinearGradient
-              colors={[DARK.bg, '#0B150F', '#09110C']}
+              colors={['#F4F1EA', '#EDE9E0', '#F4F1EA']}
               start={{ x: 0.2, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.scanStageBg}
@@ -448,7 +448,7 @@ Return JSON with keys:
                   <Image source={{ uri: primaryImageDisplayUri ?? primaryImage.uri }} style={styles.focusImage} contentFit="cover" transition={120} cachePolicy="memory-disk" testID="scan-primary-image" />
                 ) : (
                   <View style={styles.focusPlaceholder}>
-                    <Scan size={70} color="rgba(255,255,255,0.18)" />
+                    <Scan size={70} color="rgba(74,107,83,0.22)" />
                   </View>
                 )}
                 <View style={styles.focusFrame} pointerEvents="none">

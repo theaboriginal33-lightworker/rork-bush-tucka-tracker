@@ -37,10 +37,10 @@ type GuideSection = {
 const ART_URI =
   'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/pgpbqamdlcd66rshna53j';
 
-const BRAND_GREEN = '#38D989' as const;
+const BRAND_GREEN = '#4A6B53' as const;
 
-const OCHRE = '#F6C445' as const;
-const OCHRE_DEEP = '#FF8C3C' as const;
+const OCHRE = '#C05C3B' as const;
+const OCHRE_DEEP = '#A04830' as const;
 
 function usePressScale() {
   const scale = useRef(new Animated.Value(1)).current;
@@ -351,9 +351,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(74,107,83,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(0,0,0,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -365,9 +365,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 40,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(74,107,83,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(56,217,137,0.20)',
+    borderColor: 'rgba(74,107,83,0.18)',
     justifyContent: 'center',
   },
   brandPillRow: {
@@ -400,17 +400,17 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },
   backgroundGlow: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#07110B',
+    backgroundColor: '#F4F1EA',
   },
   heroGlow: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(56,217,137,0.12)',
+    backgroundColor: 'rgba(74,107,83,0.06)',
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -421,9 +421,9 @@ const styles = StyleSheet.create({
     width: 86,
     height: 86,
     borderRadius: 28,
-    backgroundColor: 'rgba(7,17,11,0.62)',
+    backgroundColor: 'rgba(74,107,83,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(74,107,83,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     marginTop: 6,
-    color: 'rgba(234,246,238,0.76)',
+    color: 'rgba(44,44,44,0.60)',
     fontSize: 12,
     fontWeight: '800',
     lineHeight: 16,
@@ -461,9 +461,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     borderRadius: 20,
     padding: 14,
-    backgroundColor: 'rgba(7,17,11,0.52)',
+    backgroundColor: 'rgba(192,92,59,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(246,196,69,0.20)',
+    borderColor: 'rgba(192,92,59,0.18)',
   },
   reminderTopRow: {
     flexDirection: 'row',
@@ -475,9 +475,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 14,
-    backgroundColor: 'rgba(246,196,69,0.12)',
+    backgroundColor: 'rgba(192,92,59,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(246,196,69,0.22)',
+    borderColor: 'rgba(192,92,59,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   reminderText: {
-    color: 'rgba(234,246,238,0.86)',
+    color: 'rgba(44,44,44,0.75)',
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '800',
@@ -501,9 +501,9 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderRadius: 22,
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(0,0,0,0.06)',
   },
   sectionCardTopRow: {
     flexDirection: 'row',
@@ -515,9 +515,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 16,
-    backgroundColor: 'rgba(56,217,137,0.12)',
+    backgroundColor: 'rgba(74,107,83,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(56,217,137,0.20)',
+    borderColor: 'rgba(74,107,83,0.20)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -534,13 +534,13 @@ const styles = StyleSheet.create({
   },
   sectionSubtitleText: {
     marginTop: 2,
-    color: 'rgba(234,246,238,0.72)',
+    color: 'rgba(44,44,44,0.55)',
     fontSize: 12,
     fontWeight: '800',
     lineHeight: 16,
   },
   sectionBodyText: {
-    color: 'rgba(234,246,238,0.78)',
+    color: 'rgba(44,44,44,0.65)',
     fontSize: 13,
     lineHeight: 19,
     fontWeight: '700',
@@ -555,9 +555,9 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(74,107,83,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(0,0,0,0.06)',
   },
   footerText: {
     flex: 1,

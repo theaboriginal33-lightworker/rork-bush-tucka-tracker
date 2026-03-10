@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   },
   reminderText: {
     marginTop: 10,
-    color: 'rgba(234,246,238,0.86)',
+    color: 'rgba(44,44,44,0.75)',
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 18,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   },
   sectionBodyText: {
     marginTop: 10,
-    color: 'rgba(234,246,238,0.86)',
+    color: 'rgba(44,44,44,0.75)',
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 18,
