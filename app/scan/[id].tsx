@@ -107,15 +107,65 @@ function getCacheDir(fs: ExpoFileSystemModule): string {
   );
 }
 
+type ExpoImageManipulatorModule = typeof import('expo-image-manipulator');
+let imageManipPromise: Promise<ExpoImageManipulatorModule | null> | null = null;
+
+async function loadImageManipulator(): Promise<ExpoImageManipulatorModule | null> {
+  try {
+    if (!imageManipPromise) {
+      imageManipPromise = import('expo-image-manipulator')
+        .then((m) => m as ExpoImageManipulatorModule)
+        .catch((e) => {
+          console.log('[PDF] failed to load expo-image-manipulator', e instanceof Error ? e.message : String(e));
+          return null;
+        });
+    }
+    return await imageManipPromise;
+  } catch {
+    return null;
+  }
+}
+
+async function imageToBase64ViaManipulator(uri: string): Promise<string | null> {
+  try {
+    const ImageManipulator = await loadImageManipulator();
+    if (!ImageManipulator) {
+      console.log('[imageToBase64ViaManipulator] ImageManipulator not available');
+      return null;
+    }
+    console.log('[imageToBase64ViaManipulator] manipulating', { uri: uri.substring(0, 60) });
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    if (typeof result.base64 === 'string' && result.base64.length > 0) {
+      console.log('[imageToBase64ViaManipulator] success', { base64Len: result.base64.length });
+      return `data:image/jpeg;base64,${result.base64}`;
+    }
+    console.log('[imageToBase64ViaManipulator] no base64 in result');
+    return null;
+  } catch (e) {
+    console.log('[imageToBase64ViaManipulator] failed', e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 async function imageToBase64DataUri(uri: string | null): Promise<string | null> {
   if (!uri) return null;
   try {
     if (Platform.OS === 'web') return null;
+    
+    const scheme = uri.split(':')[0] ?? '';
+
+    const manipResult = await imageToBase64ViaManipulator(uri);
+    if (manipResult) return manipResult;
+    console.log('[imageToBase64] manipulator failed, trying file system fallback');
+
     const fs = await loadExpoFileSystem();
     if (!fs) return null;
 
     let localUri = uri;
-    const scheme = uri.split(':')[0] ?? '';
 
     if (scheme === 'http' || scheme === 'https') {
       const cacheDir = getCacheDir(fs);
@@ -123,13 +173,15 @@ async function imageToBase64DataUri(uri: string | null): Promise<string | null> 
         const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_dl_${Date.now()}.jpg` : `${cacheDir}/pdf_dl_${Date.now()}.jpg`;
         try {
           const dl = await fs.downloadAsync(uri, tmpDest);
+          const manipDl = await imageToBase64ViaManipulator(dl.uri);
+          if (manipDl) return manipDl;
           const b64 = await fs.readAsStringAsync(dl.uri, { encoding: 'base64' as const });
           if (b64 && b64.length > 0) {
-            console.log('[imageToBase64] http downloaded+converted', { uriLen: uri.length, base64Len: b64.length });
+            console.log('[imageToBase64] http downloaded+converted', { base64Len: b64.length });
             return `data:image/jpeg;base64,${b64}`;
           }
         } catch (dlErr) {
-          console.log('[imageToBase64] http download failed, returning raw URL', dlErr instanceof Error ? dlErr.message : String(dlErr));
+          console.log('[imageToBase64] http download failed', dlErr instanceof Error ? dlErr.message : String(dlErr));
         }
       }
       return uri;
@@ -137,15 +189,13 @@ async function imageToBase64DataUri(uri: string | null): Promise<string | null> 
 
     if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
       const cacheDir = getCacheDir(fs);
-      if (!cacheDir) {
-        console.log('[imageToBase64] no cache dir for copy');
-        return null;
-      }
+      if (!cacheDir) return null;
       const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_img_${Date.now()}.jpg` : `${cacheDir}/pdf_img_${Date.now()}.jpg`;
       try {
         await fs.copyAsync({ from: uri, to: tmpDest });
         localUri = tmpDest;
-        console.log('[imageToBase64] copyAsync succeeded', { from: uri.substring(0, 40), to: tmpDest });
+        const manipCopy = await imageToBase64ViaManipulator(localUri);
+        if (manipCopy) return manipCopy;
       } catch (copyErr) {
         console.log('[imageToBase64] copyAsync failed', copyErr instanceof Error ? copyErr.message : String(copyErr));
         return null;
@@ -154,10 +204,10 @@ async function imageToBase64DataUri(uri: string | null): Promise<string | null> 
 
     const base64 = await fs.readAsStringAsync(localUri, { encoding: 'base64' as const });
     if (!base64 || base64.length === 0) return null;
-    console.log('[imageToBase64] converted successfully', { uriLen: uri.length, base64Len: base64.length });
+    console.log('[imageToBase64] fs read success', { base64Len: base64.length });
     return `data:image/jpeg;base64,${base64}`;
   } catch (e) {
-    console.log('[imageToBase64] failed', e instanceof Error ? e.message : String(e));
+    console.log('[imageToBase64] failed completely', e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -168,11 +218,16 @@ async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: 
     entry.imageUri,
   ].filter((u): u is string => typeof u === 'string' && u.trim().length > 0 && u !== 'null' && u !== 'undefined');
 
-  console.log('[resolveImageForPdf] candidates', candidates.map(c => c.substring(0, 60)));
+  console.log('[resolveImageForPdf] candidates', candidates.map(c => c.substring(0, 80)));
 
   for (const uri of candidates) {
     const scheme = uri.split(':')[0] ?? '';
     if (scheme === 'data') {
+      if (uri.length > 2_000_000) {
+        console.log('[resolveImageForPdf] data URI too large, trying to re-encode', { len: uri.length });
+        const reEncoded = await imageToBase64ViaManipulator(uri);
+        if (reEncoded) return reEncoded;
+      }
       console.log('[resolveImageForPdf] using data URI directly', { len: uri.length });
       return uri;
     }
@@ -191,6 +246,15 @@ async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: 
     }
   }
 
+  if (Platform.OS !== 'web' && candidates.length > 0) {
+    console.log('[resolveImageForPdf] all conversions failed, trying ImageManipulator on first candidate');
+    for (const uri of candidates) {
+      const result = await imageToBase64ViaManipulator(uri);
+      if (result) return result;
+    }
+  }
+
+  console.log('[resolveImageForPdf] could not resolve any image');
   return null;
 }
 
