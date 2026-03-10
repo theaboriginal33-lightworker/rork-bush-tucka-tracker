@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   RefreshCcw,
   Scan,
+  Settings,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -439,6 +440,9 @@ Return JSON with keys:
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.topIconButton} onPress={onPressRescan} disabled={analyzing} testID="scan-refresh-button">
                     <RefreshCcw size={18} color={DARK.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.topIconButton} onPress={() => router.push('/settings')} testID="scan-settings-button">
+                    <Settings size={18} color={DARK.text} />
                   </TouchableOpacity>
                 </View>
               </View>

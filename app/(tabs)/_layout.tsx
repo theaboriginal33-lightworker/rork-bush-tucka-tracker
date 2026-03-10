@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import { BookOpen, ChefHat, Camera, NotebookPen, UserCircle2 } from 'lucide-react-native';
+import { BookOpen, ChefHat, Camera, NotebookPen } from 'lucide-react-native';
 
 
 export default function TabLayout() {
@@ -99,15 +99,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused, size }) => (
-            <UserCircle2
-              color={focused ? COLORS.tabBarActive : COLORS.tabBarInactive}
-              size={typeof size === 'number' && Number.isFinite(size) ? Math.round(size) : 24}
-              testID="tab-profile-icon"
-            />
-          ),
-          tabBarLabel: 'Profile',
+          href: null,
         }}
       />
     </Tabs>
