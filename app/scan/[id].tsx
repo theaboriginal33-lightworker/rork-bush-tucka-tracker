@@ -212,15 +212,18 @@ async function imageToBase64DataUri(uri: string | null): Promise<string | null> 
   }
 }
 
-async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: string }): Promise<string | null> {
+async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: string }, displayUri?: string | null): Promise<string | null> {
   const candidates = [
     entry.imagePreviewUri,
     entry.imageUri,
+    displayUri,
   ].filter((u): u is string => typeof u === 'string' && u.trim().length > 0 && u !== 'null' && u !== 'undefined');
 
-  console.log('[resolveImageForPdf] candidates', candidates.map(c => c.substring(0, 80)));
+  const uniqueCandidates = [...new Set(candidates)];
 
-  for (const uri of candidates) {
+  console.log('[resolveImageForPdf] candidates', uniqueCandidates.map(c => c.substring(0, 80)));
+
+  for (const uri of uniqueCandidates) {
     const scheme = uri.split(':')[0] ?? '';
     if (scheme === 'data') {
       if (uri.length > 2_000_000) {
@@ -246,9 +249,9 @@ async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: 
     }
   }
 
-  if (Platform.OS !== 'web' && candidates.length > 0) {
+  if (Platform.OS !== 'web' && uniqueCandidates.length > 0) {
     console.log('[resolveImageForPdf] all conversions failed, trying ImageManipulator on first candidate');
-    for (const uri of candidates) {
+    for (const uri of uniqueCandidates) {
       const result = await imageToBase64ViaManipulator(uri);
       if (result) return result;
     }
@@ -519,8 +522,8 @@ export default function ScanDetailsScreen() {
   const buildPdfHtml = useCallback(async (): Promise<string> => {
     if (!entry) return '';
 
-    const resolvedImage = await resolveImageForPdf(entry);
-    console.log('[buildPdfHtml] resolvedImage', { hasImage: Boolean(resolvedImage), prefix: resolvedImage?.substring(0, 40) });
+    const resolvedImage = await resolveImageForPdf(entry, entryDisplayImageUri);
+    console.log('[buildPdfHtml] resolvedImage', { hasImage: Boolean(resolvedImage), prefix: resolvedImage?.substring(0, 40), displayUri: entryDisplayImageUri?.substring(0, 60) });
     const canEmbedImage = Boolean(resolvedImage);
     const imageUri = resolvedImage;
 
@@ -640,7 +643,7 @@ export default function ScanDetailsScreen() {
   </div>
 </body>
 </html>`;
-  }, [entry]);
+  }, [entry, entryDisplayImageUri]);
 
   const exportPdf = useCallback(async () => {
     if (!entry) return;
