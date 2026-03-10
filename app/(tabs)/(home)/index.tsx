@@ -461,6 +461,9 @@ Return JSON with keys:
                     <View style={[styles.focusCorner, styles.focusCornerTR]} />
                     <View style={[styles.focusCorner, styles.focusCornerBL]} />
                     <View style={[styles.focusCorner, styles.focusCornerBR]} />
+                    <View style={styles.focusCenterCircle} />
+                    <View style={[styles.focusCrossLineH, styles.focusCrossLineLeft]} />
+                    <View style={[styles.focusCrossLineH, styles.focusCrossLineRight]} />
                   </View>
                 </View>
                 {analyzing ? (
