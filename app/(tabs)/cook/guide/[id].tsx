@@ -462,9 +462,67 @@ export default function CookGuideDetailsScreen() {
         return;
       }
 
-      console.log('[CookGuide] using printAsync for native PDF (opens print dialog)');
-      await print.printAsync({ html });
-      console.log('[CookGuide] printAsync completed');
+      const result = await print.printToFileAsync({ html, base64: true });
+      console.log('[CookGuide] printToFileAsync result', {
+        uri: result.uri,
+        hasBase64: Boolean((result as any).base64),
+        base64Len: ((result as any).base64 ?? '').length,
+      });
+
+      const fs = await getLegacyFileSystem();
+      const cacheDir = fs?.cacheDirectory;
+
+      if (fs && cacheDir) {
+        const pdfFileName = safeName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const destUri = `${cacheDir}${pdfFileName}`;
+        console.log('[CookGuide] target PDF path', { destUri });
+
+        try {
+          await fs.deleteAsync(destUri, { idempotent: true });
+        } catch {}
+
+        const b64 = (result as any).base64 as string | undefined;
+        if (b64 && b64.length > 100) {
+          await fs.writeAsStringAsync(destUri, b64, {
+            encoding: fs.EncodingType.Base64,
+          });
+          console.log('[CookGuide] wrote PDF from base64 to', destUri);
+        } else {
+          await fs.copyAsync({ from: result.uri, to: destUri });
+          console.log('[CookGuide] copied PDF to', destUri);
+        }
+
+        const info = await fs.getInfoAsync(destUri);
+        console.log('[CookGuide] PDF file info', { exists: info.exists, size: (info as any).size });
+
+        if (info.exists) {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(destUri, {
+              mimeType: 'application/pdf',
+              dialogTitle: entry.title,
+              UTI: 'com.adobe.pdf',
+            });
+            return;
+          }
+        }
+      }
+
+      console.log('[CookGuide] fallback: sharing original URI', result.uri);
+      if (Platform.OS === 'ios') {
+        await Share.share({ url: result.uri, title: entry.title });
+      } else {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(result.uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: entry.title,
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          await Share.share({ message: exportText, title: entry.title });
+        }
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[CookGuide] exportPdf failed', { message });
