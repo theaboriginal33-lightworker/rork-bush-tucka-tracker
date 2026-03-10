@@ -21,7 +21,7 @@ export default function TabLayout() {
           borderTopWidth: StyleSheet.hairlineWidth,
           ...Platform.select({
             ios: {
-              shadowColor: 'rgba(0,0,0,0.08)',
+              shadowColor: COLORS.primary,
               shadowOffset: { width: 0, height: -10 },
               shadowOpacity: 0.1,
               shadowRadius: 16,

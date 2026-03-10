@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0.2,
-    color: '#FFFFFF',
+    color: '#06210F',
   },
   links: {
     marginTop: 14,
@@ -461,14 +461,14 @@ const styles = StyleSheet.create({
   linkText: {
     fontSize: 13,
     fontWeight: '800',
-    color: 'rgba(44,44,44,0.65)',
+    color: 'rgba(234,246,238,0.78)',
   },
   footnote: {
     marginTop: 16,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 16,
-    color: 'rgba(44,44,44,0.40)',
+    color: 'rgba(234,246,238,0.45)',
     textAlign: 'center',
   },
 });
