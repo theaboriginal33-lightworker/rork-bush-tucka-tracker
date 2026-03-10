@@ -56,56 +56,29 @@ async function loadExpoPrint(): Promise<ExpoPrintModule | null> {
   }
 }
 
-type ExpoFileSystemModule = typeof import('expo-file-system');
+type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
 
-type MaybePaths = {
-  Paths?: {
-    cache?: {
-      uri?: string;
-    };
-    document?: {
-      uri?: string;
-    };
-  };
-  cacheDirectory?: string;
-  documentDirectory?: string;
-};
+let legacyFsPromise: Promise<LegacyFileSystemModule | null> | null = null;
 
-let fileSystemPromise: Promise<ExpoFileSystemModule | null> | null = null;
-
-async function loadExpoFileSystem(): Promise<ExpoFileSystemModule | null> {
+async function loadLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   if (Platform.OS === 'web') return null;
-
   try {
-    if (!fileSystemPromise) {
-      fileSystemPromise = import('expo-file-system')
-        .then((m) => m as ExpoFileSystemModule)
+    if (!legacyFsPromise) {
+      legacyFsPromise = import('expo-file-system/legacy')
+        .then((m) => m as LegacyFileSystemModule)
         .catch((e) => {
-          const message = e instanceof Error ? e.message : String(e);
-          console.log('[ScanDetails] failed to load expo-file-system', { message });
+          console.log('[PDF] failed to load expo-file-system/legacy', e instanceof Error ? e.message : String(e));
           return null;
         });
     }
-
-    return await fileSystemPromise;
+    return await legacyFsPromise;
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    console.log('[ScanDetails] loadExpoFileSystem unexpected error', { message });
+    console.log('[PDF] loadLegacyFileSystem error', e instanceof Error ? e.message : String(e));
     return null;
   }
 }
 
 const CULTURAL_FOOTER = 'Cultural knowledge shared here is general and non-restricted.';
-
-function getCacheDir(fs: ExpoFileSystemModule): string {
-  const fsAny = fs as unknown as MaybePaths;
-  return (
-    (typeof fsAny.Paths?.cache?.uri === 'string' ? fsAny.Paths.cache.uri : '') ||
-    (typeof fsAny.cacheDirectory === 'string' ? fsAny.cacheDirectory : '') ||
-    (typeof fsAny.documentDirectory === 'string' ? fsAny.documentDirectory : '') ||
-    (typeof fsAny.Paths?.document?.uri === 'string' ? fsAny.Paths.document.uri : '')
-  );
-}
 
 type ExpoImageManipulatorModule = typeof import('expo-image-manipulator');
 let imageManipPromise: Promise<ExpoImageManipulatorModule | null> | null = null;
@@ -122,6 +95,50 @@ async function loadImageManipulator(): Promise<ExpoImageManipulatorModule | null
     }
     return await imageManipPromise;
   } catch {
+    return null;
+  }
+}
+
+async function readFileBase64WithNewApi(uri: string): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const { File: ExpoFile } = await import('expo-file-system');
+    const file = new ExpoFile(uri);
+    console.log('[readFileBase64NewApi] checking file', { uri: uri.substring(0, 80), exists: file.exists, size: file.size });
+    if (!file.exists || file.size === 0) return null;
+    const b64 = await file.base64();
+    if (b64 && b64.length > 100) {
+      console.log('[readFileBase64NewApi] success', { base64Len: b64.length });
+      return `data:image/jpeg;base64,${b64}`;
+    }
+    console.log('[readFileBase64NewApi] base64 empty or too short');
+    return null;
+  } catch (e) {
+    console.log('[readFileBase64NewApi] error', e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
+async function readFileBase64WithLegacyApi(uri: string): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const fs = await loadLegacyFileSystem();
+    if (!fs) return null;
+    console.log('[readFileBase64Legacy] reading', { uri: uri.substring(0, 80) });
+    const info = await fs.getInfoAsync(uri);
+    if (!info.exists) {
+      console.log('[readFileBase64Legacy] file does not exist');
+      return null;
+    }
+    const b64 = await fs.readAsStringAsync(uri, { encoding: fs.EncodingType.Base64 });
+    if (b64 && b64.length > 100) {
+      console.log('[readFileBase64Legacy] success', { base64Len: b64.length });
+      return `data:image/jpeg;base64,${b64}`;
+    }
+    console.log('[readFileBase64Legacy] base64 empty or too short');
+    return null;
+  } catch (e) {
+    console.log('[readFileBase64Legacy] error', e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -151,63 +168,19 @@ async function imageToBase64ViaManipulator(uri: string): Promise<string | null> 
   }
 }
 
-async function imageToBase64DataUri(uri: string | null): Promise<string | null> {
-  if (!uri) return null;
+async function downloadAndConvertToBase64(uri: string): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
   try {
-    if (Platform.OS === 'web') return null;
-    
-    const scheme = uri.split(':')[0] ?? '';
-
-    const manipResult = await imageToBase64ViaManipulator(uri);
-    if (manipResult) return manipResult;
-    console.log('[imageToBase64] manipulator failed, trying file system fallback');
-
-    const fs = await loadExpoFileSystem();
-    if (!fs) return null;
-
-    let localUri = uri;
-
-    if (scheme === 'http' || scheme === 'https') {
-      const cacheDir = getCacheDir(fs);
-      if (cacheDir) {
-        const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_dl_${Date.now()}.jpg` : `${cacheDir}/pdf_dl_${Date.now()}.jpg`;
-        try {
-          const dl = await fs.downloadAsync(uri, tmpDest);
-          const manipDl = await imageToBase64ViaManipulator(dl.uri);
-          if (manipDl) return manipDl;
-          const b64 = await fs.readAsStringAsync(dl.uri, { encoding: 'base64' as const });
-          if (b64 && b64.length > 0) {
-            console.log('[imageToBase64] http downloaded+converted', { base64Len: b64.length });
-            return `data:image/jpeg;base64,${b64}`;
-          }
-        } catch (dlErr) {
-          console.log('[imageToBase64] http download failed', dlErr instanceof Error ? dlErr.message : String(dlErr));
-        }
-      }
-      return uri;
-    }
-
-    if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
-      const cacheDir = getCacheDir(fs);
-      if (!cacheDir) return null;
-      const tmpDest = cacheDir.endsWith('/') ? `${cacheDir}pdf_img_${Date.now()}.jpg` : `${cacheDir}/pdf_img_${Date.now()}.jpg`;
-      try {
-        await fs.copyAsync({ from: uri, to: tmpDest });
-        localUri = tmpDest;
-        const manipCopy = await imageToBase64ViaManipulator(localUri);
-        if (manipCopy) return manipCopy;
-      } catch (copyErr) {
-        console.log('[imageToBase64] copyAsync failed', copyErr instanceof Error ? copyErr.message : String(copyErr));
-        return null;
-      }
-    }
-
-    const base64 = await fs.readAsStringAsync(localUri, { encoding: 'base64' as const });
-    if (!base64 || base64.length === 0) return null;
-    console.log('[imageToBase64] fs read success', { base64Len: base64.length });
-    return `data:image/jpeg;base64,${base64}`;
+    const fs = await loadLegacyFileSystem();
+    if (!fs || !fs.cacheDirectory) return null;
+    const dest = `${fs.cacheDirectory}pdf_dl_${Date.now()}.jpg`;
+    console.log('[downloadAndConvert] downloading', { from: uri.substring(0, 60), to: dest.substring(0, 60) });
+    const dl = await fs.downloadAsync(uri, dest);
+    const b64 = await readFileBase64WithNewApi(dl.uri);
+    if (b64) return b64;
+    return await readFileBase64WithLegacyApi(dl.uri);
   } catch (e) {
-    console.log('[imageToBase64] failed completely', e instanceof Error ? e.message : String(e));
+    console.log('[downloadAndConvert] error', e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -220,40 +193,58 @@ async function resolveImageForPdf(entry: { imageUri?: string; imagePreviewUri?: 
   ].filter((u): u is string => typeof u === 'string' && u.trim().length > 0 && u !== 'null' && u !== 'undefined');
 
   const uniqueCandidates = [...new Set(candidates)];
-
   console.log('[resolveImageForPdf] candidates', uniqueCandidates.map(c => c.substring(0, 80)));
 
   for (const uri of uniqueCandidates) {
     const scheme = uri.split(':')[0] ?? '';
+
     if (scheme === 'data') {
-      if (uri.length > 2_000_000) {
-        console.log('[resolveImageForPdf] data URI too large, trying to re-encode', { len: uri.length });
-        const reEncoded = await imageToBase64ViaManipulator(uri);
-        if (reEncoded) return reEncoded;
-      }
       console.log('[resolveImageForPdf] using data URI directly', { len: uri.length });
       return uri;
     }
+
+    if (scheme === 'file' || uri.startsWith('/')) {
+      console.log('[resolveImageForPdf] trying file URI', { uri: uri.substring(0, 80) });
+      const newApiResult = await readFileBase64WithNewApi(uri);
+      if (newApiResult) return newApiResult;
+
+      const legacyResult = await readFileBase64WithLegacyApi(uri);
+      if (legacyResult) return legacyResult;
+
+      const manipResult = await imageToBase64ViaManipulator(uri);
+      if (manipResult) return manipResult;
+      continue;
+    }
+
     if (scheme === 'http' || scheme === 'https') {
-      const b64 = await imageToBase64DataUri(uri);
-      if (b64) return b64;
+      console.log('[resolveImageForPdf] trying http URI', { uri: uri.substring(0, 80) });
+      const dlResult = await downloadAndConvertToBase64(uri);
+      if (dlResult) return dlResult;
+
+      const manipResult = await imageToBase64ViaManipulator(uri);
+      if (manipResult) return manipResult;
       return uri;
     }
-    if (scheme === 'file') {
-      const b64 = await imageToBase64DataUri(uri);
-      if (b64) return b64;
-    }
-    if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
-      const b64 = await imageToBase64DataUri(uri);
-      if (b64) return b64;
-    }
-  }
 
-  if (Platform.OS !== 'web' && uniqueCandidates.length > 0) {
-    console.log('[resolveImageForPdf] all conversions failed, trying ImageManipulator on first candidate');
-    for (const uri of uniqueCandidates) {
-      const result = await imageToBase64ViaManipulator(uri);
-      if (result) return result;
+    if (scheme === 'content' || scheme === 'ph' || scheme === 'assets-library') {
+      console.log('[resolveImageForPdf] trying content URI via manipulator', { uri: uri.substring(0, 80) });
+      const manipResult = await imageToBase64ViaManipulator(uri);
+      if (manipResult) return manipResult;
+
+      try {
+        const fs = await loadLegacyFileSystem();
+        if (fs && fs.cacheDirectory) {
+          const tmpDest = `${fs.cacheDirectory}pdf_img_${Date.now()}.jpg`;
+          await fs.copyAsync({ from: uri, to: tmpDest });
+          const b64 = await readFileBase64WithNewApi(tmpDest);
+          if (b64) return b64;
+          const legacyB64 = await readFileBase64WithLegacyApi(tmpDest);
+          if (legacyB64) return legacyB64;
+        }
+      } catch (e) {
+        console.log('[resolveImageForPdf] content copy failed', e instanceof Error ? e.message : String(e));
+      }
+      continue;
     }
   }
 
@@ -781,19 +772,14 @@ export default function ScanDetailsScreen() {
         return;
       }
 
-      const fs = await loadExpoFileSystem();
+      const fs = await loadLegacyFileSystem();
       if (!fs) {
         Alert.alert('Sharing unavailable', 'File sharing is not available on this device.');
         return;
       }
 
       const fileName = `scan-${entry.id}.jpg`;
-      const fsAny = fs as unknown as MaybePaths;
-      const cacheDirUri =
-        (typeof fsAny.Paths?.cache?.uri === 'string' ? fsAny.Paths.cache.uri : '') ||
-        (typeof fsAny.cacheDirectory === 'string' ? fsAny.cacheDirectory : '') ||
-        (typeof fsAny.documentDirectory === 'string' ? fsAny.documentDirectory : '') ||
-        (typeof fsAny.Paths?.document?.uri === 'string' ? fsAny.Paths.document.uri : '');
+      const cacheDirUri = fs.cacheDirectory ?? fs.documentDirectory ?? '';
       if (cacheDirUri.length === 0) {
         throw new Error('No cache directory available');
       }
