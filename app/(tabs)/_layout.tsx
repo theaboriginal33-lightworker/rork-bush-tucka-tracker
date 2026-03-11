@@ -2,7 +2,6 @@ import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
 import { BookOpen, ChefHat, Camera, NotebookPen, Users } from 'lucide-react-native';
 
 
@@ -11,12 +10,6 @@ export default function TabLayout() {
 
   return (
     <View style={tabStyles.root}>
-      <Image
-        source={require('@/assets/images/aboriginal-dot-art.png')}
-        style={tabStyles.watermark}
-        contentFit="cover"
-        cachePolicy="memory-disk"
-      />
     <Tabs
       initialRouteName={initialRouteName}
       screenOptions={{
@@ -134,11 +127,6 @@ const tabStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#07110B',
   },
-  watermark: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.15,
-    zIndex: 0,
-  } as const,
 });
 
 
