@@ -1,7 +1,8 @@
 import { Tabs } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { BookOpen, ChefHat, Camera, NotebookPen, Users } from 'lucide-react-native';
 
 
@@ -9,6 +10,13 @@ export default function TabLayout() {
   const initialRouteName: 'journal' | 'learn' = Platform.OS === 'web' ? 'journal' : 'learn';
 
   return (
+    <View style={tabStyles.root}>
+      <Image
+        source={require('@/assets/images/aboriginal-dot-art.png')}
+        style={tabStyles.watermark}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+      />
     <Tabs
       initialRouteName={initialRouteName}
       screenOptions={{
@@ -16,7 +24,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: COLORS.tabBarActive,
         tabBarInactiveTintColor: COLORS.tabBarInactive,
         tabBarStyle: {
-          backgroundColor: COLORS.tabBarBackground,
+          backgroundColor: 'rgba(7,17,11,0.85)',
           borderTopColor: COLORS.border,
           borderTopWidth: StyleSheet.hairlineWidth,
           ...Platform.select({
@@ -117,7 +125,20 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </View>
   );
 }
+
+const tabStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#07110B',
+  },
+  watermark: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.15,
+    zIndex: 0,
+  } as const,
+});
 
 
