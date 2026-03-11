@@ -75,7 +75,13 @@ export const styles = StyleSheet.create({
   },
   scanStageTitleWrap: {
     gap: 6,
+    overflow: 'hidden' as const,
   },
+  titleWatermark: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.15,
+    zIndex: 0,
+  } as const,
   scanStageTitle: {
     color: DARK.text,
     fontSize: 26,

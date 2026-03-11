@@ -437,6 +437,12 @@ Return JSON with keys:
             >
               <View style={styles.scanStageTopBar}>
                 <View style={styles.scanStageTitleWrap}>
+                  <Image
+                    source={require('@/assets/images/aboriginal-dot-art.png')}
+                    style={styles.titleWatermark}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
                   <Text style={styles.scanStageTitle}>Identify</Text>
                   <Text style={styles.scanStageSubtitle}>Place the plant in focus</Text>
                 </View>
