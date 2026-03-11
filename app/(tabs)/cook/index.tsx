@@ -323,7 +323,7 @@ export default function CookScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.background,
   },
   safeArea: {
     flex: 1,

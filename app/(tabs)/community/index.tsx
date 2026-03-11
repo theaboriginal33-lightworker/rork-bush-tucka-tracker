@@ -588,7 +588,7 @@ function CreatePinModal({ visible, onClose, onSubmit, coordinate }: CreatePinMod
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.background,
   },
   safeArea: {
     flex: 1,
