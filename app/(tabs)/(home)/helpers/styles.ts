@@ -126,7 +126,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   focusCornerWrap: {
-    width: '75%',
+    width: '92%',
     aspectRatio: 1,
   },
   focusCorner: {
