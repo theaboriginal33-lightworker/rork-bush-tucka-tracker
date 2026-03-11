@@ -421,7 +421,7 @@ Return JSON with keys:
   return (
     <View style={styles.container}>
       <Image
-        source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/vg1p4qdg7bqck49y9bvjj' }}
+        source={require('@/assets/images/aboriginal-dot-art.png')}
         style={styles.watermarkBg}
         contentFit="cover"
         cachePolicy="memory-disk"
