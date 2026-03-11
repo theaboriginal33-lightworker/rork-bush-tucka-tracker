@@ -14,11 +14,6 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: DARK.bg,
   },
-  watermarkBg: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.15,
-    zIndex: 0,
-  } as const,
   safeArea: {
     flex: 1,
   },
@@ -77,11 +72,6 @@ export const styles = StyleSheet.create({
     gap: 6,
     overflow: 'hidden' as const,
   },
-  titleWatermark: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.15,
-    zIndex: 0,
-  } as const,
   scanStageTitle: {
     color: DARK.text,
     fontSize: 26,
