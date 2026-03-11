@@ -14,7 +14,6 @@ import {
   Settings,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ImageBackground } from 'react-native';
 import {
   createScanEntryId,
   useScanJournal,
@@ -421,17 +420,11 @@ Return JSON with keys:
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={require('@/assets/images/koori-watermark.png')}
-        style={styles.watermarkBg}
-        imageStyle={styles.watermarkImage}
-        resizeMode="cover"
-      >
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.scrollContent}>
           <View style={styles.scanStage} testID="scan-stage">
             <LinearGradient
-              colors={['rgba(7,17,11,0.82)', 'rgba(11,21,15,0.75)', 'rgba(9,17,12,0.80)']}
+              colors={[DARK.bg, '#0B150F', '#09110C']}
               start={{ x: 0.2, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.scanStageBg}
@@ -510,7 +503,6 @@ Return JSON with keys:
 
         </View>
       </SafeAreaView>
-      </ImageBackground>
     </View>
   );
 }
