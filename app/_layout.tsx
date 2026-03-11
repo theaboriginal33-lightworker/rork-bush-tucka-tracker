@@ -4,6 +4,7 @@ import 'react-native-url-polyfill/auto';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router, usePathname, useSegments } from "expo-router";
 import React, { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { LearnImageProvider } from "@/app/providers/LearnImageProvider";
@@ -57,6 +58,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function GestureWrapper({ children }: { children: React.ReactNode }) {
+  if (Platform.OS === 'web') {
+    return <>{children}</>;
+  }
+  return <GestureHandlerRootView style={{ flex: 1 }}>{children}</GestureHandlerRootView>;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
@@ -79,7 +87,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppErrorBoundary>
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureWrapper>
           <AuthProvider>
             <ScanJournalProvider>
               <CookbookProvider>
@@ -93,7 +101,7 @@ export default function RootLayout() {
               </CookbookProvider>
             </ScanJournalProvider>
           </AuthProvider>
-        </GestureHandlerRootView>
+        </GestureWrapper>
       </AppErrorBoundary>
     </QueryClientProvider>
   );
