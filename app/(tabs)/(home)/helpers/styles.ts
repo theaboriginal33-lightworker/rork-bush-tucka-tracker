@@ -14,6 +14,11 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: DARK.bg,
   },
+  watermarkBg: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.15,
+    zIndex: 0,
+  } as const,
   safeArea: {
     flex: 1,
   },
