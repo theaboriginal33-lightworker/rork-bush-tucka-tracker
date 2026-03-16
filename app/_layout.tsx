@@ -3,6 +3,7 @@ import 'react-native-url-polyfill/auto';
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router, usePathname, useSegments } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -18,22 +19,63 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const { session, isReady, hasConfig } = useAuth();
   const segments = useSegments();
   const pathname = usePathname();
+  const [onboardingChecked, setOnboardingChecked] = useState<boolean>(false);
+  const [hasOnboarded, setHasOnboarded] = useState<boolean>(false);
 
   useEffect(() => {
+    AsyncStorage.getItem('onboarding_complete')
+      .then((value) => {
+        console.log('[AuthGate] onboarding_complete =', value);
+        setHasOnboarded(value === 'true');
+        setOnboardingChecked(true);
+      })
+      .catch(() => {
+        setOnboardingChecked(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!onboardingChecked) return;
+
     const inAuthGroup = segments?.[0] === 'auth';
+    const inOnboarding = segments?.[0] === 'onboarding';
     console.log('[AuthGate] check', {
       isReady,
       hasConfig,
       hasSession: Boolean(session),
       inAuthGroup,
+      inOnboarding,
+      hasOnboarded,
       pathname,
       segments,
     });
 
+    if (!hasOnboarded && !inOnboarding) {
+      console.log('[AuthGate] redirect -> /onboarding');
+      try {
+        router.replace('/onboarding');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[AuthGate] router.replace failed', { message });
+      }
+      return;
+    }
+
+    if (hasOnboarded && inOnboarding) {
+      console.log('[AuthGate] onboarding done, redirect -> /auth');
+      try {
+        router.replace('/auth');
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[AuthGate] router.replace failed', { message });
+      }
+      return;
+    }
+
     if (!isReady) return;
     if (!hasConfig) return;
 
-    if (!session && !inAuthGroup) {
+    if (!session && !inAuthGroup && !inOnboarding) {
       console.log('[AuthGate] redirect -> /auth');
       try {
         router.replace('/auth');
@@ -53,7 +95,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         console.log('[AuthGate] router.replace failed', { message });
       }
     }
-  }, [isReady, hasConfig, session, segments, pathname]);
+  }, [isReady, hasConfig, session, segments, pathname, onboardingChecked, hasOnboarded]);
 
   return <>{children}</>;
 }
@@ -69,6 +111,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="scan/[id]" options={{ headerShown: false }} />
