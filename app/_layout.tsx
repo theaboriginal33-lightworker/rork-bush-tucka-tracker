@@ -76,6 +76,7 @@ function RootLayoutNav() {
       <Stack.Screen name="pocket-guides/animal-care-and-share" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="pocket-guides/foraging-with-kids" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="pocket-guides/if-something-goes-wrong" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="user-flow" options={{ headerShown: false }} />
     </Stack>
   );
 }
