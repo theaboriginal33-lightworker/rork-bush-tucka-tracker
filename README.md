@@ -47,7 +47,7 @@ bun run start-web
 bun run start  # then press "i" in the terminal to open iOS Simulator
 # Option B (if supported by your environment):
 bun run start -- --ios
-```
+
 
 ### **Edit a file directly in GitHub**
 

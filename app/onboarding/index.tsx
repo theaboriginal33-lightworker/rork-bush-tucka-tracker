@@ -18,7 +18,7 @@ const BG_DARK = '#000000';
 export default function IntroScreen() {
   return (
     <View style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={BG_DARK} />                                                          1111111111                1qqqq≥qqqqqqqqqqqqqqqqqq
+      <StatusBar barStyle="light-content" backgroundColor={BG_DARK} />                                                    
 
       {/* ── Title at top ── */}
       <View style={styles.titleSection}>

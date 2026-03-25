@@ -72,6 +72,7 @@ function RootLayoutNav() {
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="scan/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="pocket-guides/cultural-respect-on-country" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="pocket-guides/animal-care-and-share" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="pocket-guides/foraging-with-kids" options={{ headerShown: false, presentation: 'modal' }} />
