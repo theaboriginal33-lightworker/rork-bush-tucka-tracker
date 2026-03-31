@@ -36,6 +36,7 @@ import {
   type PinCategory,
   type CommunityPin,
 } from '@/app/providers/CommunityProvider';
+import { useLocalSearchParams, router } from 'expo-router';
 
 const CATEGORY_FILTERS: { key: PinCategory | 'all'; label: string; emoji: string }[] = [
   { key: 'all', label: 'All', emoji: '🗺️' },
@@ -84,6 +85,21 @@ export default function CommunityScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPin, setSelectedPin] = useState<CommunityPin | null>(null);
 
+  // ── ✅ Location picker state ──────────────────────────────
+  const [pickedAddress, setPickedAddress] = useState('');
+  const [pickedLat, setPickedLat]         = useState<number | null>(null);
+  const [pickedLng, setPickedLng]         = useState<number | null>(null);
+
+  // ── ✅ Read params from location picker ──────────────────
+  const params = useLocalSearchParams();
+  useEffect(() => {
+    if (params.pickedLat) {
+      setPickedLat(Number(params.pickedLat));
+      setPickedLng(Number(params.pickedLng));
+      setPickedAddress(params.pickedAddress as string);
+    }
+  }, [params.pickedLat]);
+
   const fabScale = useRef(new Animated.Value(1)).current;
   const cardSlide = useRef(new Animated.Value(300)).current;
 
@@ -99,41 +115,27 @@ export default function CommunityScreen() {
 
   useEffect(() => {
     void (async () => {
-      console.log('[Community] Requesting location permission');
       try {
         if (Platform.OS === 'web') {
           if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
               (pos) => {
-                const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-                console.log('[Community] Web location:', loc);
-                setUserLocation(loc);
+                setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
                 setLocationLoading(false);
               },
-              (err) => {
-                console.log('[Community] Web location error:', err.message);
-                setLocationLoading(false);
-              }
+              () => setLocationLoading(false)
             );
           } else {
             setLocationLoading(false);
           }
           return;
         }
-
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('[Community] Location permission denied');
-          setLocationLoading(false);
-          return;
-        }
+        if (status !== 'granted') { setLocationLoading(false); return; }
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-        console.log('[Community] Got location:', coords);
-        setUserLocation(coords);
+        setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
         setLocationLoading(false);
-      } catch (e) {
-        console.log('[Community] Location error:', e);
+      } catch {
         setLocationLoading(false);
       }
     })();
@@ -143,7 +145,7 @@ export default function CommunityScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Animated.sequence([
       Animated.timing(fabScale, { toValue: 0.85, duration: 80, useNativeDriver: true }),
-      Animated.timing(fabScale, { toValue: 1, duration: 80, useNativeDriver: true }),
+      Animated.timing(fabScale, { toValue: 1,    duration: 80, useNativeDriver: true }),
     ]).start();
     setShowCreateModal(true);
   }, [fabScale]);
@@ -152,12 +154,7 @@ export default function CommunityScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedPin(pin);
     cardSlide.setValue(300);
-    Animated.spring(cardSlide, {
-      toValue: 0,
-      tension: 65,
-      friction: 11,
-      useNativeDriver: true,
-    }).start();
+    Animated.spring(cardSlide, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }).start();
   }, [cardSlide]);
 
   const dismissPinCard = useCallback(() => {
@@ -169,14 +166,7 @@ export default function CommunityScreen() {
   const handleDeletePin = useCallback((id: string) => {
     Alert.alert('Remove Pin', 'Are you sure you want to remove this pin?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          removePin(id);
-          dismissPinCard();
-        },
-      },
+      { text: 'Remove', style: 'destructive', onPress: () => { removePin(id); dismissPinCard(); } },
     ]);
   }, [removePin, dismissPinCard]);
 
@@ -234,6 +224,11 @@ export default function CommunityScreen() {
     );
   }
 
+  // ── ✅ Pin ko add karte waqt picked location use karo ─────
+  const pinCoordinate = (pickedLat && pickedLng)
+    ? { latitude: pickedLat, longitude: pickedLng }
+    : userLocation ?? { latitude: -25.2744, longitude: 133.7751 };
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -256,6 +251,28 @@ export default function CommunityScreen() {
           </View>
         )}
 
+        {/* ── ✅ Picked location bar — map se select ki hui location ── */}
+        <TouchableOpacity
+          style={styles.pickedLocationBar}
+          onPress={() => router.push('/map/location-picker')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.pickedLocationIcon}>📍</Text>
+          <Text style={styles.pickedLocationText} numberOfLines={1}>
+            {pickedAddress || 'Tap to pick pin location on map'}
+          </Text>
+          {pickedAddress ? (
+            <TouchableOpacity
+              onPress={() => { setPickedAddress(''); setPickedLat(null); setPickedLng(null); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.pickedLocationClear}>✕</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.pickedLocationArrow}>›</Text>
+          )}
+        </TouchableOpacity>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -268,10 +285,7 @@ export default function CommunityScreen() {
               <TouchableOpacity
                 key={f.key}
                 style={[styles.filterChip, isActive && styles.filterChipActive]}
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  setActiveFilter(f.key);
-                }}
+                onPress={() => { void Haptics.selectionAsync(); setActiveFilter(f.key); }}
                 activeOpacity={0.7}
                 testID={`filter-${f.key}`}
               >
@@ -317,22 +331,13 @@ export default function CommunityScreen() {
       </SafeAreaView>
 
       {selectedPin && (
-        <Animated.View
-          style={[styles.pinCard, { transform: [{ translateY: cardSlide }] }]}
-        >
+        <Animated.View style={[styles.pinCard, { transform: [{ translateY: cardSlide }] }]}>
           <SafeAreaView edges={['bottom']}>
             <View style={styles.pinCardInner}>
               <View style={styles.pinCardHeader}>
-                <View
-                  style={[
-                    styles.pinCategoryDot,
-                    { backgroundColor: PIN_CATEGORY_META[selectedPin.category].color },
-                  ]}
-                />
+                <View style={[styles.pinCategoryDot, { backgroundColor: PIN_CATEGORY_META[selectedPin.category].color }]} />
                 <View style={styles.pinCardTitleWrap}>
-                  <Text style={styles.pinCardTitle} numberOfLines={1}>
-                    {selectedPin.title}
-                  </Text>
+                  <Text style={styles.pinCardTitle} numberOfLines={1}>{selectedPin.title}</Text>
                   <Text style={styles.pinCardCategory}>
                     {PIN_CATEGORY_META[selectedPin.category].emoji}{' '}
                     {PIN_CATEGORY_META[selectedPin.category].label}
@@ -344,9 +349,7 @@ export default function CommunityScreen() {
               </View>
 
               {selectedPin.description.length > 0 && (
-                <Text style={styles.pinCardDesc} numberOfLines={3}>
-                  {selectedPin.description}
-                </Text>
+                <Text style={styles.pinCardDesc} numberOfLines={3}>{selectedPin.description}</Text>
               )}
 
               {selectedPin.tags.length > 0 && (
@@ -375,10 +378,7 @@ export default function CommunityScreen() {
                     {new Date(selectedPin.createdAt).toLocaleDateString()}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => handleDeletePin(selectedPin.id)}
-                >
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeletePin(selectedPin.id)}>
                   <Trash2 color={COLORS.error} size={16} />
                 </TouchableOpacity>
               </View>
@@ -389,20 +389,22 @@ export default function CommunityScreen() {
 
       <CreatePinModal
         visible={showCreateModal}
-        onClose={() => {
-          setShowCreateModal(false);
-        }}
+        onClose={() => setShowCreateModal(false)}
         onSubmit={(data) => {
-          const coord = userLocation ?? { latitude: -25.2744, longitude: 133.7751 };
           addPin({
             ...data,
-            latitude: coord.latitude,
-            longitude: coord.longitude,
+            // ✅ Picked location use karo, nahi toh current location
+            latitude:  pinCoordinate.latitude,
+            longitude: pinCoordinate.longitude,
             author: 'Me',
           });
+          // ✅ Reset picked location after pin add
+          setPickedAddress('');
+          setPickedLat(null);
+          setPickedLng(null);
           setShowCreateModal(false);
         }}
-        coordinate={userLocation}
+        coordinate={pinCoordinate}
       />
     </View>
   );
@@ -1062,4 +1064,33 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: '#07110B',
   },
+  // Existing styles ke saath yeh add karo:
+pickedLocationBar: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginHorizontal: 16,
+  marginBottom: 10,
+  backgroundColor: 'rgba(58,173,126,0.08)',
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: '#163326',
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  gap: 8,
+},
+pickedLocationIcon: { fontSize: 14 },
+pickedLocationText: {
+  flex: 1,
+  fontSize: 13,
+  color: '#3aad7e',
+},
+pickedLocationClear: {
+  fontSize: 14,
+  color: '#5a8a72',
+  paddingHorizontal: 4,
+},
+pickedLocationArrow: {
+  fontSize: 18,
+  color: '#3a6650',
+},
 });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   StatusBar, ScrollView, Platform, KeyboardAvoidingView,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -104,7 +105,7 @@ export default function GoalsScreen() {
          
           {/* ── Heading ── */}
           <Text style={s.heading}>
-            <Text style={{ color: GREEN_HIGHLIGHT }}>What</Text> Bring You{'\n'}To Bush Tucka{'\n'}Tracka Today?
+            <Text style={{ color: GREEN_HIGHLIGHT }}>What</Text> Brings You{'\n'}To Bush Tucka{'\n'}Tracka Today?
           </Text>
           <Text style={s.subheading}>
             Select all that apply — we'll personalise your experience.
@@ -134,6 +135,11 @@ export default function GoalsScreen() {
           </View>
 
           <View style={{ flex: 1 }} />
+                 <Image
+                source={require('../../assets/images/goanna2.png')}
+                style={s.heroImage3}
+                resizeMode="contain"
+              />
 
           {/* ── CTA ── */}
           <TouchableOpacity
@@ -261,7 +267,7 @@ const s = StyleSheet.create({
   btn: {
     backgroundColor: GREEN_BTN,
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 12,
     width: '100%',
@@ -291,4 +297,11 @@ const s = StyleSheet.create({
     color: TEXT_HINT,
     textDecorationLine: 'underline',
   },
+  heroImage3: {
+    
+    left:"50%",
+   width: 230,
+  height: 120,
+  //  backgroundColor:"red"
+},
 });

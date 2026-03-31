@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  StatusBar, ScrollView, KeyboardAvoidingView, Platform, Alert,
+  StatusBar, ScrollView, KeyboardAvoidingView, Platform, Alert,ImageBackground,
+  Image
 } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { supabase } from '@/constants/supabase';
+
 
 
 // ── Palette ───────────────────────────────────────────────────
@@ -46,9 +48,20 @@ async function upsertProfile(payload: {
   email?: string;
   discovery?: string;
 }) {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("User not authenticated");
+
   const { error } = await supabase
     .from('profiles')
-    .upsert(payload, { onConflict: 'phone' });
+    .upsert(
+      {
+        id: user.id,   
+        ...payload,
+      },
+      { onConflict: 'id' }
+    );
+
   if (error) throw error;
 }
 
@@ -210,8 +223,13 @@ export default function CollectScreen() {
   }
 
   return (
-    <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={BG_DEEP} />
+     <ImageBackground
+          source={require('../../assets/images/dark2.png')}
+          style={s.container}
+          resizeMode="cover"
+        >
+    {/* <View style={s.root}> */}
+    
 
       {/* Top bar */}
       <View style={s.topBar}>
@@ -225,42 +243,52 @@ export default function CollectScreen() {
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* ── PHONE ── */}
-          {step === 'phone' && (
-            <View style={s.stepWrap}>
-              <Text style={s.heading}>Phone number</Text>
-              <Text style={s.subheading}>We'll send you a verification code to confirm your number.</Text>
-              <View style={s.card}>
-                <TouchableOpacity style={s.inputRow} activeOpacity={0.8} onPress={() => phoneRef.current?.focus()}>
-                  <PhoneIcon />
-                  <View style={s.countryPill}>
-                    <Text style={s.flag}>🇦🇺</Text>
-                    <Text style={s.countryCode}>+61</Text>
-                  </View>
-                  <TextInput
-                    ref={phoneRef}
-                    style={[s.input, { flex: 1, fontSize: 20, letterSpacing: 3, fontWeight: '300' }]}
-                    value={phone}
-                    onChangeText={(t) => setPhone(formatPhone(t))}
-                    keyboardType="phone-pad"
-                    placeholder="8123 4567"
-                    placeholderTextColor={TEXT_HINT}
-                    maxLength={11}
-                    autoFocus
-                  />
-                </TouchableOpacity>
-              </View>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity
-                style={[s.btn, (phoneDigits.length < 9 || loading) && s.btnDisabled]}
-                disabled={phoneDigits.length < 9 || loading}
-                onPress={goNext}
-              >
-                <Text style={[s.btnText, phoneDigits.length < 9 && s.btnTextDisabled]}>
-                  {loading ? 'Please wait…' : 'Continue'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+         {/* ── PHONE ── */}
+{step === 'phone' && (
+  <View style={s.stepWrap}>
+    <Text style={s.heading}>Phone number</Text>
+    <Text style={s.subheading}>We'll send you a verification code to confirm your number.</Text>
+    <View style={s.card}>
+      <TouchableOpacity style={s.inputRow} activeOpacity={0.8} onPress={() => phoneRef.current?.focus()}>
+        <PhoneIcon />
+        <View style={s.countryPill}>
+          <Text style={s.flag}>🇦🇺</Text>
+          <Text style={s.countryCode}>+61</Text>
+        </View>
+        <TextInput
+          ref={phoneRef}
+          style={[s.input, { flex: 1, fontSize: 20, letterSpacing: 3, fontWeight: '300' }]}
+          value={phone}
+          onChangeText={(t) => setPhone(formatPhone(t))}
+          keyboardType="phone-pad"
+          placeholder="8123 4567"
+          placeholderTextColor={TEXT_HINT}
+          maxLength={11}
+          autoFocus
+        />
+      </TouchableOpacity>
+    </View>
+
+    <View style={{ flex: 1 }} />
+
+  
+    <Image
+      source={require('../../assets/images/kangaroo.png')}
+      style={s.heroImage}
+      resizeMode="contain"
+    />
+
+    <TouchableOpacity
+      style={[s.btn, (phoneDigits.length < 9 || loading) && s.btnDisabled]}
+      disabled={phoneDigits.length < 9 || loading}
+      onPress={goNext}
+    >
+      <Text style={[s.btnText, phoneDigits.length < 9 && s.btnTextDisabled]}>
+        {loading ? 'Please wait…' : 'Continue'}
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
 
           {/* ── OTP ── */}
           {step === 'otp' && (
@@ -288,6 +316,12 @@ export default function CollectScreen() {
                 <Text style={s.linkGreen}>Resend code</Text>
               </TouchableOpacity>
               <View style={{ flex: 1 }} />
+                <Image
+      source={require('../../assets/images/possum.png')}
+      style={s.heroImage}
+      resizeMode="contain"
+    />
+
               <TouchableOpacity
                 style={[s.btn, (otp.length < 6 || loading) && s.btnDisabled]}
                 disabled={otp.length < 6 || loading}
@@ -323,6 +357,11 @@ export default function CollectScreen() {
                 </View>
               </View>
               <View style={{ flex: 1 }} />
+                  <Image
+      source={require('../../assets/images/koala.png')}
+      style={s.heroImage3}
+      resizeMode="contain"
+    />
               <TouchableOpacity
                 style={[s.btn, (!name.trim() || loading) && s.btnDisabled]}
                 disabled={!name.trim() || loading}
@@ -361,6 +400,13 @@ export default function CollectScreen() {
                 <Text style={s.linkMuted}>Skip for now</Text>
               </TouchableOpacity>
               <View style={{ flex: 1 }} />
+
+                <Image
+      source={require('../../assets/images/kangaroo.png')}
+      style={s.heroImage}
+      resizeMode="contain"
+    />
+
               <TouchableOpacity
                 style={[s.btn, (!email.includes('@') || loading) && s.btnDisabled]}
                 disabled={!email.includes('@') || loading}
@@ -374,56 +420,74 @@ export default function CollectScreen() {
           )}
 
           {/* ── DISCOVERY ── */}
-          {step === 'discovery' && (
-            <View style={s.stepWrap}>
-              <Text style={s.heading}>
-                How did you find{'\n'}
-                <Text style={{ color: GREEN }}>Bush Tucka Tracka?</Text>
-              </Text>
-              <Text style={s.subheading}>Help us understand how you found us.</Text>
-              <View style={s.card}>
-                {DISCOVERY_OPTIONS.map((opt, i) => (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[
-                      s.optionRow,
-                      i < DISCOVERY_OPTIONS.length - 1 && s.optionRowBorder,
-                      discovery === opt && s.optionRowActive,
-                    ]}
-                    onPress={() => setDiscovery(opt)}
-                    activeOpacity={0.7}
-                  >
-                    <SearchIcon />
-                    <Text style={[s.optionText, discovery === opt && s.optionTextActive]}>{opt}</Text>
-                    {discovery === opt && (
-                      <View style={s.checkCircle}><CheckIcon /></View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity
-                style={[s.btn, (!discovery || loading) && s.btnDisabled]}
-                disabled={!discovery || loading}
-                onPress={goNext}
-              >
-                <Text style={[s.btnText, !discovery && s.btnTextDisabled]}>
-                  {loading ? 'Finishing…' : 'Continue'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+         {step === 'discovery' && (
+  <View style={s.stepWrap}>
+
+    {/* ✅ Heading row with parrot in top-right corner */}
+    <View style={{ position: 'relative' }}>
+      <Text style={s.heading}>
+        How did you find{'\n'}
+        <Text style={{ color: GREEN }}>Bush Tucka Tracka?</Text>
+      </Text>
+      <Image
+        source={require('../../assets/images/cockatoo.png')} // replace with parrot image
+        style={s.parrotImage}
+        resizeMode="contain"
+      />
+    </View>
+
+    <Text style={s.subheading}>Help us understand how you found us.</Text>
+
+    <View style={s.card}>
+      {DISCOVERY_OPTIONS.map((opt, i) => (
+        <TouchableOpacity
+          key={opt}
+          style={[
+            s.optionRow,
+            i < DISCOVERY_OPTIONS.length - 1 && s.optionRowBorder,
+            discovery === opt && s.optionRowActive,
+          ]}
+          onPress={() => setDiscovery(opt)}
+          activeOpacity={0.7}
+        >
+          <SearchIcon />
+          <Text style={[s.optionText, discovery === opt && s.optionTextActive]}>{opt}</Text>
+          {discovery === opt && (
+            <View style={s.checkCircle}><CheckIcon /></View>
           )}
+        </TouchableOpacity>
+      ))}
+    </View>
+
+    <View style={{ flex: 1 }} />
+
+    <TouchableOpacity
+      style={[s.btn, (!discovery || loading) && s.btnDisabled]}
+      disabled={!discovery || loading}
+      onPress={goNext}
+    >
+      <Text style={[s.btnText, !discovery && s.btnTextDisabled]}>
+        {loading ? 'Finishing…' : 'Continue'}
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
+
+ 
 
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    {/* </View> */}
+    </ImageBackground>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG_DEEP },
-
+ 
+ container: {
+    flex: 1,
+  },
   topBar: {
     height: 64,
     marginTop: 24,
@@ -437,7 +501,7 @@ const s = StyleSheet.create({
 
   scroll: { flexGrow: 1, paddingBottom: 40 },
   stepWrap: { flex: 1, paddingHorizontal: 24, paddingTop: 16, minHeight: 500 },
-
+stepWrap1: { flex: 1, paddingHorizontal: 24, paddingTop: 16, minHeight: 500 },
   logoCircle: {
     width: 60,
     height: 60,
@@ -542,4 +606,24 @@ const s = StyleSheet.create({
   },
   btnText: { fontSize: 16, fontWeight: '700', color: TEXT_WHITE, letterSpacing: 0.2 },
   btnTextDisabled: { color: TEXT_HINT },
+  heroImage: {
+    
+    right:"10%",
+  width: 230,
+  height: 200,
+},
+heroImage3: {
+    
+    right:"5%",
+  width: 230,
+  height: 200,
+},
+parrotImage: {
+  position: 'absolute',
+  top: -40,
+  right: -40,
+  width: 120,
+  height: 120,
+},
+
 });

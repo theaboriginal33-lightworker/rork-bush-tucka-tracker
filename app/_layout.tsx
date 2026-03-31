@@ -12,52 +12,44 @@ import { ScanJournalProvider } from "@/app/providers/ScanJournalProvider";
 import { CommunityProvider } from "@/app/providers/CommunityProvider";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthProvider, useAuth } from "@/app/providers/AuthProvider";
+import { supabase } from '@/constants/supabase';
+
 
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { session, isReady, hasConfig } = useAuth();
+  const { session, isReady, hasConfig, onboardingCompleted } = useAuth();
   const segments = useSegments();
   const pathname = usePathname();
 
   useEffect(() => {
     const inAuthGroup = segments?.[0] === 'auth';
-    console.log('[AuthGate] check', {
-      isReady,
-      hasConfig,
-      hasSession: Boolean(session),
-      inAuthGroup,
-      pathname,
-      segments,
-    });
+    const inOnboarding = segments?.[0] === 'onboarding';
 
-    if (!isReady) return;
+    if (!isReady) return; 
     if (!hasConfig) return;
 
-    if (!session && !inAuthGroup) {
-      console.log('[AuthGate] redirect -> /auth');
-      try {
-        router.replace('/auth');
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.log('[AuthGate] router.replace failed', { message });
-      }
+    if (!session) {
+      if (!inAuthGroup) router.replace('/auth');
       return;
     }
 
-    if (session && inAuthGroup) {
-      console.log('[AuthGate] redirect -> /(tabs)');
-      try {
-        router.replace('/');
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.log('[AuthGate] router.replace failed', { message });
-      }
+    if (onboardingCompleted === null) return; 
+
+    if (!onboardingCompleted && !inOnboarding) {
+      router.replace('/onboarding');
+      return;
     }
-  }, [isReady, hasConfig, session, segments, pathname]);
+
+    if (onboardingCompleted && (inAuthGroup || inOnboarding)) {
+      router.replace('/');
+    }
+
+  }, [isReady, hasConfig, session, onboardingCompleted, segments, pathname]);
 
   return <>{children}</>;
 }
 
+  
 function GestureWrapper({ children }: { children: React.ReactNode }) {
   if (Platform.OS === 'web') {
     return <>{children}</>;
@@ -73,6 +65,7 @@ function RootLayoutNav() {
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="scan/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="map" options={{ headerShown: false }} />
       <Stack.Screen name="pocket-guides/cultural-respect-on-country" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="pocket-guides/animal-care-and-share" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="pocket-guides/foraging-with-kids" options={{ headerShown: false, presentation: 'modal' }} />
