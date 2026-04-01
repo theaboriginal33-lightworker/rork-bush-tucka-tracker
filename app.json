@@ -22,7 +22,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We need your location to show plant sightings near you.",
         "NSLocationAlwaysUsageDescription": "We need your location to show plant sightings near you."
-      }
+      },
+      "appleTeamId": "542P4J57LM"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,7 +38,9 @@
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -57,7 +60,8 @@
         {
           "locationWhenInUsePermission": "Allow Bush Tucka Tracker to use your location to show nearby plant sightings."
         }
-      ]
+      ],
+      "./plugins/withReactNativeMaps"
     ],
     "experiments": {
       "typedRoutes": true
