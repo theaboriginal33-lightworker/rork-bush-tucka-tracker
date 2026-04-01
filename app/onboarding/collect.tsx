@@ -28,7 +28,7 @@ const STATIC_OTP = '111111'; // 🔒 Dev-only
 
 const DISCOVERY_OPTIONS = [
   'Searching the App Store',
-  'Plant retailer',
+  'TikTok',
   'Facebook Ad',
   'Searching Google',
   'Referral from a friend',

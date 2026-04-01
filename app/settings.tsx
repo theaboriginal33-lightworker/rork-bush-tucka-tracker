@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ShieldCheck, LogIn, LogOut, ExternalLink, ChevronRight, ChevronLeft } from 'lucide-react-native';
@@ -148,7 +149,7 @@ router.push('/onboarding');
           >
             <ChevronLeft size={20} color={COLORS.text} />
           </Pressable>
-          <Text style={styles.navTitle}>Settingss</Text>
+          <Text style={styles.navTitle}>Settings</Text>
           <View style={styles.backButton} />
         </View>
 
@@ -255,25 +256,16 @@ router.push('/onboarding');
             ) : null}
           </View>
         </View>
+           <View style={{ flex: 1 }} />
+        
+                        <Image
+              source={require('../assets/images/kangaroo.png')}
+              style={styles.heroImage}
+              resizeMode="contain"
+            />
+        
 
-         <View style={[styles.card, { marginTop: 12 }]} testID="settings-onboarding-card">
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>App Tour</Text>
-          </View>
-          <Pressable
-            onPress={onPressViewOnboarding}
-            style={({ pressed }) => [styles.rowButton, pressed ? styles.rowButtonPressed : null]}
-            testID="settings-view-onboarding"
-          >
-            <View style={styles.rowLeft}>
-              <ChevronRight size={18} color={COLORS.primary} />
-              <Text style={[styles.rowText, { color: COLORS.primary }]}>
-                View Introduction Screen
-              </Text>
-            </View>
-            <ChevronRight size={18} color={COLORS.primary} />
-          </Pressable>
-        </View>
+       
       </SafeAreaView>
     </View>
   );
@@ -519,4 +511,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
+   heroImage: {
+    
+    right:"10%",
+  width: 230,
+  height: 200,
+  bottom:"5%"
+},
 });
