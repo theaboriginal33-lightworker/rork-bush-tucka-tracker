@@ -29,7 +29,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { supabase, supabasePublicDebugInfo } from '@/constants/supabase';
+import { supabase } from '@/constants/supabase';
 
 const PRIVACY_POLICY_URL = 'https://bushtuckatracka.com.au/privacy-policy';
 const TERMS_URL = 'https://bushtuckatracka.com.au/terms';
@@ -146,64 +146,32 @@ export default function SettingsScreen() {
     if (!user) return;
     runHeaderPulse();
     Alert.alert(
-      'Delete account?',
-      'This removes your login. Profile and other data may be deleted per your database rules.',
+      'Request Account Deletion',
+      'We will send a deletion request to our support team. Your account will be removed within 7 business days.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Send Request',
           style: 'destructive',
           onPress: () => {
-            void (async () => {
-              try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) {
-                  Alert.alert('Not signed in');
-                  return;
-                }
-                const base =
-                  supabasePublicDebugInfo.url ||
-                  (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\s+/g, '');
-                const anon = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
-                if (!base || !anon) {
-                  throw new Error('App configuration is missing.');
-                }
-                const root = base.startsWith('http') ? base : `https://${base}`;
-                const normalized = root.replace(/\/$/, '');
-                const res = await fetch(`${normalized}/auth/v1/user`, {
-                  method: 'DELETE',
-                  headers: {
-                    apikey: anon,
-                    Authorization: `Bearer ${session.access_token}`,
-                  },
-                });
-                if (!res.ok) {
-                  const body = await res.text().catch(() => '');
-                  throw new Error(body || `Request failed (${res.status})`);
-                }
-                await supabase.auth.signOut();
-                Alert.alert('Account deleted', 'You have been signed out.');
-                router.replace('/auth');
-              } catch (e) {
-                const message = e instanceof Error ? e.message : String(e);
-                Alert.alert(
-                  'Could not delete account',
-                  `${message}\n\nTry signing out or contact support.`,
-                  [
-                    { text: 'OK' },
-                    {
-                      text: 'Privacy policy',
-                      onPress: () => void openLegalUrl(PRIVACY_POLICY_URL),
-                    },
-                  ]
-                );
-              }
-            })();
+            const email = typeof user.email === 'string' ? user.email : '';
+            const subject = encodeURIComponent('Account Deletion Request');
+            const body = encodeURIComponent(
+              `Hello,\n\nI would like to request the deletion of my account.\n\nAccount Email: ${email}\n\nPlease confirm once my account has been removed.\n\nThank you.`
+            );
+            const mailtoUrl = `mailto:support@bushtuckatracka.com.au?subject=${subject}&body=${body}`;
+  
+            Linking.openURL(mailtoUrl).catch(() => {
+              Alert.alert(
+                'Could not open email',
+                'Please contact us directly at support@bushtuckatracka.com.au to request account deletion.'
+              );
+            });
           },
         },
       ]
     );
-  }, [user, runHeaderPulse, openLegalUrl]);
+  }, [user, runHeaderPulse]);
 
   const headerGlowOpacity = headerGlow.interpolate({
     inputRange: [0, 1],
@@ -343,18 +311,18 @@ export default function SettingsScreen() {
               </Pressable>
             ) : null}
 
-            {hasConfig && user ? (
-              <Pressable
-                onPress={onPressDeleteAccount}
-                style={({ pressed }) => [styles.dangerButton, pressed ? styles.dangerButtonPressed : null]}
-                testID="settings-delete-account"
-              >
-                <View style={styles.primaryButtonInner}>
-                  <Trash2 size={18} color={COLORS.error} />
-                  <Text style={styles.dangerButtonText}>Delete account</Text>
-                </View>
-              </Pressable>
-            ) : null}
+{hasConfig && user ? (
+  <Pressable
+    onPress={onPressDeleteAccount}
+    style={({ pressed }) => [styles.dangerButton, pressed ? styles.dangerButtonPressed : null]}
+    testID="settings-delete-account"
+  >
+    <View style={styles.primaryButtonInner}>
+      <Trash2 size={18} color={COLORS.error} />
+      <Text style={styles.dangerButtonText}>Request Account Deletion</Text>
+    </View>
+  </Pressable>
+) : null}
 
             {hasConfig && !isReady ? (
               <Text style={styles.hint} testID="settings-hint">
