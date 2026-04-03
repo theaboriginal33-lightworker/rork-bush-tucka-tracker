@@ -118,7 +118,9 @@ export default function PlayVideoScreen() {
               </Pressable>
             </View>
           </View>
-
+          <TouchableOpacity style={s.skipBtn} onPress={onContinueOrSkip}>
+            <Text style={s.skipText}>Skip for now</Text>
+          </TouchableOpacity>
           {/* Spacer + goanna — same pattern as goals / other onboarding */}
           <View style={{ flex: 1 }} />
           <Image
@@ -126,9 +128,7 @@ export default function PlayVideoScreen() {
             style={s.heroImage3}
             resizeMode="contain"
           />
- <TouchableOpacity style={s.skipBtn} onPress={onContinueOrSkip}>
-            <Text style={s.skipText}>Skip for now</Text>
-          </TouchableOpacity>
+ 
           {/* Bottom actions — same order as goals: primary CTA, then skip, then back */}
           {/* <TouchableOpacity style={s.btn} activeOpacity={0.85} onPress={onContinueOrSkip}>
             <Text style={s.btnText}>Continue</Text>
@@ -244,12 +244,13 @@ const s = StyleSheet.create({
   },
   skipBtn: {
     alignSelf: 'center',
-    padding: 8,
-    marginBottom: 4,
+    marginTop:'10%'
+    // padding: 8,
+  
   },
   skipText: {
-    fontSize: 13,
-    color: TEXT_HINT,
+    fontSize: 18,
+    color: GREEN_BTN,
     textDecorationLine: 'underline',
   },
   backBottomBtn: {
