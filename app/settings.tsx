@@ -7,17 +7,32 @@ import {
   Linking,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ShieldCheck, LogIn, LogOut, ExternalLink, ChevronRight, ChevronLeft } from 'lucide-react-native';
+import {
+  ShieldCheck,
+  LogIn,
+  LogOut,
+  ExternalLink,
+  ChevronRight,
+  ChevronLeft,
+  FileText,
+  Scale,
+  Trash2,
+} from 'lucide-react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { supabase, supabasePublicDebugInfo } from '@/constants/supabase';
+
+const PRIVACY_POLICY_URL = 'https://bushtuckatracka.com.au/privacy-policy';
+const TERMS_URL = 'https://bushtuckatracka.com.au/terms';
 
 function maskEmail(email: string): string {
   const at = email.indexOf('@');
@@ -107,6 +122,89 @@ export default function SettingsScreen() {
     }
   }, [runHeaderPulse]);
 
+
+
+  const openLegalUrl = useCallback(
+    async (url: string) => {
+      runHeaderPulse();
+      try {
+        const canOpen = await Linking.canOpenURL(url);
+        if (!canOpen) {
+          Alert.alert('Cannot open link', url);
+          return;
+        }
+        await Linking.openURL(url);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        Alert.alert('Could not open link', message);
+      }
+    },
+    [runHeaderPulse]
+  );
+
+  const onPressDeleteAccount = useCallback(() => {
+    if (!user) return;
+    runHeaderPulse();
+    Alert.alert(
+      'Delete account?',
+      'This removes your login. Profile and other data may be deleted per your database rules.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                  Alert.alert('Not signed in');
+                  return;
+                }
+                const base =
+                  supabasePublicDebugInfo.url ||
+                  (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\s+/g, '');
+                const anon = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+                if (!base || !anon) {
+                  throw new Error('App configuration is missing.');
+                }
+                const root = base.startsWith('http') ? base : `https://${base}`;
+                const normalized = root.replace(/\/$/, '');
+                const res = await fetch(`${normalized}/auth/v1/user`, {
+                  method: 'DELETE',
+                  headers: {
+                    apikey: anon,
+                    Authorization: `Bearer ${session.access_token}`,
+                  },
+                });
+                if (!res.ok) {
+                  const body = await res.text().catch(() => '');
+                  throw new Error(body || `Request failed (${res.status})`);
+                }
+                await supabase.auth.signOut();
+                Alert.alert('Account deleted', 'You have been signed out.');
+                router.replace('/auth');
+              } catch (e) {
+                const message = e instanceof Error ? e.message : String(e);
+                Alert.alert(
+                  'Could not delete account',
+                  `${message}\n\nTry signing out or contact support.`,
+                  [
+                    { text: 'OK' },
+                    {
+                      text: 'Privacy policy',
+                      onPress: () => void openLegalUrl(PRIVACY_POLICY_URL),
+                    },
+                  ]
+                );
+              }
+            })();
+          },
+        },
+      ]
+    );
+  }, [user, runHeaderPulse, openLegalUrl]);
+
   const headerGlowOpacity = headerGlow.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
@@ -118,18 +216,6 @@ export default function SettingsScreen() {
   });
 
   const showBusy = hasConfig && !isReady;
-
-
-   const onPressViewOnboarding = useCallback(() => {
-    try {
-router.push('/onboarding');
-     
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      Alert.alert('Navigation failed', message);
-    }
-  }, []);
-
 
   return (
     <View style={styles.root} testID="settings-root">
@@ -153,6 +239,12 @@ router.push('/onboarding');
           <View style={styles.backButton} />
         </View>
 
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.header} testID="settings-header">
           <Animated.View
             pointerEvents="none"
@@ -180,6 +272,8 @@ router.push('/onboarding');
             {authState.subtitle}
           </Text>
         </View>
+
+      
 
         <View style={styles.card} testID="settings-card">
           <View style={styles.sectionHeader}>
@@ -249,6 +343,19 @@ router.push('/onboarding');
               </Pressable>
             ) : null}
 
+            {hasConfig && user ? (
+              <Pressable
+                onPress={onPressDeleteAccount}
+                style={({ pressed }) => [styles.dangerButton, pressed ? styles.dangerButtonPressed : null]}
+                testID="settings-delete-account"
+              >
+                <View style={styles.primaryButtonInner}>
+                  <Trash2 size={18} color={COLORS.error} />
+                  <Text style={styles.dangerButtonText}>Delete account</Text>
+                </View>
+              </Pressable>
+            ) : null}
+
             {hasConfig && !isReady ? (
               <Text style={styles.hint} testID="settings-hint">
                 Checking your session…
@@ -256,16 +363,46 @@ router.push('/onboarding');
             ) : null}
           </View>
         </View>
-           <View style={{ flex: 1 }} />
-        
-                        <Image
-              source={require('../assets/images/kangaroo.png')}
-              style={styles.heroImage}
-              resizeMode="contain"
-            />
-        
 
-       
+        <View style={styles.card} testID="settings-legal-card">
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle} testID="settings-legal-section-title">
+              Legal
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
+            style={({ pressed }) => [styles.legalRow, pressed ? styles.legalRowPressed : null]}
+            testID="settings-privacy-policy"
+          >
+            <View style={styles.rowLeft}>
+              <FileText size={18} color={COLORS.textSecondary} />
+              <Text style={styles.rowText}>Privacy policy</Text>
+            </View>
+            <ChevronRight size={18} color={COLORS.textSecondary} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => void openLegalUrl(TERMS_URL)}
+            style={({ pressed }) => [styles.legalRow, pressed ? styles.legalRowPressed : null]}
+            testID="settings-terms"
+          >
+            <View style={styles.rowLeft}>
+              <Scale size={18} color={COLORS.textSecondary} />
+              <Text style={styles.rowText}>Terms of use</Text>
+            </View>
+            <ChevronRight size={18} color={COLORS.textSecondary} />
+          </Pressable>
+        </View>
+
+        <View style={{ flex: 1 }} />
+        <Image
+          source={require('../assets/images/kangaroo.png')}
+          style={styles.heroImage}
+          resizeMode="contain"
+        />
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -278,6 +415,36 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
+    flexGrow: 1,
+  },
+  playVideoBanner: {
+    marginHorizontal: 18,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(56,217,137,0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  playVideoBannerPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  playVideoBannerText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: 0.2,
   },
   topNav: {
     flexDirection: 'row',
@@ -432,6 +599,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  legalRow: {
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(7,17,11,0.35)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.16)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  legalRowPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.99 }],
   },
   kv: {
     borderRadius: 18,

@@ -17,7 +17,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: COLORS.tabBarActive,
         tabBarInactiveTintColor: COLORS.tabBarInactive,
         tabBarStyle: {
-          backgroundColor: 'rgba(7,17,11,0.85)',
+          backgroundColor: COLORS.overlay,
           borderTopColor: COLORS.border,
           borderTopWidth: StyleSheet.hairlineWidth,
           ...Platform.select({
@@ -125,7 +125,7 @@ export default function TabLayout() {
 const tabStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#07110B',
+    backgroundColor: COLORS.background,
   },
 });
 

@@ -61,7 +61,8 @@
           "locationWhenInUsePermission": "Allow Bush Tucka Tracker to use your location to show nearby plant sightings."
         }
       ],
-      "./plugins/withReactNativeMaps"
+      "./plugins/withReactNativeMaps",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

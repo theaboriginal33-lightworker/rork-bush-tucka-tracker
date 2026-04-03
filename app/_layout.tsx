@@ -24,12 +24,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const inAuthGroup = segments?.[0] === 'auth';
     const inOnboarding = segments?.[0] === 'onboarding';
+    // Allow revisiting intro video from Settings after onboarding is done (expo-video test / preview).
+    const isPlayVideoScreen = segments?.[1] === 'playvideo';
 
     if (!isReady) return; 
     if (!hasConfig) return;
 
+    // Allow onboarding without a session so phone OTP can create the auth session on verify.
     if (!session) {
-      if (!inAuthGroup) router.replace('/auth');
+      if (!inAuthGroup && !inOnboarding) router.replace('/auth');
       return;
     }
 
@@ -40,7 +43,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (onboardingCompleted && (inAuthGroup || inOnboarding)) {
+    if (onboardingCompleted && (inAuthGroup || (inOnboarding && !isPlayVideoScreen))) {
       router.replace('/');
     }
 

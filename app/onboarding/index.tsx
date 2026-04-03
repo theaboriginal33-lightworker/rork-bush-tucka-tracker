@@ -1,4 +1,3 @@
-
 import {
   View,
   Text,
@@ -7,14 +6,24 @@ import {
   Dimensions,
   Image,
   ImageBackground,
+  Platform,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS } from '@/constants/colors';
+import { useAuth } from '@/app/providers/AuthProvider';
 
 const { width, height } = Dimensions.get('window');
-const BRAND_GREEN = '#3AE081';
+const BRAND_GREEN = COLORS.primary;
+
+const CTA_WIDTH = Math.min(width * 0.88, 380);
+const CTA_GRADIENT = ['#38B48D', '#3ABF88', '#3CD673'] as const;
+const CTA_GRADIENT_LOCATIONS = [0, 0.48, 1] as const;
 
 export default function IntroScreen() {
+  const { session, signOut } = useAuth();
+
   return (
     <ImageBackground
       source={require('../../assets/images/Dark.jpg')}
@@ -52,29 +61,49 @@ export default function IntroScreen() {
 
       <View style={{ flex: 1 }} />
 
-      {/* ── Button ── */}
-    {/* ── Button ── */}
-<View style={styles.btnSection}>
-  <View style={styles.ctaWrapper}>
-    
-    {/* ::after glow - CSS se convert */}
-    <View style={styles.glowAfter} />
-    
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={() => router.push('/onboarding/collect')}
-    >
-      <LinearGradient
-        colors={['#3AE081', '#3AE081']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.ctaBtn}
-      >
-        <Text style={styles.ctaBtnText}>BEGIN YOUR JOURNEY</Text>
-      </LinearGradient>
-    </TouchableOpacity>
-  </View>
-</View>
+      {/* ── Primary CTA: normal rounded button + linear gradient ── */}
+      <View style={styles.btnSection}>
+        <View style={styles.ctaOuter}>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => router.push('/onboarding/playvideo' as never)}
+            style={styles.ctaTouchable}
+          >
+            <LinearGradient
+              colors={[...CTA_GRADIENT]}
+              locations={[...CTA_GRADIENT_LOCATIONS]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.ctaGradient}
+            >
+              <Text style={styles.ctaBtnText}>Begin your journey</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+        {/* {session ? (
+          <TouchableOpacity
+            style={styles.signOutRow}
+            onPress={() => {
+              Alert.alert('Sign out?', 'You can log in again or use another account.', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Sign out',
+                  style: 'destructive',
+                  onPress: () => {
+                    void signOut().catch((e: unknown) => {
+                      const message = e instanceof Error ? e.message : String(e);
+                      Alert.alert('Could not sign out', message);
+                    });
+                  },
+                },
+              ]);
+            }}
+            hitSlop={{ top: 12, bottom: 12, left: 24, right: 24 }}
+          >
+            <Text style={styles.signOutText}>Sign out</Text>
+          </TouchableOpacity>
+        ) : null} */}
+      </View>
     </ImageBackground>
   );
 }
@@ -91,7 +120,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 34,
     fontWeight: '800',
-    color: '#ffffff',
+    color: COLORS.white,
     textAlign: 'center',
     lineHeight: 46,
   },
@@ -115,40 +144,58 @@ const styles = StyleSheet.create({
   },
   quoteText: {
     fontSize: 14,
-    color: '#d0d0d0',
+    color: 'rgba(234,246,238,0.70)',
     lineHeight: 24,
     textAlign: 'center',
   },
   btnSection: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 48 : 32,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom:"20%"
+  },
+  ctaOuter: {
+    width: CTA_WIDTH,
+    maxWidth: '100%',
+    borderRadius: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  ctaTouchable: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  ctaGradient: {
+    paddingVertical: 16,
     paddingHorizontal: 24,
-    paddingBottom: 90,
     alignItems: 'center',
-  },
-  ctaWrapper: {
-    position: 'relative',
-  },
-  glow: {
-    position: 'absolute',
-    bottom: -25,
-    left: 40,
-    right: 10,
-    height: 60,
-    backgroundColor: '#49ca83',
-    borderRadius: 50,
-    opacity: 0.5,
-    transform: [{ scaleX: 1.2 }],
-  },
-  
-  ctaBtn: {
-    borderRadius: 50,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
   },
   ctaBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#000',
-    letterSpacing: 1,
+    color: '#06210F',
+    letterSpacing: 0.2,
+  },
+  signOutRow: {
+    marginTop: 8,
+    paddingBottom: 8,
+    alignItems: 'center',
+  },
+  signOutText: {
+    fontSize: 14,
+    color: 'rgba(234,246,238,0.55)',
+    textDecorationLine: 'underline',
   },
 });

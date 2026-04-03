@@ -7,24 +7,27 @@ import {
 import { router } from 'expo-router';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { supabase } from '@/constants/supabase';
-
-
+import { COLORS } from '@/constants/colors';
 
 // ── Palette ───────────────────────────────────────────────────
-const BG_DEEP    = '#041a14';
-const CARD_BG    = '#0d1f18';
-const INPUT_BG   = '#0a1a13';
-const GREEN      = '#3aad7e';
-const GREEN_BTN  = '#3db87f';
-const TEXT_WHITE = '#ffffff';
-const TEXT_MUTED = '#5a8a72';
-const TEXT_HINT  = '#3a6650';
-const BORDER     = '#163326';
+const BG_DEEP = COLORS.background;
+const CARD_BG = COLORS.card;
+const INPUT_BG = COLORS.surface;
+const GREEN = COLORS.primary;
+const GREEN_BTN = COLORS.secondary;
+const TEXT_WHITE = COLORS.white;
+const TEXT_MUTED = COLORS.textSecondary;
+const TEXT_HINT = COLORS.textHint;
+const BORDER = COLORS.border;
 
-type Step = 'phone' | 'otp' | 'name' | 'email' | 'discovery';
-const STEPS: Step[] = ['phone', 'otp', 'name', 'email', 'discovery'];
+type Step = 'phone' | 'otp' | 'name' | 'discovery';
+const STEPS: Step[] = ['phone', 'otp', 'name', 'discovery'];
 
-const STATIC_OTP = '111111'; // 🔒 Dev-only
+/** `true` = no SMS, accept STATIC_OTP only (needs existing login for profile save). `false` = Supabase SMS OTP. */
+const USE_STATIC_OTP = true;
+const STATIC_OTP = '111111';
+
+type OtpVerifyType = 'sms' | 'phone_change';
 
 const DISCOVERY_OPTIONS = [
   'Searching the App Store',
@@ -37,32 +40,137 @@ const DISCOVERY_OPTIONS = [
 ];
 
 // ── Supabase helpers ──────────────────────────────────────────
+/** Australian mobile without leading 0 (9 digits), e.g. 412345678 → +61412345678 */
 function toE164(digits: string) {
   return `+61${digits}`;
+}
+
+function mapAuthError(err: unknown): string {
+  const msg =
+    err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+      ? (err as { message: string }).message
+      : String(err);
+  const lower = msg.toLowerCase();
+  if (lower.includes('rate') || lower.includes('too many')) {
+    return 'Too many attempts. Wait a minute and try again.';
+  }
+  return msg;
+}
+
+const OTP_SEND_TIMEOUT_MS = 60_000;
+const OTP_VERIFY_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(id);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(id);
+        reject(e);
+      }
+    );
+  });
+}
+
+async function requestPhoneOtp(phoneDigits: string): Promise<{ e164: string; verifyType: OtpVerifyType }> {
+  const e164 = toE164(phoneDigits);
+  const { data: { session } } = await withTimeout(
+    supabase.auth.getSession(),
+    15_000,
+    'Could not reach Supabase. Check your internet connection and try again.'
+  );
+
+  if (session?.user) {
+    const { error } = await withTimeout(
+      supabase.auth.updateUser({ phone: e164 }),
+      OTP_SEND_TIMEOUT_MS,
+      'Request timed out while updating your phone. Check your connection and try again.'
+    );
+    if (error) throw new Error(mapAuthError(error));
+    return { e164, verifyType: 'phone_change' };
+  }
+
+  const { error } = await withTimeout(
+    supabase.auth.signInWithOtp({
+      phone: e164,
+      options: { shouldCreateUser: true },
+    }),
+    OTP_SEND_TIMEOUT_MS,
+    'Request timed out while sending the code. Check your connection, VPN, or try again.'
+  );
+  if (error) throw new Error(mapAuthError(error));
+  return { e164, verifyType: 'sms' };
+}
+
+async function verifyPhoneOtp(phone: string, token: string, verifyType: OtpVerifyType) {
+  const { error } = await withTimeout(
+    supabase.auth.verifyOtp({
+      phone,
+      token,
+      type: verifyType,
+    }),
+    OTP_VERIFY_TIMEOUT_MS,
+    'Verification timed out. Check your connection and try again.'
+  );
+  if (error) throw new Error(mapAuthError(error));
+}
+
+const PHONE_TAKEN_MESSAGE =
+  'This phone number is already on another account. Log in with that account, or use a different number.';
+
+function isPhoneUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; message?: string };
+  const msg = typeof e?.message === 'string' ? e.message : '';
+  return (
+    e?.code === '23505' ||
+    msg.includes('profiles_phone_unique') ||
+    msg.includes('duplicate key') ||
+    msg.includes('unique constraint')
+  );
 }
 
 async function upsertProfile(payload: {
   phone?: string;
   verified?: boolean;
   first_name?: string;
-  email?: string;
   discovery?: string;
 }) {
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("User not authenticated");
+  if (!user) throw new Error('User not authenticated');
+
+  if (payload.phone) {
+    const { data: rowWithPhone } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('phone', payload.phone)
+      .maybeSingle();
+
+    if (rowWithPhone && rowWithPhone.id !== user.id) {
+      throw new Error(PHONE_TAKEN_MESSAGE);
+    }
+  }
 
   const { error } = await supabase
     .from('profiles')
     .upsert(
       {
-        id: user.id,   
+        id: user.id,
         ...payload,
       },
       { onConflict: 'id' }
     );
 
-  if (error) throw error;
+  if (error) {
+    if (isPhoneUniqueViolation(error)) {
+      throw new Error(PHONE_TAKEN_MESSAGE);
+    }
+    throw error;
+  }
 }
 
 // ── Progress dots ─────────────────────────────────────────────
@@ -77,7 +185,7 @@ function ProgressDots({ current }: { current: number }) {
 }
 const p = StyleSheet.create({
   wrap: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#163326' },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: BORDER },
   dotActive: { width: 20, backgroundColor: GREEN },
   dotDone: { backgroundColor: GREEN, opacity: 0.45 },
 });
@@ -108,14 +216,6 @@ function PersonIcon() {
     </Svg>
   );
 }
-function EmailIcon() {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Rect x={3} y={5} width={18} height={14} rx={2} stroke={TEXT_HINT} strokeWidth={1.5} />
-      <Path d="M3 7l9 6 9-6" stroke={TEXT_HINT} strokeWidth={1.5} strokeLinecap="round" />
-    </Svg>
-  );
-}
 function SearchIcon() {
   return (
     <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
@@ -127,7 +227,7 @@ function SearchIcon() {
 function CheckIcon() {
   return (
     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-      <Path d="M5 13l4 4L19 7" stroke="#000" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M5 13l4 4L19 7" stroke={COLORS.black} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -138,14 +238,14 @@ export default function CollectScreen() {
   const [phone, setPhone]         = useState('');
   const [otp, setOtp]             = useState('');
   const [name, setName]           = useState('');
-  const [email, setEmail]         = useState('');
   const [discovery, setDiscovery] = useState('');
   const [loading, setLoading]     = useState(false);
+  const [pendingE164, setPendingE164] = useState('');
+  const [otpVerifyType, setOtpVerifyType] = useState<OtpVerifyType>('sms');
 
   const phoneRef = useRef<TextInput>(null);
   const otpRef   = useRef<TextInput>(null);
   const nameRef  = useRef<TextInput>(null);
-  const emailRef = useRef<TextInput>(null);
 
   const stepIndex   = STEPS.indexOf(step);
   const phoneDigits = phone.replace(/\D/g, '');
@@ -157,6 +257,8 @@ export default function CollectScreen() {
 
   async function goNext() {
     setLoading(true);
+    // One frame so "Please wait…" can paint before the network call.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     try {
       await handleStepSubmit();
     } catch (err: any) {
@@ -169,37 +271,47 @@ export default function CollectScreen() {
   async function handleStepSubmit() {
     switch (step) {
 
-      // PHONE → sirf agle step pe jao, koi DB call nahi
-      case 'phone':
+      // PHONE → static OTP: next step only. Real SMS: Supabase sends OTP.
+      case 'phone': {
+        const e164 = toE164(phoneDigits);
+        setPendingE164(e164);
+        setOtp('');
+        if (USE_STATIC_OTP) {
+          setStep('otp');
+          break;
+        }
+        const { e164: sentE164, verifyType } = await requestPhoneOtp(phoneDigits);
+        setPendingE164(sentE164);
+        setOtpVerifyType(verifyType);
         setStep('otp');
         break;
+      }
 
-      // OTP → 111111 check → profiles mein insert
-      case 'otp':
-        if (otp !== STATIC_OTP) {
-          throw new Error('Wrong code. Enter 111111 to continue.');
+      // OTP → static code or Supabase verifyOtp, then profile
+      case 'otp': {
+        if (!pendingE164) {
+          throw new Error('Missing phone. Go back and request a code again.');
+        }
+        if (USE_STATIC_OTP) {
+          if (otp !== STATIC_OTP) {
+            throw new Error(`Wrong code. Enter ${STATIC_OTP} to continue.`);
+          }
+        } else {
+          await verifyPhoneOtp(pendingE164, otp, otpVerifyType);
         }
         await upsertProfile({
-          phone:    toE164(phoneDigits),
+          phone: pendingE164,
           verified: true,
         });
         setStep('name');
         break;
+      }
 
-      // NAME → first_name save
+      // NAME → first_name save → discovery
       case 'name':
         await upsertProfile({
-          phone:      toE164(phoneDigits),
+          phone: pendingE164 || toE164(phoneDigits),
           first_name: name.trim(),
-        });
-        setStep('email');
-        break;
-
-      // EMAIL → email save (skip = undefined)
-      case 'email':
-        await upsertProfile({
-          phone: toE164(phoneDigits),
-          email: email.trim() || undefined,
         });
         setStep('discovery');
         break;
@@ -207,11 +319,31 @@ export default function CollectScreen() {
       // DISCOVERY → save → agle screen
       case 'discovery':
         await upsertProfile({
-          phone:     toE164(phoneDigits),
+          phone: pendingE164 || toE164(phoneDigits),
           discovery: discovery,
         });
         router.push('/onboarding/goals');
         break;
+    }
+  }
+
+  async function resendCode() {
+    if (phoneDigits.length < 9) return;
+    if (USE_STATIC_OTP) {
+      setOtp('');
+      return;
+    }
+    setLoading(true);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    try {
+      const { e164, verifyType } = await requestPhoneOtp(phoneDigits);
+      setPendingE164(e164);
+      setOtpVerifyType(verifyType);
+      setOtp('');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not resend code.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -261,7 +393,7 @@ export default function CollectScreen() {
           value={phone}
           onChangeText={(t) => setPhone(formatPhone(t))}
           keyboardType="phone-pad"
-          placeholder="8123 4567"
+          placeholder="412 345 678"
           placeholderTextColor={TEXT_HINT}
           maxLength={11}
           autoFocus
@@ -295,6 +427,11 @@ export default function CollectScreen() {
             <View style={s.stepWrap}>
               <Text style={s.heading}>Confirmation code</Text>
               <Text style={s.subheading}>Sent to +61 {phone}</Text>
+              <Text style={s.smsHint}>
+                {USE_STATIC_OTP
+                  ? `Enter ${STATIC_OTP} to continue (static code, no SMS).`
+                  : 'Enter the 6-digit code from your SMS.'}
+              </Text>
               <View style={s.card}>
                 <View style={s.inputRow}>
                   <LockIcon />
@@ -311,7 +448,7 @@ export default function CollectScreen() {
                   />
                 </View>
               </View>
-              <TouchableOpacity style={s.linkRow} onPress={() => setOtp('')}>
+              <TouchableOpacity style={s.linkRow} onPress={resendCode} disabled={loading}>
                 <Text style={s.linkMuted}>Didn't get it? </Text>
                 <Text style={s.linkGreen}>Resend code</Text>
               </TouchableOpacity>
@@ -368,51 +505,6 @@ export default function CollectScreen() {
                 onPress={goNext}
               >
                 <Text style={[s.btnText, !name.trim() && s.btnTextDisabled]}>
-                  {loading ? 'Saving…' : 'Continue'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ── EMAIL ── */}
-          {step === 'email' && (
-            <View style={s.stepWrap}>
-              <Text style={s.heading}>What's your email?</Text>
-              <Text style={s.subheading}>For tips & plant updates 🌿</Text>
-              <View style={s.card}>
-                <View style={s.inputRow}>
-                  <EmailIcon />
-                  <TextInput
-                    ref={emailRef}
-                    style={[s.input, { flex: 1 }]}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="example@email.com"
-                    placeholderTextColor={TEXT_HINT}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoFocus
-                    returnKeyType="done"
-                  />
-                </View>
-              </View>
-              <TouchableOpacity style={s.linkRow} onPress={goNext}>
-                <Text style={s.linkMuted}>Skip for now</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1 }} />
-
-                <Image
-      source={require('../../assets/images/kangaroo.png')}
-      style={s.heroImage}
-      resizeMode="contain"
-    />
-
-              <TouchableOpacity
-                style={[s.btn, (!email.includes('@') || loading) && s.btnDisabled]}
-                disabled={!email.includes('@') || loading}
-                onPress={goNext}
-              >
-                <Text style={[s.btnText, !email.includes('@') && s.btnTextDisabled]}>
                   {loading ? 'Saving…' : 'Continue'}
                 </Text>
               </TouchableOpacity>
@@ -506,9 +598,9 @@ stepWrap1: { flex: 1, paddingHorizontal: 24, paddingTop: 16, minHeight: 500 },
     width: 60,
     height: 60,
     borderRadius: 18,
-    backgroundColor: 'rgba(58,173,126,0.12)',
+    backgroundColor: 'rgba(56,217,137,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(58,173,126,0.2)',
+    borderColor: COLORS.statusBorder,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 28,
@@ -526,10 +618,19 @@ stepWrap1: { flex: 1, paddingHorizontal: 24, paddingTop: 16, minHeight: 500 },
   },
   subheading: {
     fontSize: 14,
-    color: 'rgba(234,246,238,0.74)',
+    color: COLORS.textMutedStrong,
     lineHeight: 21,
     marginBottom: 28,
     textAlign: 'center',
+  },
+  smsHint: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginTop: -20,
+    marginBottom: 16,
+    lineHeight: 18,
+    paddingHorizontal: 8,
   },
 
   card: {
@@ -574,7 +675,7 @@ stepWrap1: { flex: 1, paddingHorizontal: 24, paddingTop: 16, minHeight: 500 },
     backgroundColor: INPUT_BG,
   },
   optionRowBorder: { borderBottomWidth: 1, borderBottomColor: BORDER },
-  optionRowActive: { backgroundColor: 'rgba(58,173,126,0.08)' },
+  optionRowActive: { backgroundColor: 'rgba(56,217,137,0.08)' },
   optionText: { flex: 1, fontSize: 14, color: TEXT_MUTED },
   optionTextActive: { color: TEXT_WHITE, fontWeight: '500' },
   checkCircle: {
@@ -600,7 +701,7 @@ stepWrap1: { flex: 1, paddingHorizontal: 24, paddingTop: 16, minHeight: 500 },
     width: '100%',
   },
   btnDisabled: {
-    backgroundColor: 'rgba(58,173,126,0.1)',
+    backgroundColor: COLORS.statusSoft,
     borderWidth: 1,
     borderColor: BORDER,
   },
