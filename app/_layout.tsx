@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router, usePathname, useSegments } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CookbookProvider } from "@/app/providers/CookbookProvider";
 import { LearnImageProvider } from "@/app/providers/LearnImageProvider";
@@ -36,12 +37,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (onboardingCompleted === null) return; 
+   if (onboardingCompleted === null && !inOnboarding) {
+  router.replace('/onboarding');
+  return;
+}
 
-    if (!onboardingCompleted && !inOnboarding) {
-      router.replace('/onboarding');
-      return;
-    }
+if (onboardingCompleted === false && !inOnboarding) {
+  router.replace('/onboarding');
+  return;
+}
 
     if (onboardingCompleted && (inAuthGroup || (inOnboarding && !isPlayVideoScreen))) {
       router.replace('/');
@@ -68,6 +72,7 @@ function RootLayoutNav() {
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="scan/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="paywall" options={{ headerShown: false }} />
       <Stack.Screen name="map" options={{ headerShown: false }} />
       <Stack.Screen name="pocket-guides/cultural-respect-on-country" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="pocket-guides/animal-care-and-share" options={{ headerShown: false, presentation: 'modal' }} />
@@ -80,6 +85,21 @@ function RootLayoutNav() {
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
   console.log('[RootLayout] render');
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+
+   const iosApiKey = 'appl_QpqHbDZfeZExbXsXsPYUXlpPGOZ';
+    const androidApiKey = 'test_MMHuIjBwrJjpTreIYTwyLbBWXfW';
+
+    if (Platform.OS === 'ios') {
+      Purchases.configure({ apiKey: iosApiKey });
+    } else if (Platform.OS === 'android') {
+      Purchases.configure({ apiKey: androidApiKey });
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

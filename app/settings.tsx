@@ -24,6 +24,7 @@ import {
   FileText,
   Scale,
   Trash2,
+  Crown
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -54,8 +55,8 @@ export default function SettingsScreen() {
     if (!user) return { title: 'Not signed in', subtitle: 'Log in to sync your collections across devices.' };
 
     const email = typeof user.email === 'string' ? user.email : null;
-    if (!email) return { title: 'Signed in', subtitle: 'Your account is active.' };
-    return { title: 'Signed in', subtitle: maskEmail(email) };
+if (!email) return { title: 'Signed in', subtitle: 'Your account is active.' };
+return { title: 'Signed in', subtitle: email };
   }, [hasConfig, isReady, user]);
 
   const runHeaderPulse = useCallback(() => {
@@ -279,7 +280,7 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.kvRow}>
                 <Text style={styles.kvKey}>Email</Text>
-                <Text style={styles.kvValue}>{typeof user.email === 'string' ? user.email : '—'}</Text>
+              <Text style={styles.kvValue}>{typeof user.email === 'string' ? user.email : '—'}</Text>
               </View>
             </View>
           ) : null}
@@ -339,6 +340,27 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
+          <View style={styles.card}>
+  <Pressable
+    onPress={() => router.push('/paywall/paywall')}
+    style={({ pressed }) => [
+      styles.primaryButton,
+      pressed ? styles.primaryButtonPressed : null,
+      { backgroundColor: '#4ade80' }
+    ]}
+  >
+    <View style={styles.primaryButtonInner}>
+      <Crown size={18} color="#051a05" />
+      <Text style={[styles.primaryButtonText, { color: '#051a05' }]}>
+        Upgrade to Premium
+      </Text>
+    </View>
+  </Pressable>
+  <Text style={[styles.hint, { marginTop: 8 }]}>
+    Unlimited identifications · Tucka Guide · Offline maps
+  </Text>
+</View>
+
           <Pressable
             onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
             style={({ pressed }) => [styles.legalRow, pressed ? styles.legalRowPressed : null]}
@@ -363,6 +385,9 @@ export default function SettingsScreen() {
             <ChevronRight size={18} color={COLORS.textSecondary} />
           </Pressable>
         </View>
+
+        {/* Upgrade card */}
+
 
         <View style={{ flex: 1 }} />
         <Image

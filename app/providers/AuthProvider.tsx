@@ -36,12 +36,20 @@ export const [AuthProvider, useAuth] = createContextHook<AuthState>(() => {
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null); 
    
 async function fetchOnboardingStatus(userId: string) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('onboarding_completed')
     .eq('id', userId)
-    .single();
-  setOnboardingCompleted(data?.onboarding_completed ?? false); 
+    .maybeSingle();
+  console.log('[fetchOnboarding]', { userId, data, error });
+  
+  if (error) {
+    setOnboardingCompleted(null);
+    return;
+  }
+  
+  // ✅ Fix: sirf actual value use karo
+  setOnboardingCompleted(data?.onboarding_completed ?? null);
 }
   // useEffect(() => {
   //   let isMounted = true;
@@ -111,6 +119,14 @@ async function fetchOnboardingStatus(userId: string) {
         return;
       }
 
+      // USER_UPDATED fires when phone is linked — don't re-fetch onboarding
+      // as it would interrupt the onboarding flow mid-step
+      if (event === 'USER_UPDATED') {
+        setSession(nextSession);
+        setIsReady(true);
+        return;
+      }
+
       setSession(nextSession);
       if (nextSession?.user) {
         await fetchOnboardingStatus(nextSession.user.id);
@@ -165,8 +181,7 @@ async function fetchOnboardingStatus(userId: string) {
       if (error) throw error;
 
       console.log('[auth] signInWithPassword success', { hasSession: Boolean(data?.session) });
-      setSession(data?.session ?? null);
-       if (data?.session?.user) await fetchOnboardingStatus(data.session.user.id);
+      // onAuthStateChange handles session + onboarding fetch
   
     },
     onError: (e) => {

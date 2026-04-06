@@ -26,10 +26,12 @@ const BORDER         = '#163326';
 
 async function upsertProfile(payload: { onboarding_completed?: boolean }) {
   const { data: { user } } = await supabase.auth.getUser();
+  console.log('[upsert] user', user?.id);
   if (!user) throw new Error("User not authenticated");
   const { error } = await supabase
     .from('profiles')
     .upsert({ id: user.id, ...payload }, { onConflict: 'id' });
+  console.log('[upsert] result', { error });
   if (error) throw error;
 }
 
@@ -150,9 +152,15 @@ async function handleContinue() {
     setAttemptedSkip(true);
     return;
   }
-  await upsertProfile({ onboarding_completed: true });
-  await refreshOnboarding(); 
-  router.replace('/');
+  try {
+    await upsertProfile({ onboarding_completed: true });
+    console.log('[onboarding] upsert success');
+    await refreshOnboarding();
+    // AuthGate in _layout.tsx will automatically navigate to '/' once
+    // onboardingCompleted becomes true — no manual replace needed
+  } catch (e) {
+    console.log('[onboarding] upsert error', e);
+  }
 }
   
   return (
