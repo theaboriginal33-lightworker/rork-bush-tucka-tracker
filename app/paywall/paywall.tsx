@@ -7,68 +7,80 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import Svg, { Path } from "react-native-svg";
+import { useState } from "react";
 import { usePurchases } from "@/hooks/usePurchases";
 
-// ─── Check Icon ──────────────────────────────────────────────────────────────
-const CheckIcon = () => (
-  <View style={styles.checkCircle}>
-    <Text style={styles.checkMark}>✓</Text>
-  </View>
-);
+type PlanKey = "monthly" | "annual" | "lifetime";
 
-// ─── Forest Hero ─────────────────────────────────────────────────────────────
-const ForestHero = () => (
-  <View style={styles.heroWrapper}>
-    <LinearGradient
-      colors={["#3d6b52", "#2a4a38", "#1a3a1a", "#0d2010", "#111"]}
-      style={StyleSheet.absoluteFill}
-    />
-    <Svg
-      viewBox="0 0 360 220"
-      width="100%"
-      height="100%"
-      style={StyleSheet.absoluteFill}
-    >
-      <Path
-        d="M0 160 L60 90 L120 130 L180 70 L240 110 L300 60 L360 100 L360 220 L0 220Z"
-        fill="#1a3020"
-        opacity={0.7}
-      />
-      <Path
-        d="M-20 220 L10 120 L30 145 L55 100 L75 130 L100 85 L120 115 L145 75 L165 105 L190 65 L210 100 L235 70 L255 105 L280 80 L300 110 L325 75 L345 105 L380 80 L380 220Z"
-        fill="#0d1f0d"
-      />
-      <Path
-        d="M-10 220 L20 140 L35 165 L55 120 L70 150 L90 105 L110 140 L130 100 L155 135 L175 90 L200 130 L225 95 L250 135 L275 100 L300 140 L325 110 L345 145 L370 115 L380 220Z"
-        fill="#090f09"
-      />
-    </Svg>
-    <LinearGradient
-      colors={["transparent", "#111"]}
-      style={[StyleSheet.absoluteFill, { top: "55%" }]}
-    />
-  </View>
-);
+const GREEN = "#4ade80";
+const GOLD = "#f59e0b";
+const BG = "#0d1a0d";
 
-// ─── Main Screen ─────────────────────────────────────────────────────────────
+function RadioButton({ selected, color = GREEN }: { selected: boolean; color?: string }) {
+  return (
+    <View style={[styles.radio, { borderColor: selected ? color : "#555" }]}>
+      {selected && <View style={[styles.radioDot, { backgroundColor: color }]} />}
+    </View>
+  );
+}
+
+function CheckItem({ text, color = GREEN }: { text: string; color?: string }) {
+  return (
+    <View style={styles.checkRow}>
+      <Text style={[styles.checkIcon, { color }]}>✓</Text>
+      <Text style={styles.checkText}>{text}</Text>
+    </View>
+  );
+}
+
 export default function PaywallScreen() {
   const router = useRouter();
-  const { purchasing, purchaseMonthly, restorePurchases } = usePurchases();
+  const {
+    purchasing,
+    monthlyPackage,
+    annualPackage,
+    lifetimePackage,
+    purchaseMonthly,
+    purchaseAnnual,
+    purchaseLifetime,
+    restorePurchases,
+  } = usePurchases();
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>("annual");
+
+  const annualPrice = annualPackage?.product.priceString ?? "$79";
+  const monthlyPrice = monthlyPackage?.product.priceString ?? "$9.99";
+  const lifetimePrice = lifetimePackage?.product.priceString ?? "$199";
+
+  const selectedPackage =
+    selectedPlan === "monthly" ? monthlyPackage
+    : selectedPlan === "annual" ? annualPackage
+    : lifetimePackage;
 
   const handlePurchase = async () => {
+    if (!selectedPackage) {
+      Alert.alert(
+        "Product Not Loaded",
+        "This product couldn't be loaded. Make sure you're signed into a Sandbox account."
+      );
+      return;
+    }
     try {
-      const success = await purchaseMonthly();
+      let success = false;
+      if (selectedPlan === "monthly") success = await purchaseMonthly();
+      else if (selectedPlan === "annual") success = await purchaseAnnual();
+      else success = await purchaseLifetime();
+
       if (success) {
         Alert.alert("Welcome!", "You now have full access.", [
           { text: "Let's go!", onPress: () => router.back() },
         ]);
       }
-    } catch {
-      Alert.alert("Purchase Failed", "Something went wrong. Please try again.");
+    } catch (e: any) {
+      Alert.alert("Purchase Failed", e?.message ?? "Something went wrong. Please try again.");
     }
   };
 
@@ -77,9 +89,7 @@ export default function PaywallScreen() {
       const success = await restorePurchases();
       Alert.alert(
         success ? "Restored!" : "No Purchases Found",
-        success
-          ? "Your subscription has been restored."
-          : "No active subscriptions found."
+        success ? "Your subscription has been restored." : "No active subscriptions found."
       );
       if (success) router.back();
     } catch {
@@ -94,9 +104,17 @@ export default function PaywallScreen() {
         bounces={false}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero ── */}
-        <View>
-          <ForestHero />
+        {/* ── Hero Image ── */}
+        <View style={styles.heroContainer}>
+          <Image
+            source={require("@/assets/images/paywallbackground.png")}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+          <LinearGradient
+            colors={["transparent", BG]}
+            style={[StyleSheet.absoluteFill, { top: "45%" }]}
+          />
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.closeBtn}
@@ -108,70 +126,121 @@ export default function PaywallScreen() {
 
         {/* ── Content ── */}
         <View style={styles.content}>
-
-          {/* Headline */}
-          <Text style={styles.headline}>
-            Unlock the Full Bush{"\n"}Tucka Experience
-          </Text>
+          <Text style={styles.headline}>Unlock the Full Bush Tucka Experience</Text>
           <Text style={styles.subtext}>
-            Join our community to get unlimited plant identifications, full
-            access to the deep-dive Tucka Guide, and premium mapping features.
+            Unlimited plant identifications, full access to the Tucka Guide, and 60,000 years of Culturally Verified knowledge.
           </Text>
 
-          {/* Monthly plan card */}
-          <View style={styles.planCard}>
-            <View style={styles.planHeader}>
-              <View>
-                <Text style={styles.planTitle}>Monthly Plan</Text>
-                <View style={styles.priceRow}>
-                  <Text style={styles.price}>$4.99</Text>
-                  <Text style={styles.pricePer}> / month</Text>
-                </View>
-                <Text style={styles.cancelLabel}>Cancel anytime</Text>
+          {/* ── Annual — BEST VALUE ── */}
+          <View style={styles.bestValueWrapper}>
+            <View style={styles.bestValueBadge}>
+              <Text style={styles.bestValueText}>BEST VALUE</Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.planCard,
+                styles.planCardAnnual,
+                selectedPlan === "annual" && styles.planCardAnnualSelected,
+              ]}
+              onPress={() => setSelectedPlan("annual")}
+              activeOpacity={0.85}
+            >
+              {/* Radio top-right */}
+              <View style={styles.radioAbsolute}>
+                <RadioButton selected={selectedPlan === "annual"} />
               </View>
-              <View style={styles.greenDot} />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.features}>
-              {[
-                "Unlimited plant identifications",
-                "Full Tucka Guide access",
-                "Premium offline mapping",
-                "Community access",
-              ].map((f) => (
-                <View key={f} style={styles.featureRow}>
-                  <CheckIcon />
-                  <Text style={styles.featureText}>{f}</Text>
+              {/* Two-column body */}
+              <View style={styles.cardBody}>
+                <View style={styles.cardLeft}>
+                  <Text style={styles.planName}>Annual</Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.planPrice}>{annualPrice}</Text>
+                    <Text style={styles.planPer}> / year</Text>
+                  </View>
+                  <Text style={styles.savingLabel}>Save 34% vs monthly</Text>
                 </View>
-              ))}
-            </View>
+                <View style={styles.cardRight}>
+                  <CheckItem text="Unlimited plant identifications" />
+                  <CheckItem text="Full Tucka Guide access" />
+                  <CheckItem text="Priority access to new plant additions" />
+                </View>
+              </View>
+            </TouchableOpacity>
           </View>
 
-          {/* CTA */}
+          {/* ── Monthly ── */}
           <TouchableOpacity
-            style={styles.ctaBtn}
+            style={[
+              styles.planCard,
+              selectedPlan === "monthly" && styles.planCardMonthlySelected,
+            ]}
+            onPress={() => setSelectedPlan("monthly")}
+            activeOpacity={0.85}
+          >
+            <View style={styles.radioAbsolute}>
+              <RadioButton selected={selectedPlan === "monthly"} />
+            </View>
+            <View style={styles.cardBodySimple}>
+              <Text style={styles.planName}>Monthly</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.planPrice}>{monthlyPrice}</Text>
+                <Text style={styles.planPer}> / month</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* ── Elder Tier — Lifetime ── */}
+          <TouchableOpacity
+            style={[
+              styles.planCard,
+              styles.planCardLifetime,
+              selectedPlan === "lifetime" && styles.planCardLifetimeSelected,
+            ]}
+            onPress={() => setSelectedPlan("lifetime")}
+            activeOpacity={0.85}
+          >
+            <View style={styles.radioAbsolute}>
+              <RadioButton selected={selectedPlan === "lifetime"} color={GOLD} />
+            </View>
+            <View style={styles.cardBody}>
+              <View style={styles.cardLeft}>
+                <Text style={[styles.planName, { color: GOLD }]}>Elder Tier — Lifetime</Text>
+                <View style={styles.priceRow}>
+                  <Text style={[styles.planPrice, { color: GOLD }]}>{lifetimePrice}</Text>
+                  <Text style={[styles.planPer, { color: "#c8860a" }]}> once</Text>
+                </View>
+                <Text style={styles.lifetimeDesc}>
+                  Every future update. Forever.{"\n"}Never pay again.
+                </Text>
+              </View>
+              <View style={styles.cardRight}>
+                <CheckItem text="Lifetime access" color={GOLD} />
+                <CheckItem text="Every update included" color={GOLD} />
+                <CheckItem text="Zero subscriptions ever" color={GOLD} />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Comparison */}
+          <Text style={styles.comparison}>
+            Monthly over 3 years: $359.64 | Annual over 3 years: $237 | Elder Tier: $199 forever
+          </Text>
+
+          {/* CTA — Sandbox test: triggers Apple purchase sheet */}
+          <TouchableOpacity
+            style={[styles.ctaBtn, (!selectedPackage || purchasing) && { opacity: 0.6 }]}
             onPress={handlePurchase}
             activeOpacity={0.88}
             disabled={purchasing}
           >
-            <LinearGradient
-              colors={["#4ade80", "#22c55e"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.ctaGradient}
-            >
-              {purchasing ? (
-                <ActivityIndicator color="#051a05" />
-              ) : (
-                <>
-                  <Text style={styles.ctaText}>Get Full Access</Text>
-                  <Text style={styles.ctaSubText}>$4.99 / month</Text>
-                </>
-              )}
-            </LinearGradient>
+            {purchasing ? (
+              <ActivityIndicator color="#051a05" />
+            ) : (
+              <Text style={styles.ctaText}>Continue</Text>
+            )}
           </TouchableOpacity>
+          {/* Sandbox test note — remove before production */}
+          <Text style={styles.sandboxNote}>Sandbox test mode active</Text>
 
           {/* Footer */}
           <View style={styles.footer}>
@@ -184,195 +253,181 @@ export default function PaywallScreen() {
             </TouchableOpacity>
           </View>
 
+          <View style={styles.brandRow}>
+            <Text style={styles.brandText}>⊕  Bush Tucka Tracka BTT</Text>
+          </View>
         </View>
       </ScrollView>
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = "#4ade80";
-const BG = "#111";
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  scroll: {
-    flexGrow: 1,
-  },
+  root: { flex: 1, backgroundColor: BG },
+  scroll: { flexGrow: 1 },
 
   // Hero
-  heroWrapper: {
-    height: 220,
-    width: "100%",
-    overflow: "hidden",
-  },
+  heroContainer: { height: 280, width: "100%" },
+  heroImage: { width: "100%", height: "100%" },
   closeBtn: {
     position: "absolute",
     top: Platform.OS === "ios" ? 52 : 16,
     right: 16,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.45)",
     alignItems: "center",
     justifyContent: "center",
   },
-  closeBtnText: {
-    color: "#fff",
-    fontSize: 13,
-    lineHeight: 16,
-  },
+  closeBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 
   // Content
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 36,
-    backgroundColor: BG,
-  },
+  content: { paddingHorizontal: 16, paddingBottom: 36, backgroundColor: BG },
   headline: {
-    fontSize: 26,
-    fontWeight: "700",
+    fontSize: 24,
+    fontWeight: "800",
     color: "#fff",
     textAlign: "center",
-    marginTop: 10,
+    marginTop: 4,
     marginBottom: 10,
-    lineHeight: 33,
+    lineHeight: 31,
   },
   subtext: {
     fontSize: 13,
-    color: "#999",
+    color: "#aaa",
     textAlign: "center",
     lineHeight: 20,
-    marginBottom: 22,
-    fontWeight: "300",
+    marginBottom: 20,
   },
 
-  // Plan card
-  planCard: {
-    backgroundColor: "rgba(74,222,128,0.06)",
-    borderWidth: 1.5,
-    borderColor: GREEN,
-    borderRadius: 14,
-    padding: 20,
-    marginBottom: 16,
-  },
-  planHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  greenDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  // Best value
+  bestValueWrapper: { marginBottom: 10 },
+  bestValueBadge: {
+    alignSelf: "center",
     backgroundColor: GREEN,
-    marginTop: 6,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginBottom: -12,
+    zIndex: 1,
   },
-  planTitle: {
-    color: GREEN,
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    textTransform: "uppercase",
-  },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-  },
-  price: {
-    color: "#fff",
-    fontSize: 40,
-    fontWeight: "700",
-  },
-  pricePer: {
-    color: "#888",
-    fontSize: 14,
-  },
-  cancelLabel: {
-    color: "#666",
-    fontSize: 12,
-    marginTop: 4,
+  bestValueText: {
+    color: "#051a05",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1,
   },
 
-  divider: {
-    height: 1,
-    backgroundColor: "#2a2a2a",
-    marginVertical: 16,
+  // Plan cards
+  planCard: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#2a2a2a",
+    backgroundColor: "#151f15",
+    padding: 16,
+    marginBottom: 10,
+    position: "relative",
   },
+  planCardAnnual: { borderColor: "#2a4a2a", backgroundColor: "#121f12" },
+  planCardAnnualSelected: { borderColor: GREEN, backgroundColor: "rgba(74,222,128,0.07)" },
+  planCardMonthlySelected: { borderColor: GREEN },
+  planCardLifetime: { borderColor: "#5c3a00", backgroundColor: "#1a1200" },
+  planCardLifetimeSelected: { borderColor: GOLD, backgroundColor: "rgba(245,158,11,0.07)" },
 
-  // Features
-  features: {
-    gap: 10,
+  // Radio — absolute top right
+  radioAbsolute: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    zIndex: 1,
   },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  featureText: {
-    color: "#ccc",
-    fontSize: 14,
-    fontWeight: "300",
-  },
-
-  // Check icon
-  checkCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "rgba(74,222,128,0.2)",
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  checkMark: {
+  radioDot: { width: 10, height: 10, borderRadius: 5 },
+
+  // Card body — two columns
+  cardBody: {
+    flexDirection: "row",
+    paddingRight: 30, // space for radio button
+  },
+  cardBodySimple: {
+    paddingRight: 30, // space for radio button
+  },
+  cardLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  cardRight: {
+    width: 155,
+    gap: 2,
+    justifyContent: "center",
+  },
+
+  // Text
+  planName: { color: "#fff", fontSize: 15, fontWeight: "700", marginBottom: 4 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", marginBottom: 4 },
+  planPrice: { color: "#fff", fontSize: 26, fontWeight: "600" },
+  planPer: { color: "#888", fontSize: 14, fontWeight: "500" },
+  savingLabel: {
     color: GREEN,
+    fontSize: 12,
+    fontWeight: "600",
+    fontStyle: "italic",
+  },
+  lifetimeDesc: {
+    color: "#c8860a",
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 4,
+    lineHeight: 18,
+  },
+
+  // Check items
+  checkRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  checkIcon: { fontSize: 12, fontWeight: "700", lineHeight: 18, flexShrink: 0 },
+  checkText: { color: "#ccc", fontSize: 12, lineHeight: 18, flex: 1 },
+
+  // Comparison
+  comparison: {
+    color: "#555",
     fontSize: 11,
-    fontWeight: "700",
-    lineHeight: 14,
+    textAlign: "center",
+    lineHeight: 17,
+    marginBottom: 16,
+    marginTop: 4,
   },
 
   // CTA
   ctaBtn: {
-    borderRadius: 14,
-    overflow: "hidden",
-    marginBottom: 14,
-  },
-  ctaGradient: {
+    borderRadius: 50,
+    backgroundColor: GREEN,
     paddingVertical: 18,
     alignItems: "center",
     justifyContent: "center",
-    gap: 2,
+    marginBottom: 8,
+    shadowColor: GREEN,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  ctaText: {
-    color: "#051a05",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  ctaSubText: {
-    color: "#051a05",
-    fontSize: 12,
-    fontWeight: "500",
-    opacity: 0.7,
-  },
+  ctaText: { color: "#051a05", fontSize: 17, fontWeight: "800", letterSpacing: 0.2 },
+
+  sandboxNote: { color: "#555", fontSize: 11, textAlign: "center", marginBottom: 14 },
 
   // Footer
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  footerLink: {
-    color: "#555",
-    fontSize: 11,
-    letterSpacing: 0.5,
-    fontWeight: "500",
-  },
-  footerSep: {
-    color: "#333",
-  },
+  footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginBottom: 10 },
+  footerLink: { color: "#555", fontSize: 11, letterSpacing: 0.5, fontWeight: "500" },
+  footerSep: { color: "#333" },
+
+  // Brand
+  brandRow: { alignItems: "center", marginTop: 4 },
+  brandText: { color: "#3a4a3a", fontSize: 12, fontWeight: "500", letterSpacing: 0.5 },
 });

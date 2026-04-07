@@ -64,7 +64,6 @@ export default function AuthScreen() {
         await signInWithPassword({ email, password });
       } else {
         await signUpWithPassword({ email, password });
-        Alert.alert('Almost there', 'If email confirmation is enabled, check your inbox to confirm your account.');
       }
     } catch (e) {
       console.log('[auth-screen] submit error caught', {

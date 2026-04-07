@@ -9,6 +9,8 @@ const ENTITLEMENT_ID = 'premium';
 
 export function usePurchases() {
   const [monthlyPackage, setMonthlyPackage] = useState<PurchasesPackage | null>(null);
+  const [annualPackage, setAnnualPackage] = useState<PurchasesPackage | null>(null);
+  const [lifetimePackage, setLifetimePackage] = useState<PurchasesPackage | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
@@ -29,15 +31,26 @@ export function usePurchases() {
           Purchases.getCustomerInfo(),
         ]);
 
-        console.log('[usePurchases] offerings:', JSON.stringify(offerings.current?.availablePackages.map(p => p.product.identifier)));
-        console.log('[usePurchases] current offering:', offerings.current?.identifier);
+        const current = offerings.current;
 
-        const pkg = offerings.current?.availablePackages.find(
-          (p) => p.product.identifier === 'bushtucka_monthly'
-        ) ?? offerings.current?.monthly ?? null;
+        const monthly =
+          current?.availablePackages.find(
+            (p) => p.product.identifier === 'bushtucka_monthly_v2'
+          ) ?? current?.monthly ?? null;
 
-        console.log('[usePurchases] selected package:', pkg?.product.identifier ?? 'NULL');
-        setMonthlyPackage(pkg);
+        const annual =
+          current?.availablePackages.find(
+            (p) => p.product.identifier === 'bushtucka_annual'
+          ) ?? current?.annual ?? null;
+
+        const lifetime =
+          current?.availablePackages.find(
+            (p) => p.product.identifier === 'bushtucka_lifetime'
+          ) ?? current?.lifetime ?? null;
+
+        setMonthlyPackage(monthly);
+        setAnnualPackage(annual);
+        setLifetimePackage(lifetime);
         setCustomerInfo(info);
       } catch (e) {
         console.error('[usePurchases] load error:', e);
@@ -52,11 +65,10 @@ export function usePurchases() {
     return () => listener.remove();
   }, []);
 
-  const purchaseMonthly = useCallback(async (): Promise<boolean> => {
-    if (!monthlyPackage) throw new Error('Product not loaded');
+  const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
     try {
       setPurchasing(true);
-      const { customerInfo } = await Purchases.purchasePackage(monthlyPackage);
+      const { customerInfo } = await Purchases.purchasePackage(pkg);
       setCustomerInfo(customerInfo);
       return customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
     } catch (e: any) {
@@ -65,7 +77,31 @@ export function usePurchases() {
     } finally {
       setPurchasing(false);
     }
-  }, [monthlyPackage]);
+  }, []);
+
+  const purchaseMonthly = useCallback(async (): Promise<boolean> => {
+    if (!monthlyPackage) {
+      console.warn('[usePurchases] monthlyPackage is null — not loaded from RevenueCat');
+      throw new Error('Monthly product not available. Check RevenueCat offerings.');
+    }
+    return purchasePackage(monthlyPackage);
+  }, [monthlyPackage, purchasePackage]);
+
+  const purchaseAnnual = useCallback(async (): Promise<boolean> => {
+    if (!annualPackage) {
+      console.warn('[usePurchases] annualPackage is null — not loaded from RevenueCat');
+      throw new Error('Annual product not available. Check RevenueCat offerings.');
+    }
+    return purchasePackage(annualPackage);
+  }, [annualPackage, purchasePackage]);
+
+  const purchaseLifetime = useCallback(async (): Promise<boolean> => {
+    if (!lifetimePackage) {
+      console.warn('[usePurchases] lifetimePackage is null — not loaded from RevenueCat');
+      throw new Error('Lifetime product not available. Check RevenueCat offerings.');
+    }
+    return purchasePackage(lifetimePackage);
+  }, [lifetimePackage, purchasePackage]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     try {
@@ -80,11 +116,15 @@ export function usePurchases() {
 
   return {
     monthlyPackage,
+    annualPackage,
+    lifetimePackage,
     customerInfo,
     loading,
     purchasing,
     isPremium,
     purchaseMonthly,
+    purchaseAnnual,
+    purchaseLifetime,
     restorePurchases,
   };
 }
