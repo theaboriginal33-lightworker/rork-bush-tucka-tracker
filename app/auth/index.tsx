@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,14 +17,46 @@ import { useAuth } from '@/app/providers/AuthProvider';
 import { supabasePublicDebugInfo } from '@/constants/supabase';
 
 type AuthMode = 'login' | 'signup';
+type ScreenMode = 'auth' | 'otp';
 
 function isValidEmail(email: string): boolean {
   const value = email.trim();
   return value.includes('@') && value.includes('.') && value.length >= 6;
 }
 
+// ─── OTP Input: 6 boxes ──────────────────────────────────────────────────────
+function OtpInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<TextInput>(null);
+  const digits = value.padEnd(6, ' ').split('');
+
+  return (
+    <Pressable style={styles.otpWrapper} onPress={() => inputRef.current?.focus()}>
+      {digits.map((d, i) => (
+        <View
+          key={i}
+          style={[
+            styles.otpBox,
+            i === value.length && styles.otpBoxActive,
+          ]}
+        >
+          <Text style={styles.otpDigit}>{d.trim()}</Text>
+        </View>
+      ))}
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={(t) => onChange(t.replace(/\D/g, '').slice(0, 6))}
+        keyboardType="number-pad"
+        maxLength={6}
+        style={styles.otpHidden}
+        autoFocus
+      />
+    </Pressable>
+  );
+}
+
 export default function AuthScreen() {
-  const { signInWithPassword, signUpWithPassword, sendPasswordReset, authError, clearAuthError, hasConfig } = useAuth();
+  const { signInWithPassword, signUpWithPassword, verifyOtp, sendPasswordReset, authError, clearAuthError, hasConfig } = useAuth();
 
   const showKeyDebug = useMemo(() => {
     const err = authError?.toLowerCase() ?? '';
@@ -36,8 +68,10 @@ export default function AuthScreen() {
   }, [hasConfig, showKeyDebug]);
 
   const [mode, setMode] = useState<AuthMode>('login');
+  const [screenMode, setScreenMode] = useState<ScreenMode>('auth');
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [otp, setOtp] = useState<string>('');
   const [isBusy, setIsBusy] = useState<boolean>(false);
 
   const canSubmit = useMemo(() => {
@@ -46,6 +80,8 @@ export default function AuthScreen() {
     if (password.length < 6) return false;
     return true;
   }, [email, password, hasConfig]);
+
+  const canVerify = otp.length === 6;
 
   const onToggleMode = useCallback(() => {
     clearAuthError();
@@ -64,6 +100,11 @@ export default function AuthScreen() {
         await signInWithPassword({ email, password });
       } else {
         await signUpWithPassword({ email, password });
+        // Move to OTP screen only if no error
+        if (!authError) {
+          setScreenMode('otp');
+          setOtp('');
+        }
       }
     } catch (e) {
       console.log('[auth-screen] submit error caught', {
@@ -74,6 +115,20 @@ export default function AuthScreen() {
     }
   }, [canSubmit, email, mode, password, signInWithPassword, signUpWithPassword]);
 
+  const onVerifyOtp = useCallback(async () => {
+    if (!canVerify) return;
+    setIsBusy(true);
+    try {
+      await verifyOtp({ email, token: otp });
+    } catch (e) {
+      console.log('[auth-screen] verifyOtp error', {
+        message: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setIsBusy(false);
+    }
+  }, [canVerify, email, otp, verifyOtp]);
+
   const onForgotPassword = useCallback(async () => {
     const trimmedEmail = email.trim();
     if (!hasConfig) {
@@ -81,10 +136,9 @@ export default function AuthScreen() {
       return;
     }
     if (!isValidEmail(trimmedEmail)) {
-      Alert.alert('Email required', 'Type your email first, then tap “Reset password”.');
+      Alert.alert('Email required', 'Type your email first, then tap "Reset password".');
       return;
     }
-
     setIsBusy(true);
     try {
       await sendPasswordReset({ email: trimmedEmail });
@@ -94,6 +148,74 @@ export default function AuthScreen() {
     }
   }, [email, hasConfig, sendPasswordReset]);
 
+  // ── OTP Verification Screen ──
+  if (screenMode === 'otp') {
+    return (
+      <View style={styles.root} testID="auth-root">
+        <LinearGradient
+          colors={["rgba(56,217,137,0.22)", "rgba(88,166,255,0.12)", "rgba(7,17,11,1)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.75, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <KeyboardAvoidingView
+          style={styles.kb}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.hero}>
+            <View style={styles.logo}>
+              <ShieldCheck color={COLORS.primary} size={22} />
+            </View>
+            <Text style={styles.title}>Verify your email</Text>
+            <Text style={styles.subtitle}>
+              We sent a 6-digit code to{"\n"}
+              <Text style={{ color: COLORS.primary }}>{email}</Text>
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.otpLabel}>Enter verification code</Text>
+            <OtpInput value={otp} onChange={(v) => { clearAuthError(); setOtp(v); }} />
+
+            {authError ? (
+              <View style={styles.error}>
+                <Text style={styles.errorText}>{authError}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={onVerifyOtp}
+              disabled={!canVerify || isBusy}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                (!canVerify || isBusy) ? styles.primaryButtonDisabled : null,
+                pressed && canVerify && !isBusy ? styles.primaryButtonPressed : null,
+              ]}
+            >
+              {isBusy ? (
+                <ActivityIndicator color={'#FFFFFF'} />
+              ) : (
+                <Text style={styles.primaryButtonText}>Verify Code</Text>
+              )}
+            </Pressable>
+
+            <View style={styles.links}>
+              <Pressable onPress={() => { clearAuthError(); setScreenMode('auth'); setOtp(''); }} disabled={isBusy}>
+                <Text style={styles.linkText}>← Back</Text>
+              </Pressable>
+              <Pressable onPress={onSubmit} disabled={isBusy}>
+                <Text style={styles.linkText}>Resend code</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.footnote}>Code expires in 10 minutes.</Text>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    );
+  }
+
+  // ── Auth Screen ──
   return (
     <View style={styles.root} testID="auth-root">
       <LinearGradient
@@ -134,17 +256,8 @@ export default function AuthScreen() {
               <Text style={styles.debugBody} testID="auth-debug-body">
                 Has config: {String(supabasePublicDebugInfo.hasConfig)}
                 {'\n'}URL: {supabasePublicDebugInfo.url || '(missing)'}
-                {'\n'}URL source: {supabasePublicDebugInfo.urlSource || '(unknown)'}
-                {'\n'}URL ref: {supabasePublicDebugInfo.urlRef || '(unknown)'}
                 {'\n'}Key source: {supabasePublicDebugInfo.keySource}
                 {'\n'}Anon key prefix: {supabasePublicDebugInfo.anonKeyPrefix || '(missing)'}
-                {'\n'}Anon key length: {supabasePublicDebugInfo.anonKeyLen}
-                {'\n'}Key ref: {supabasePublicDebugInfo.keyRef || '(unknown)'}
-                {'\n'}Key role: {supabasePublicDebugInfo.keyRole || '(unknown)'}
-                {supabasePublicDebugInfo.reason ? `\nReason: ${supabasePublicDebugInfo.reason}` : ''}
-              </Text>
-              <Text style={styles.debugHint} testID="auth-debug-hint">
-                Use Supabase → Project Settings → API → “anon public”. Then restart the dev server (reload isn’t always enough for env vars).
               </Text>
             </View>
           ) : null}
@@ -153,20 +266,14 @@ export default function AuthScreen() {
         <View style={styles.card} testID="auth-card">
           <View style={styles.segment} testID="auth-segment">
             <Pressable
-              onPress={() => {
-                clearAuthError();
-                setMode('login');
-              }}
+              onPress={() => { clearAuthError(); setMode('login'); }}
               style={[styles.segmentButton, mode === 'login' ? styles.segmentButtonActive : null]}
               testID="auth-mode-login"
             >
               <Text style={[styles.segmentText, mode === 'login' ? styles.segmentTextActive : null]}>Log in</Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                clearAuthError();
-                setMode('signup');
-              }}
+              onPress={() => { clearAuthError(); setMode('signup'); }}
               style={[styles.segmentButton, mode === 'signup' ? styles.segmentButtonActive : null]}
               testID="auth-mode-signup"
             >
@@ -180,10 +287,7 @@ export default function AuthScreen() {
             </View>
             <TextInput
               value={email}
-              onChangeText={(t) => {
-                clearAuthError();
-                setEmail(t);
-              }}
+              onChangeText={(t) => { clearAuthError(); setEmail(t); }}
               placeholder="Email"
               placeholderTextColor={"rgba(234,246,238,0.35)"}
               autoCapitalize="none"
@@ -201,10 +305,7 @@ export default function AuthScreen() {
             </View>
             <TextInput
               value={password}
-              onChangeText={(t) => {
-                clearAuthError();
-                setPassword(t);
-              }}
+              onChangeText={(t) => { clearAuthError(); setPassword(t); }}
               placeholder="Password"
               placeholderTextColor={"rgba(234,246,238,0.35)"}
               autoCapitalize="none"
@@ -348,13 +449,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: 'rgba(234,246,238,0.82)',
   },
-  debugHint: {
-    marginTop: 10,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 17,
-    color: 'rgba(234,246,238,0.70)',
-  },
   card: {
     flex: 1,
     minHeight: 380,
@@ -469,5 +563,46 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: 'rgba(234,246,238,0.45)',
     textAlign: 'center',
+  },
+
+  // OTP styles
+  otpLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  otpWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  otpBox: {
+    width: 46,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: 'rgba(7,17,11,0.8)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(20,48,34,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBoxActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(56,217,137,0.08)',
+  },
+  otpDigit: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  otpHidden: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
   },
 });

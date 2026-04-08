@@ -10,9 +10,10 @@ type AuthState = {
   session: Session | null;
   user: User | null;
   onboardingCompleted: boolean | null;
-  refreshOnboarding: () => Promise<void>; 
+  refreshOnboarding: () => Promise<void>;
   signInWithPassword: (input: { email: string; password: string }) => Promise<void>;
   signUpWithPassword: (input: { email: string; password: string }) => Promise<void>;
+  verifyOtp: (input: { email: string; token: string }) => Promise<void>;
   signOut: () => Promise<void>;
   sendPasswordReset: (input: { email: string }) => Promise<void>;
 
@@ -202,6 +203,12 @@ async function fetchOnboardingStatus(userId: string) {
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
+      // Supabase returns a fake user for already-registered emails (no error thrown)
+      // Detect this by checking if identities array is empty
+      if (data?.user && data.user.identities && data.user.identities.length === 0) {
+        throw new Error('This email is already registered. Please log in instead.');
+      }
+
       console.log('[auth] signUpWithPassword success', {
         hasSession: Boolean(data?.session),
         hasUser: Boolean(data?.user),
@@ -242,6 +249,24 @@ const signOutMutation = useMutation({
     setAuthError(message);
   },
 });
+  const verifyOtpMutation = useMutation({
+    mutationFn: async (input: { email: string; token: string }) => {
+      setAuthError(null);
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: input.email.trim(),
+        token: input.token.trim(),
+        type: 'signup',
+      });
+      if (error) throw error;
+      setSession(data?.session ?? null);
+    },
+    onError: (e) => {
+      const message = toUserFacingAuthError(e);
+      console.log('[auth] verifyOtp error', { message });
+      setAuthError(message);
+    },
+  });
+
   const resetPasswordMutation = useMutation({
     mutationFn: async (input: { email: string }) => {
       setAuthError(null);
@@ -285,6 +310,14 @@ refreshOnboarding: async () => {
         return;
       }
       await signUpMutation.mutateAsync(input);
+    },
+
+    verifyOtp: async (input) => {
+      if (!hasSupabaseConfig) {
+        setAuthError('Supabase is not configured yet.');
+        return;
+      }
+      await verifyOtpMutation.mutateAsync(input);
     },
 
     signOut: async () => {
