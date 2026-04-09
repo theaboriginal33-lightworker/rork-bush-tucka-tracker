@@ -3,6 +3,9 @@ import { useMutation } from '@tanstack/react-query';
 import type { Session, User } from '@supabase/supabase-js';
 import { useEffect, useMemo, useState } from 'react';
 import { hasSupabaseConfig, supabase } from '@/constants/supabase';
+import { Platform } from 'react-native';
+import Purchases from 'react-native-purchases';
+import { syncSubscriptionToSupabase } from '@/hooks/useSubscriptionSync';
 
 type AuthState = {
   hasConfig: boolean;
@@ -10,6 +13,7 @@ type AuthState = {
   session: Session | null;
   user: User | null;
   onboardingCompleted: boolean | null;
+  subscriptionActive: boolean | null;
   refreshOnboarding: () => Promise<void>;
   signInWithPassword: (input: { email: string; password: string }) => Promise<void>;
   signUpWithPassword: (input: { email: string; password: string }) => Promise<void>;
@@ -35,22 +39,46 @@ export const [AuthProvider, useAuth] = createContextHook<AuthState>(() => {
   const [isReady, setIsReady] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null); 
+  const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null);
    
 async function fetchOnboardingStatus(userId: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('onboarding_completed')
+    .select('onboarding_completed, subscription_active')
     .eq('id', userId)
     .maybeSingle();
   console.log('[fetchOnboarding]', { userId, data, error });
   
   if (error) {
     setOnboardingCompleted(null);
+    setSubscriptionActive(null);
     return;
   }
   
   // ✅ Fix: sirf actual value use karo
   setOnboardingCompleted(data?.onboarding_completed ?? null);
+  setSubscriptionActive(
+    typeof data?.subscription_active === 'boolean' ? data.subscription_active : null
+  );
+
+  // If Supabase says not active (or unknown), double-check RevenueCat on device.
+  // This fixes the "app restart still shows paywall" issue when the profile row
+  // hasn't been synced yet or is stale.
+  if (Platform.OS !== 'web') {
+    const supaActive = typeof data?.subscription_active === 'boolean' ? data.subscription_active : null;
+    if (supaActive !== true) {
+      try {
+        const info = await Purchases.getCustomerInfo();
+        const rcActive = info.entitlements.active?.premium !== undefined;
+        if (rcActive) {
+          setSubscriptionActive(true);
+          void syncSubscriptionToSupabase({ userId, customerInfo: info });
+        }
+      } catch (e) {
+        console.log('[auth] Purchases.getCustomerInfo failed', e);
+      }
+    }
+  }
 }
   // useEffect(() => {
   //   let isMounted = true;
@@ -116,6 +144,7 @@ async function fetchOnboardingStatus(userId: string) {
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setOnboardingCompleted(null);
+        setSubscriptionActive(null);
         setIsReady(true);
         return;
       }
@@ -133,6 +162,7 @@ async function fetchOnboardingStatus(userId: string) {
         await fetchOnboardingStatus(nextSession.user.id);
       } else {
         setOnboardingCompleted(null);
+        setSubscriptionActive(null);
       }
       if (isMounted) setIsReady(true);
     });
@@ -151,6 +181,7 @@ async function fetchOnboardingStatus(userId: string) {
         } else {
           setSession(null);
           setOnboardingCompleted(null);
+          setSubscriptionActive(null);
         }
         if (isMounted) setIsReady(true);
       })
@@ -160,6 +191,7 @@ async function fetchOnboardingStatus(userId: string) {
         if (!isMounted) return;
         setSession(null);
         setOnboardingCompleted(null);
+        setSubscriptionActive(null);
         setIsReady(true);
       });
 
@@ -291,6 +323,7 @@ const signOutMutation = useMutation({
     session,
     user,
 onboardingCompleted,
+subscriptionActive,
 refreshOnboarding: async () => { 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) await fetchOnboardingStatus(user.id);

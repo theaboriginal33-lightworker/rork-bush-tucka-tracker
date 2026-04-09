@@ -18,13 +18,14 @@ import { supabase } from '@/constants/supabase';
 
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { session, isReady, hasConfig, onboardingCompleted } = useAuth();
+  const { session, isReady, hasConfig, onboardingCompleted, subscriptionActive } = useAuth();
   const segments = useSegments();
   const pathname = usePathname();
 
   useEffect(() => {
     const inAuthGroup = segments?.[0] === 'auth';
     const inOnboarding = segments?.[0] === 'onboarding';
+    const inPaywall = segments?.[0] === 'paywall';
     // Allow revisiting intro video from Settings after onboarding is done (expo-video test / preview).
     const isPlayVideoScreen = segments?.[1] === 'playvideo';
 
@@ -47,11 +48,34 @@ if (onboardingCompleted === false && !inOnboarding) {
   return;
 }
 
+    // After login (and after onboarding is completed), route based on subscription.
+    // Active subscription -> main app. Inactive/unknown -> paywall.
+    if (onboardingCompleted === true && inAuthGroup) {
+      if (subscriptionActive === true) {
+        router.replace('/');
+      } else {
+        router.replace('/paywall/paywall');
+      }
+      return;
+    }
+
+    // After onboarding is completed, require an active subscription to use the app.
+    // If subscription is NOT confirmed active (false or null), force the paywall and block all other routes.
+    if (onboardingCompleted === true && subscriptionActive !== true) {
+      if (!inPaywall) {
+        router.replace('/paywall/paywall');
+      }
+      return;
+    }
+
+    // IMPORTANT: Allow opening the paywall from Settings even if subscribed
+    // (users may want to change plans / restore / manage).
+
     if (onboardingCompleted && (inAuthGroup || (inOnboarding && !isPlayVideoScreen))) {
       router.replace('/');
     }
 
-  }, [isReady, hasConfig, session, onboardingCompleted, segments, pathname]);
+  }, [isReady, hasConfig, session, onboardingCompleted, subscriptionActive, segments, pathname]);
 
   return <>{children}</>;
 }

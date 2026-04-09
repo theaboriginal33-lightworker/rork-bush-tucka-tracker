@@ -19,7 +19,7 @@
       "supportsTablet": false,
        "buildNumber": "4",
       "bundleIdentifier": "app.rork.bush-tucka-tracker",
-      "icon": "./assets/images/icon.jpg",
+      "icon": "./assets/images/icon.png",
       "config": {
         "googleMapsApiKey": "AIzaSyAFrrz5XvKH9nBbIIAyIlLCil0azTKYwA8"
       },

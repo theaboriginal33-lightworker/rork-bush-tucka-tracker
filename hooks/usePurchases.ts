@@ -7,6 +7,11 @@ import { Platform } from 'react-native';
 
 const ENTITLEMENT_ID = 'premium';
 
+export type PurchaseResult = {
+  success: boolean;
+  customerInfo: CustomerInfo;
+};
+
 export function usePurchases() {
   const [monthlyPackage, setMonthlyPackage] = useState<PurchasesPackage | null>(null);
   const [annualPackage, setAnnualPackage] = useState<PurchasesPackage | null>(null);
@@ -61,25 +66,33 @@ export function usePurchases() {
 
     load();
 
-    const listener = Purchases.addCustomerInfoUpdateListener(setCustomerInfo);
-    return () => listener.remove();
+    const listener: any = Purchases.addCustomerInfoUpdateListener(setCustomerInfo);
+    return () => {
+      const remover = listener?.remove;
+      if (typeof remover === 'function') {
+        remover.call(listener);
+      }
+    };
   }, []);
 
-  const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
+  const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<PurchaseResult> => {
     try {
       setPurchasing(true);
       const { customerInfo } = await Purchases.purchasePackage(pkg);
       setCustomerInfo(customerInfo);
-      return customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      const success = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      return { success, customerInfo };
     } catch (e: any) {
-      if (e.userCancelled) return false;
+      if (e.userCancelled) {
+        return { success: false, customerInfo: customerInfo ?? ({} as CustomerInfo) };
+      }
       throw e;
     } finally {
       setPurchasing(false);
     }
-  }, []);
+  }, [customerInfo]);
 
-  const purchaseMonthly = useCallback(async (): Promise<boolean> => {
+  const purchaseMonthly = useCallback(async (): Promise<PurchaseResult> => {
     if (!monthlyPackage) {
       console.warn('[usePurchases] monthlyPackage is null — not loaded from RevenueCat');
       throw new Error('Monthly product not available. Check RevenueCat offerings.');
@@ -87,7 +100,7 @@ export function usePurchases() {
     return purchasePackage(monthlyPackage);
   }, [monthlyPackage, purchasePackage]);
 
-  const purchaseAnnual = useCallback(async (): Promise<boolean> => {
+  const purchaseAnnual = useCallback(async (): Promise<PurchaseResult> => {
     if (!annualPackage) {
       console.warn('[usePurchases] annualPackage is null — not loaded from RevenueCat');
       throw new Error('Annual product not available. Check RevenueCat offerings.');
@@ -95,7 +108,7 @@ export function usePurchases() {
     return purchasePackage(annualPackage);
   }, [annualPackage, purchasePackage]);
 
-  const purchaseLifetime = useCallback(async (): Promise<boolean> => {
+  const purchaseLifetime = useCallback(async (): Promise<PurchaseResult> => {
     if (!lifetimePackage) {
       console.warn('[usePurchases] lifetimePackage is null — not loaded from RevenueCat');
       throw new Error('Lifetime product not available. Check RevenueCat offerings.');
@@ -103,12 +116,13 @@ export function usePurchases() {
     return purchasePackage(lifetimePackage);
   }, [lifetimePackage, purchasePackage]);
 
-  const restorePurchases = useCallback(async (): Promise<boolean> => {
+  const restorePurchases = useCallback(async (): Promise<PurchaseResult> => {
     try {
       setPurchasing(true);
       const info = await Purchases.restorePurchases();
       setCustomerInfo(info);
-      return info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      const success = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      return { success, customerInfo: info };
     } finally {
       setPurchasing(false);
     }

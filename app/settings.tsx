@@ -1,5 +1,5 @@
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +31,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { supabase } from '@/constants/supabase';
+import { usePurchases } from '@/hooks/usePurchases';
+import Purchases from 'react-native-purchases';
+import { syncSubscriptionToSupabase } from '@/hooks/useSubscriptionSync';
 
 const PRIVACY_POLICY_URL = 'https://bushtuckatracka.com.au/privacy-policy';
 const TERMS_URL = 'https://bushtuckatracka.com.au/terms';
@@ -45,7 +48,115 @@ function maskEmail(email: string): string {
 }
 
 export default function SettingsScreen() {
-  const { user, hasConfig, isReady, signOut } = useAuth();
+  const { user, hasConfig, isReady, signOut, refreshOnboarding } = useAuth();
+  const { isPremium, customerInfo, loading: purchasesLoading } = usePurchases();
+
+  const [profileSub, setProfileSub] = useState<{
+    subscription_active: boolean | null;
+    subscription_plan: string | null;
+    revenuecat_expiration_date: string | null;
+  }>({ subscription_active: null, subscription_plan: null, revenuecat_expiration_date: null });
+
+  useEffect(() => {
+    let mounted = true;
+    if (!hasConfig || !user) return;
+
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('subscription_active, subscription_plan, revenuecat_expiration_date')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+        setProfileSub({
+          subscription_active: typeof data?.subscription_active === 'boolean' ? data.subscription_active : null,
+          subscription_plan: typeof data?.subscription_plan === 'string' ? data.subscription_plan : null,
+          revenuecat_expiration_date: typeof data?.revenuecat_expiration_date === 'string' ? data.revenuecat_expiration_date : null,
+        });
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [hasConfig, user]);
+
+  const entitlement = customerInfo?.entitlements.active?.premium as any | undefined;
+  const activeSubscriptions = (customerInfo as any)?.activeSubscriptions as string[] | undefined;
+  const allExpirationDates = (customerInfo as any)?.allExpirationDates as Record<string, string | null> | undefined;
+
+  const bestActiveProductId = (() => {
+    const entitlementPid = entitlement?.productIdentifier as string | undefined;
+    if (entitlementPid) return entitlementPid;
+
+    const subs = Array.isArray(activeSubscriptions) ? activeSubscriptions.filter(Boolean) : [];
+    if (subs.length === 0) return undefined;
+
+    // Pick the product with the furthest expiration date (lifetime often has no expiration date).
+    let best: { id: string; t: number } | null = null;
+    for (const id of subs) {
+      const raw = allExpirationDates?.[id] ?? null;
+      const t = raw ? new Date(raw).getTime() : -1;
+      if (!best || t > best.t) best = { id, t };
+    }
+    return best?.id ?? subs[0];
+  })();
+  const activeLabel =
+    purchasesLoading ? 'Checking…'
+    : isPremium ? 'Active'
+    : 'Not active';
+  const planLabel =
+    bestActiveProductId ??
+    profileSub.subscription_plan ??
+    (isPremium ? 'premium' : '—');
+  const expiryLabel = (() => {
+    const raw =
+      (bestActiveProductId ? allExpirationDates?.[bestActiveProductId] : null) ??
+      (entitlement?.expirationDate as string | undefined) ??
+      profileSub.revenuecat_expiration_date ??
+      null;
+    if (!raw) return '—';
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString();
+  })();
+
+  const onPressManageInStore = useCallback(() => {
+    const url =
+      Platform.OS === 'ios'
+        ? 'https://apps.apple.com/account/subscriptions'
+        : Platform.OS === 'android'
+          ? 'https://play.google.com/store/account/subscriptions'
+          : null;
+    if (!url) return;
+    void Linking.openURL(url);
+  }, []);
+
+  const onPressChangePlan = useCallback(() => {
+    if (purchasesLoading) {
+      Alert.alert('Checking subscription…');
+      return;
+    }
+    router.push('/paywall/paywall');
+  }, [purchasesLoading]);
+
+  const onPressRefreshSubscription = useCallback(async () => {
+    if (!user) return;
+    if (Platform.OS === 'web') return;
+    try {
+      const info = await Purchases.getCustomerInfo();
+      await syncSubscriptionToSupabase({ userId: user.id, customerInfo: info });
+      await refreshOnboarding();
+      Alert.alert('Updated', 'Subscription status refreshed.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Could not refresh', msg);
+    }
+  }, [user, refreshOnboarding]);
 
   const headerGlow = useRef<Animated.Value>(new Animated.Value(0)).current;
 
@@ -230,6 +341,8 @@ return { title: 'Signed in', subtitle: email };
             <View style={styles.badge} testID="settings-badge">
               <ShieldCheck size={18} color={COLORS.primary} />
             </View>
+
+
             {showBusy ? (
               <View style={styles.busy} testID="settings-busy">
                 <ActivityIndicator color={COLORS.primary} />
@@ -340,26 +453,49 @@ return { title: 'Signed in', subtitle: email };
             </Text>
           </View>
 
-          <View style={styles.card}>
-  <Pressable
-    onPress={() => router.push('/paywall/paywall')}
-    style={({ pressed }) => [
-      styles.primaryButton,
-      pressed ? styles.primaryButtonPressed : null,
-      { backgroundColor: '#4ade80' }
-    ]}
-  >
-    <View style={styles.primaryButtonInner}>
-      <Crown size={18} color="#051a05" />
-      <Text style={[styles.primaryButtonText, { color: '#051a05' }]}>
-        Upgrade to Premium
-      </Text>
-    </View>
-  </Pressable>
-  <Text style={[styles.hint, { marginTop: 8 }]}>
-    Unlimited identifications · Tucka Guide · Offline maps
-  </Text>
-</View>
+          {hasConfig && user ? (
+            <View style={styles.card} testID="settings-subscription-card">
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Crown size={18} color={COLORS.text} />
+                  <Text style={[styles.sectionTitle, { fontSize: 16 }]}>Subscription</Text>
+                </View>
+                <Text style={[styles.hint, { marginTop: 0 }]}>
+                  {activeLabel}
+                </Text>
+              </View>
+
+              <View style={{ marginTop: 10, gap: 6 }}>
+                <Text style={styles.hint}>Plan: {planLabel}</Text>
+                <Text style={styles.hint}>Expiry: {expiryLabel}</Text>
+               
+              </View>
+
+              <View style={{ marginTop: 12, gap: 10 }}>
+                <Pressable
+                  onPress={onPressChangePlan}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed ? styles.primaryButtonPressed : null,
+                    { backgroundColor: '#4ade80' },
+                    purchasesLoading ? { opacity: 0.6 } : null,
+                  ]}
+                  testID="settings-change-plan"
+                >
+                  <View style={styles.primaryButtonInner}>
+                    <Crown size={18} color="#051a05" />
+                    <Text style={[styles.primaryButtonText, { color: '#051a05' }]}>
+                      {isPremium ? 'Change plan' : 'Choose a plan'}
+                    </Text>
+                  </View>
+                </Pressable>
+
+             
+
+           
+              </View>
+            </View>
+          ) : null}
 
           <Pressable
             onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}

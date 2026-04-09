@@ -11,14 +11,17 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePurchases } from "@/hooks/usePurchases";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { syncSubscriptionToSupabase } from "@/hooks/useSubscriptionSync";
 
 type PlanKey = "monthly" | "annual" | "lifetime";
 
 const GREEN = "#4ade80";
 const GOLD = "#f59e0b";
 const BG = "#0d1a0d";
+const ACTIVE_LABEL = "#9ae6b4";
 
 function RadioButton({ selected, color = GREEN }: { selected: boolean; color?: string }) {
   return (
@@ -39,8 +42,12 @@ function CheckItem({ text, color = GREEN }: { text: string; color?: string }) {
 
 export default function PaywallScreen() {
   const router = useRouter();
+  const { user, refreshOnboarding } = useAuth();
+  const suppressAlreadyPremiumEffectRef = useRef(false);
   const {
     purchasing,
+    isPremium,
+    customerInfo,
     monthlyPackage,
     annualPackage,
     lifetimePackage,
@@ -49,7 +56,28 @@ export default function PaywallScreen() {
     purchaseLifetime,
     restorePurchases,
   } = usePurchases();
-  const [selectedPlan, setSelectedPlan] = useState<PlanKey>("annual");
+  // No default selection: user must choose a plan explicitly.
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey | null>(null);
+  
+  const activeProductId = (customerInfo?.entitlements.active as any)?.premium?.productIdentifier as
+    | string
+    | undefined;
+  const activePlan: PlanKey | null =
+    !activeProductId ? null
+    : activeProductId.includes('annual') ? 'annual'
+    : activeProductId.includes('lifetime') ? 'lifetime'
+    : activeProductId.includes('monthly') ? 'monthly'
+    : null;
+
+  useEffect(() => {
+    if (!user) return;
+    if (!isPremium) return;
+    if (purchasing) return;
+    if (suppressAlreadyPremiumEffectRef.current) return;
+    void syncSubscriptionToSupabase({ userId: user.id, customerInfo }).finally(() => {
+      void refreshOnboarding();
+    });
+  }, [user, isPremium, purchasing, customerInfo, refreshOnboarding]);
 
   const annualPrice = annualPackage?.product.priceString ?? "$79";
   const monthlyPrice = monthlyPackage?.product.priceString ?? "$9.99";
@@ -58,9 +86,14 @@ export default function PaywallScreen() {
   const selectedPackage =
     selectedPlan === "monthly" ? monthlyPackage
     : selectedPlan === "annual" ? annualPackage
-    : lifetimePackage;
+    : selectedPlan === "lifetime" ? lifetimePackage
+    : null;
 
   const handlePurchase = async () => {
+    if (!selectedPlan) {
+      Alert.alert("Choose a plan", "Please select Monthly, Annual, or Lifetime first.");
+      return;
+    }
     if (!selectedPackage) {
       Alert.alert(
         "Product Not Loaded",
@@ -69,14 +102,22 @@ export default function PaywallScreen() {
       return;
     }
     try {
-      let success = false;
-      if (selectedPlan === "monthly") success = await purchaseMonthly();
-      else if (selectedPlan === "annual") success = await purchaseAnnual();
-      else success = await purchaseLifetime();
+      let result: Awaited<ReturnType<typeof purchaseMonthly>> | null = null;
+      if (selectedPlan === "monthly") result = await purchaseMonthly();
+      else if (selectedPlan === "annual") result = await purchaseAnnual();
+      else result = await purchaseLifetime();
 
-      if (success) {
-        Alert.alert("Welcome!", "You now have full access.", [
-          { text: "Let's go!", onPress: () => router.back() },
+      if (result?.success) {
+        if (user) {
+          await syncSubscriptionToSupabase({
+            userId: user.id,
+            customerInfo: result.customerInfo,
+          });
+        }
+        await refreshOnboarding();
+        suppressAlreadyPremiumEffectRef.current = true;
+        Alert.alert("Success", "You now have full access to the app.", [
+          { text: "OK", onPress: () => router.replace("/") },
         ]);
       }
     } catch (e: any) {
@@ -86,12 +127,25 @@ export default function PaywallScreen() {
 
   const handleRestore = async () => {
     try {
-      const success = await restorePurchases();
+      const result = await restorePurchases();
+      const success = result.success;
       Alert.alert(
         success ? "Restored!" : "No Purchases Found",
         success ? "Your subscription has been restored." : "No active subscriptions found."
       );
-      if (success) router.back();
+      if (success) {
+        if (user) {
+          await syncSubscriptionToSupabase({
+            userId: user.id,
+            customerInfo: result.customerInfo,
+          });
+        }
+        await refreshOnboarding();
+        suppressAlreadyPremiumEffectRef.current = true;
+        Alert.alert("Success", "Your purchase has been restored. You now have full access.", [
+          { text: "OK", onPress: () => router.replace("/") },
+        ]);
+      }
     } catch {
       Alert.alert("Error", "Could not restore purchases.");
     }
@@ -115,13 +169,17 @@ export default function PaywallScreen() {
             colors={["transparent", BG]}
             style={[StyleSheet.absoluteFill, { top: "45%" }]}
           />
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.closeBtn}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.closeBtnText}>✕</Text>
-          </TouchableOpacity>
+          {/* Only allow closing paywall if user already has an active plan */}
+          {isPremium ? (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.closeBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              testID="paywall-close"
+            >
+              <Text style={styles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* ── Content ── */}
@@ -158,6 +216,9 @@ export default function PaywallScreen() {
                     <Text style={styles.planPer}> / year</Text>
                   </View>
                   <Text style={styles.savingLabel}>Save 34% vs monthly</Text>
+                  {isPremium && activePlan === 'annual' ? (
+                    <Text style={styles.activePlanLabel}>Current plan (Active)</Text>
+                  ) : null}
                 </View>
                 <View style={styles.cardRight}>
                   <CheckItem text="Unlimited plant identifications" />
@@ -181,7 +242,12 @@ export default function PaywallScreen() {
               <RadioButton selected={selectedPlan === "monthly"} />
             </View>
             <View style={styles.cardBodySimple}>
-              <Text style={styles.planName}>Monthly</Text>
+              <View>
+                <Text style={styles.planName}>Monthly</Text>
+                {isPremium && activePlan === 'monthly' ? (
+                  <Text style={styles.activePlanLabel}>Current plan (Active)</Text>
+                ) : null}
+              </View>
               <View style={styles.priceRow}>
                 <Text style={styles.planPrice}>{monthlyPrice}</Text>
                 <Text style={styles.planPer}> / month</Text>
@@ -212,6 +278,9 @@ export default function PaywallScreen() {
                 <Text style={styles.lifetimeDesc}>
                   Every future update. Forever.{"\n"}Never pay again.
                 </Text>
+                {isPremium && activePlan === 'lifetime' ? (
+                  <Text style={styles.activePlanLabel}>Current plan (Active)</Text>
+                ) : null}
               </View>
               <View style={styles.cardRight}>
                 <CheckItem text="Lifetime access" color={GOLD} />
@@ -231,7 +300,7 @@ export default function PaywallScreen() {
             style={[styles.ctaBtn, (!selectedPackage || purchasing) && { opacity: 0.6 }]}
             onPress={handlePurchase}
             activeOpacity={0.88}
-            disabled={purchasing}
+            disabled={!selectedPackage || purchasing}
           >
             {purchasing ? (
               <ActivityIndicator color="#051a05" />
@@ -380,6 +449,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     fontStyle: "italic",
+  },
+  activePlanLabel: {
+    marginTop: 6,
+    fontSize: 12,
+    color: ACTIVE_LABEL,
+    fontWeight: "800",
   },
   lifetimeDesc: {
     color: "#c8860a",
