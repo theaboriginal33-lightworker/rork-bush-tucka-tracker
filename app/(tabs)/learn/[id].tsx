@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LearnRemoteImage } from '@/components/LearnRemoteImage';
 import { Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import { COLORS } from '@/constants/colors';
 import { LEARN_HERO_IMAGE_OVERRIDES } from '@/constants/learnImageOverrides';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
 import { useLearnImages } from '@/app/providers/LearnImageProvider';
+import { pickerAllowsEditing, prepareMediaLibraryPicker } from '@/utils/iosImagePicker';
 
 type LearnPlant = {
   id: string;
@@ -1116,10 +1117,9 @@ export default function LearnPlantDetailScreen() {
     mutationFn: async () => {
       if (!plant) throw new Error('Plant not loaded');
 
-      const existingPerm = await ImagePicker.getMediaLibraryPermissionsAsync();
-      if (!existingPerm.granted) {
-        const requested = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!requested.granted) {
+      if (Platform.OS !== 'web') {
+        const ok = await prepareMediaLibraryPicker();
+        if (!ok) {
           console.log('[learn-detail] media library permission denied');
           throw new Error('Photos permission is required to change the image.');
         }
@@ -1127,7 +1127,7 @@ export default function LearnPlantDetailScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: pickerAllowsEditing(),
         quality: 0.9,
         aspect: [1, 1],
       });

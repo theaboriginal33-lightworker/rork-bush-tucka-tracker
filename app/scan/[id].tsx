@@ -11,6 +11,7 @@ import { COLORS } from '@/constants/colors';
 import { buildShareUrl } from '@/constants/shareLinks';
 import { useScanJournal, type ScanJournalChatMessage } from '@/app/providers/ScanJournalProvider';
 import { useCookbook } from '@/app/providers/CookbookProvider';
+import { useResolvedScanImageUri } from '@/hooks/useResolvedScanImageUri';
 
 type ExpoSharingModule = typeof import('expo-sharing');
 type ExpoPrintModule = typeof import('expo-print');
@@ -375,10 +376,11 @@ export default function ScanDetailsScreen() {
   const { getEntryById, updateEntry, removeEntry } = useScanJournal();
   const { saveGuideEntry } = useCookbook();
   const entry = getEntryById(entryId);
-  const entryDisplayImageUri = useMemo(() => {
-    if (!entry) return null;
-    return safeImageUri(entry.imageUri) ?? safeImageUri(entry.imagePreviewUri);
-  }, [entry]);
+  const entryDisplayImageUri = useResolvedScanImageUri({
+    storagePath: entry?.storagePath,
+    imagePreviewUri: entry?.imagePreviewUri,
+    imageUri: entry?.imageUri,
+  });
 
   const [titleDraft, setTitleDraft] = useState<string>(entry?.title ?? '');
   const [notesDraft, setNotesDraft] = useState<string>(entry?.notes ?? '');
@@ -1704,6 +1706,8 @@ ${scanBannerHtml}
                           commonName: entry.scan.commonName,
                           scientificName: entry.scan.scientificName,
                           imageUri: entry.imageUri ?? entry.imagePreviewUri,
+                          imagePreviewUri: entry.imagePreviewUri,
+                          storagePath: entry.storagePath,
                           confidence: entry.scan.confidence,
                           safetyStatus: entry.scan.safety.status as 'safe' | 'caution' | 'unknown',
                           scanEntryId: entry.id,

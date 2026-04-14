@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -7,34 +7,150 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookmarkPlus, ImageUp, Search } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { useCookbook, type CookRecipeEntry } from '@/app/providers/CookbookProvider';
+import { useResolvedScanImageUri } from '@/hooks/useResolvedScanImageUri';
+import { pickerAllowsEditing, prepareMediaLibraryPicker } from '@/utils/iosImagePicker';
 
-function safeImageUri(uri: string | undefined): string | null {
-  const raw0 = typeof uri === 'string' ? uri.trim() : '';
-  if (raw0.length === 0 || raw0 === 'null' || raw0 === 'undefined') return null;
+const COOK_LIST_IMAGE_FALLBACK =
+  'https://images.unsplash.com/photo-1541544181051-e46601a43f2b?q=80&w=1600&auto=format&fit=crop';
 
-  let raw = raw0;
-  const scheme = raw.split(':')[0] ?? '';
+type CookbookListRowProps = {
+  item: CookRecipeEntry;
+  busyImageId: string | null;
+  canEditImageForEntry: (entry: CookRecipeEntry | undefined) => boolean;
+  openImageActions: (item: CookRecipeEntry, hasPhoto: boolean) => void;
+};
 
-  if (scheme === 'ph' || scheme === 'assets-library') return null;
+const CookbookListRow = memo(function CookbookListRow({
+  item,
+  busyImageId,
+  canEditImageForEntry,
+  openImageActions,
+}: CookbookListRowProps) {
+  const resolvedUri = useResolvedScanImageUri({
+    storagePath: item.storagePath,
+    imagePreviewUri: item.imagePreviewUri,
+    imageUri: item.imageUri,
+  });
+  const displayUri = resolvedUri ?? COOK_LIST_IMAGE_FALLBACK;
+  const resolvedScheme = displayUri.split(':')[0] || 'none';
+  const isLocal = resolvedScheme === 'file' || resolvedScheme === 'data';
+  const hasPhoto = Boolean(resolvedUri);
+  const isBusy = busyImageId === item.id;
+  const isGuide = item.source === 'tucka-guide';
+  const safetyDot = item.safetyStatus === 'safe' ? COLORS.success : COLORS.warning;
+  const rawScheme = (item.imageUri ?? '').split(':')[0] || 'none';
 
-  if (raw.startsWith('/')) {
-    raw = `file://${raw}`;
-  }
+  return (
+    <TouchableOpacity
+      style={[styles.itemCard, isBusy && styles.itemCardBusy]}
+      onPress={() => {
+        if (item.source === 'collection' && item.scanEntryId) {
+          router.push(`/scan/${encodeURIComponent(item.scanEntryId)}`);
+          return;
+        }
+        router.push(`/cook/guide/${encodeURIComponent(item.id)}`);
+      }}
+      onLongPress={() => {
+        if (!canEditImageForEntry(item)) return;
+        openImageActions(item, hasPhoto);
+      }}
+      delayLongPress={280}
+      disabled={isBusy}
+      testID={`cook-item-${item.id}`}
+    >
+      <View style={styles.itemImageWrap}>
+        <Image
+          source={{ uri: displayUri }}
+          style={styles.itemImage}
+          contentFit="cover"
+          cachePolicy={isLocal ? 'none' : 'memory-disk'}
+          transition={120}
+          {...(!isLocal ? { recyclingKey: `${item.id}:${resolvedUri ?? 'fallback'}` } : {})}
+          testID={`cook-item-image-${item.id}`}
+          onLoadStart={() => {
+            console.log('[Cook] image load start', {
+              id: item.id,
+              resolvedUriScheme: resolvedScheme,
+              rawUriScheme: rawScheme,
+              isLocal,
+            });
+          }}
+          onLoad={() => {
+            console.log('[Cook] image loaded', {
+              id: item.id,
+              resolvedUriScheme: resolvedScheme,
+              rawUriScheme: rawScheme,
+              isLocal,
+            });
+          }}
+          onError={(e) => {
+            console.log('[Cook] image load error', {
+              id: item.id,
+              uri: item.imageUri,
+              resolvedUri,
+              resolvedUriScheme: resolvedScheme,
+              rawUriScheme: rawScheme,
+              isLocal,
+              error: (e as unknown as { error?: string })?.error,
+            });
+          }}
+        />
+        <View style={styles.itemTopRow}>
+          {canEditImageForEntry(item) ? (
+            <TouchableOpacity
+              style={[styles.imageQuickAction, isBusy && styles.imageQuickActionDisabled]}
+              onPress={() => openImageActions(item, hasPhoto)}
+              disabled={isBusy}
+              testID={`cook-item-image-action-${item.id}`}
+            >
+              <ImageUp size={16} color={COLORS.text} />
+            </TouchableOpacity>
+          ) : null}
 
-  if (raw.startsWith('file:/') && !raw.startsWith('file://')) {
-    raw = `file:///${raw.replace(/^file:\/*/i, '')}`;
-  }
+          <View style={styles.itemTopRowInner}>
+            <View style={styles.safetyPill}>
+              <View style={[styles.safetyDot, { backgroundColor: safetyDot }]} />
+              <Text style={styles.safetyPillText}>{item.safetyStatus.toUpperCase()}</Text>
+            </View>
 
-  if (raw.includes(' ')) {
-    raw = raw.replace(/ /g, '%20');
-  }
+            {isGuide ? (
+              <View style={styles.guidePill} testID={`cook-item-guide-pill-${item.id}`}>
+                <BookmarkPlus size={14} color={COLORS.primary} />
+                <Text style={styles.guidePillText}>Guide</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </View>
 
-  try {
-    return encodeURI(raw);
-  } catch {
-    return raw;
-  }
-}
+      {canEditImageForEntry(item) ? (
+        <Text style={styles.holdHint} testID={`cook-item-hold-hint-${item.id}`}>
+          Tap photo icon to change / remove
+        </Text>
+      ) : null}
+
+      <View style={styles.itemBody}>
+        <Text style={styles.itemTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.itemSubtitle} numberOfLines={1}>
+          {item.scientificName ? `${item.commonName} • ${item.scientificName}` : item.commonName}
+        </Text>
+
+        <View style={styles.itemMetaRow}>
+          <View style={styles.confidencePill}>
+            <Text style={styles.confidenceText}>{Math.round(item.confidence * 100)}% confidence</Text>
+          </View>
+          {item.suggestedUses.length > 0 ? (
+            <Text style={styles.usesText} numberOfLines={1}>
+              {item.suggestedUses[0]}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 export default function CookScreen() {
   const { entries, isLoading, errorMessage, setEntryImage, clearEntryImage, canEditImageForEntry } = useCookbook();
@@ -67,9 +183,17 @@ export default function CookScreen() {
         setBusyImageId(entryId);
         console.log('[Cook] pickImageForEntry start', { entryId });
 
+        if (Platform.OS !== 'web') {
+          const ok = await prepareMediaLibraryPicker();
+          if (!ok) {
+            Alert.alert('Permission needed', 'Photo library access is required to set a recipe photo.');
+            return;
+          }
+        }
+
         const res = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
-          allowsEditing: true,
+          allowsEditing: pickerAllowsEditing(),
           quality: 0.9,
           base64: Platform.OS === 'web',
         });
@@ -147,132 +271,14 @@ export default function CookScreen() {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: CookRecipeEntry }) => {
-      const safetyDot = item.safetyStatus === 'safe' ? COLORS.success : COLORS.warning;
-      const isGuide = item.source === 'tucka-guide';
-
-      const resolvedUri = safeImageUri(item.imageUri);
-      const resolvedScheme = (resolvedUri ?? '').split(':')[0] || 'none';
-      const rawScheme = (item.imageUri ?? '').split(':')[0] || 'none';
-      const isLocal = resolvedScheme === 'file' || resolvedScheme === 'data';
-      const hasPhoto = Boolean(resolvedUri);
-      const isBusy = busyImageId === item.id;
-
-      return (
-        <TouchableOpacity
-          style={[styles.itemCard, isBusy && styles.itemCardBusy]}
-          onPress={() => {
-            if (item.source === 'collection' && item.scanEntryId) {
-              router.push(`/scan/${encodeURIComponent(item.scanEntryId)}`);
-              return;
-            }
-            router.push(`/cook/guide/${encodeURIComponent(item.id)}`);
-          }}
-          onLongPress={() => {
-            if (!canEditImageForEntry(item)) return;
-            openImageActions(item, hasPhoto);
-          }}
-          delayLongPress={280}
-          disabled={isBusy}
-          testID={`cook-item-${item.id}`}
-        >
-          <View style={styles.itemImageWrap}>
-            <Image
-              source={{
-                uri:
-                  resolvedUri ??
-                  'https://images.unsplash.com/photo-1541544181051-e46601a43f2b?q=80&w=1600&auto=format&fit=crop',
-              }}
-              style={styles.itemImage}
-              contentFit="cover"
-              cachePolicy={isLocal ? 'none' : 'memory-disk'}
-              transition={120}
-              {...(!isLocal ? { recyclingKey: `${item.id}:${resolvedUri ?? 'fallback'}` } : {})}
-              testID={`cook-item-image-${item.id}`}
-              onLoadStart={() => {
-                console.log('[Cook] image load start', {
-                  id: item.id,
-                  resolvedUriScheme: resolvedScheme,
-                  rawUriScheme: rawScheme,
-                  isLocal,
-                });
-              }}
-              onLoad={() => {
-                console.log('[Cook] image loaded', {
-                  id: item.id,
-                  resolvedUriScheme: resolvedScheme,
-                  rawUriScheme: rawScheme,
-                  isLocal,
-                });
-              }}
-              onError={(e) => {
-                console.log('[Cook] image load error', {
-                  id: item.id,
-                  uri: item.imageUri,
-                  resolvedUri,
-                  resolvedUriScheme: resolvedScheme,
-                  rawUriScheme: rawScheme,
-                  isLocal,
-                  error: (e as unknown as { error?: string })?.error,
-                });
-              }}
-            />
-            <View style={styles.itemTopRow}>
-              {canEditImageForEntry(item) ? (
-                <TouchableOpacity
-                  style={[styles.imageQuickAction, isBusy && styles.imageQuickActionDisabled]}
-                  onPress={() => openImageActions(item, hasPhoto)}
-                  disabled={isBusy}
-                  testID={`cook-item-image-action-${item.id}`}
-                >
-                  <ImageUp size={16} color={COLORS.text} />
-                </TouchableOpacity>
-              ) : null}
-
-              <View style={styles.itemTopRowInner}>
-                <View style={styles.safetyPill}>
-                <View style={[styles.safetyDot, { backgroundColor: safetyDot }]} />
-                <Text style={styles.safetyPillText}>{item.safetyStatus.toUpperCase()}</Text>
-              </View>
-
-                {isGuide ? (
-                  <View style={styles.guidePill} testID={`cook-item-guide-pill-${item.id}`}>
-                    <BookmarkPlus size={14} color={COLORS.primary} />
-                    <Text style={styles.guidePillText}>Guide</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          </View>
-
-          {canEditImageForEntry(item) ? (
-            <Text style={styles.holdHint} testID={`cook-item-hold-hint-${item.id}`}>
-              Tap photo icon to change / remove
-            </Text>
-          ) : null}
-
-          <View style={styles.itemBody}>
-            <Text style={styles.itemTitle} numberOfLines={1}>
-              {item.title}
-            </Text>
-            <Text style={styles.itemSubtitle} numberOfLines={1}>
-              {item.scientificName ? `${item.commonName} • ${item.scientificName}` : item.commonName}
-            </Text>
-
-            <View style={styles.itemMetaRow}>
-              <View style={styles.confidencePill}>
-                <Text style={styles.confidenceText}>{Math.round(item.confidence * 100)}% confidence</Text>
-              </View>
-              {item.suggestedUses.length > 0 ? (
-                <Text style={styles.usesText} numberOfLines={1}>
-                  {item.suggestedUses[0]}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        </TouchableOpacity>
-      );
-    },
+    ({ item }: { item: CookRecipeEntry }) => (
+      <CookbookListRow
+        item={item}
+        busyImageId={busyImageId}
+        canEditImageForEntry={canEditImageForEntry}
+        openImageActions={openImageActions}
+      />
+    ),
     [busyImageId, canEditImageForEntry, openImageActions],
   );
 

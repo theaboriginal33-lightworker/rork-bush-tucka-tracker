@@ -3,6 +3,21 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Platform } from 'react-native';
+import { useAuth } from '@/app/providers/AuthProvider';
+import {
+  bulkUpsertScanJournalRows,
+  deleteAllScanJournalRows,
+  deleteScanJournalRow,
+  fetchScanJournalRows,
+  upsertScanJournalRow,
+} from '@/constants/scanJournalRemote';
+import {
+  buildScanImageStoragePath,
+  deleteAllUserScanImages,
+  deleteScanJournalImage,
+  uploadScanJournalImage,
+} from '@/constants/scanImagesStorage';
+import { hasSupabaseConfig } from '@/constants/supabase';
 
 const STORAGE_KEY = 'bush-tucka.scan-journal.v1';
 
@@ -64,6 +79,8 @@ export type ScanJournalEntry = {
   location?: ScanJournalLocation;
   imageUri?: string;
   imagePreviewUri?: string;
+  /** Supabase Storage path in `scan-images` bucket: `{userId}/{entryId}.jpg` */
+  storagePath?: string;
   notes?: string;
   chatHistory?: ScanJournalChatMessage[];
   scan: GeminiScanResult;
@@ -152,6 +169,7 @@ function normalizeEntry(input: ScanJournalEntry): ScanJournalEntry {
     location,
     imageUri: input.imageUri ? String(input.imageUri) : undefined,
     imagePreviewUri: input.imagePreviewUri ? String(input.imagePreviewUri) : undefined,
+    storagePath: input.storagePath ? String(input.storagePath) : undefined,
     notes: typeof input.notes === 'string' ? input.notes : undefined,
     chatHistory,
     scan: normalizedScan,
@@ -262,6 +280,78 @@ function compactEntryForNative(entry: ScanJournalEntry): ScanJournalEntry {
       : entry.chatHistory,
     scan: compactScan,
   };
+}
+
+function sortJournalEntries(list: ScanJournalEntry[]): ScanJournalEntry[] {
+  return [...list].sort((a, b) => {
+    const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
+    const bT = Number.isFinite(b.createdAt) ? b.createdAt : 0;
+    if (bT !== aT) return bT - aT;
+    return String(b.id).localeCompare(String(a.id));
+  });
+}
+
+/** Only persist cross-device-safe URIs; `storage_path` carries photos. Strip sandbox `file:` / `content:` etc. */
+function portableImageUriForRemote(uri: string | undefined): string | undefined {
+  if (typeof uri !== 'string') return undefined;
+  const t = uri.trim();
+  if (!t) return undefined;
+  if (t.startsWith('data:')) return undefined;
+  const s = t.split(':')[0]?.toLowerCase() ?? '';
+  if (s === 'file' || s === 'content' || s === 'blob' || s === 'ph' || s === 'assets-library') return undefined;
+  return t;
+}
+
+function entryToRemotePayload(entry: ScanJournalEntry): Record<string, unknown> {
+  const stripped = stripLargeWebImages(stripLargeNativeImages(entry));
+  const compact = compactEntryForNative(stripped);
+  return {
+    createdAt: compact.createdAt,
+    title: compact.title,
+    locationName: compact.locationName,
+    location: compact.location,
+    imageUri: portableImageUriForRemote(compact.imageUri),
+    imagePreviewUri: portableImageUriForRemote(compact.imagePreviewUri),
+    notes: compact.notes,
+    chatHistory: compact.chatHistory,
+    scan: compact.scan as unknown as Record<string, unknown>,
+  };
+}
+
+function remoteRowToEntry(
+  row: {
+    id: string;
+    storage_path: string | null;
+    payload: unknown;
+  },
+  ownerUserId: string | null
+): ScanJournalEntry | null {
+  if (!row.payload || typeof row.payload !== 'object') return null;
+  const p = row.payload as Record<string, unknown>;
+  const scan = p.scan;
+  if (!scan || typeof scan !== 'object') return null;
+  const colPath = row.storage_path ? String(row.storage_path).trim() : '';
+  const inferredPath =
+    !colPath && ownerUserId
+      ? buildScanImageStoragePath(ownerUserId, row.id, 'jpg')
+      : undefined;
+  try {
+    return normalizeEntry({
+      id: row.id,
+      createdAt: typeof p.createdAt === 'number' && Number.isFinite(p.createdAt) ? p.createdAt : Date.now(),
+      title: String(p.title ?? ''),
+      locationName: typeof p.locationName === 'string' ? p.locationName : undefined,
+      location: p.location as ScanJournalLocation | undefined,
+      imageUri: typeof p.imageUri === 'string' ? p.imageUri : undefined,
+      imagePreviewUri: typeof p.imagePreviewUri === 'string' ? p.imagePreviewUri : undefined,
+      storagePath: colPath || inferredPath,
+      notes: typeof p.notes === 'string' ? p.notes : undefined,
+      chatHistory: Array.isArray(p.chatHistory) ? (p.chatHistory as ScanJournalChatMessage[]) : undefined,
+      scan: scan as GeminiScanResult,
+    });
+  } catch {
+    return null;
+  }
 }
 
 function getIndexedDb(): any | null {
@@ -384,6 +474,15 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const loadedOnceRef = useRef<boolean>(false);
   const storageInitRef = useRef<boolean>(false);
+  const storageBackfillTriedRef = useRef<Set<string>>(new Set());
+
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const journalRemoteKey = hasSupabaseConfig && userId ? userId : 'local';
+
+  useEffect(() => {
+    loadedOnceRef.current = false;
+  }, [journalRemoteKey]);
 
   useEffect(() => {
     if (storageInitRef.current) return;
@@ -401,7 +500,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
   }, []);
 
   const { data, error, isLoading, refetch } = useQuery({
-    queryKey: ['scanJournal', 'entries'],
+    queryKey: ['scanJournal', 'entries', journalRemoteKey],
     retry: 0,
     queryFn: async () => {
       console.log('[ScanJournal] loading from storage');
@@ -450,15 +549,72 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       const cleaned = Platform.OS === 'web'
         ? normalized.map((entry) => stripLargeWebImages(entry))
         : normalized.map((entry) => stripLargeNativeImages(entry));
-      if (Platform.OS === 'web') {
-        webMemoryCache = cleaned;
+      const sorted = sortJournalEntries(cleaned);
+
+      const wantRemote = journalRemoteKey !== 'local';
+      const remoteUserId = wantRemote && userId ? userId : null;
+
+      if (!remoteUserId) {
+        if (Platform.OS === 'web') webMemoryCache = sorted;
+        return sorted;
       }
-      return cleaned.sort((a, b) => {
-        const aT = Number.isFinite(a.createdAt) ? a.createdAt : 0;
-        const bT = Number.isFinite(b.createdAt) ? b.createdAt : 0;
-        if (bT !== aT) return bT - aT;
-        return String(b.id).localeCompare(String(a.id));
-      });
+
+      try {
+        const rows = await fetchScanJournalRows(remoteUserId);
+        const remoteEntries = rows
+          .map((r) => remoteRowToEntry(r, remoteUserId))
+          .filter((e): e is ScanJournalEntry => e !== null);
+
+        if (remoteEntries.length === 0 && sorted.length > 0) {
+          const ok = await bulkUpsertScanJournalRows(
+            remoteUserId,
+            sorted.map((e) => ({
+              id: e.id,
+              storage_path: e.storagePath ?? null,
+              payload: entryToRemotePayload(e),
+            }))
+          );
+          if (ok) {
+            console.log('[ScanJournal] migrated local entries to Supabase', { count: sorted.length });
+          } else {
+            console.log('[ScanJournal] bulk upsert to Supabase failed; keeping local only');
+          }
+          const finalList = sorted.map((e) =>
+            Platform.OS === 'web' ? stripLargeWebImages(e) : stripLargeNativeImages(e)
+          );
+          if (Platform.OS === 'web') webMemoryCache = finalList;
+          return sortJournalEntries(finalList);
+        }
+
+        if (remoteEntries.length > 0) {
+          const rmap = new Map(remoteEntries.map((e) => [e.id, e]));
+          for (const l of sorted) {
+            if (!rmap.has(l.id)) {
+              rmap.set(l.id, l);
+              void upsertScanJournalRow(remoteUserId, {
+                id: l.id,
+                storage_path: l.storagePath ?? null,
+                payload: entryToRemotePayload(l),
+              });
+            }
+          }
+          const merged = sortJournalEntries(Array.from(rmap.values()));
+          const finalList = merged.map((e) =>
+            Platform.OS === 'web' ? stripLargeWebImages(e) : stripLargeNativeImages(e)
+          );
+          if (Platform.OS === 'web') webMemoryCache = finalList;
+          return sortJournalEntries(finalList);
+        }
+
+        const out = sorted.map((e) => (Platform.OS === 'web' ? stripLargeWebImages(e) : stripLargeNativeImages(e)));
+        if (Platform.OS === 'web') webMemoryCache = out;
+        return sortJournalEntries(out);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.log('[ScanJournal] Supabase journal load failed; using local', { message });
+        if (Platform.OS === 'web') webMemoryCache = sorted;
+        return sorted;
+      }
     },
   });
 
@@ -473,6 +629,12 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
 
     if (!Array.isArray(data)) {
       console.log('[ScanJournal] loadQuery no data (continuing)', { hasData: Boolean(data) });
+      return;
+    }
+
+    if (journalRemoteKey !== 'local') {
+      setEntries(data);
+      setErrorMessage(null);
       return;
     }
 
@@ -500,7 +662,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       return merged;
     });
     setErrorMessage(null);
-  }, [data, error, isLoading]);
+  }, [data, error, isLoading, journalRemoteKey]);
 
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -647,6 +809,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
           location: entryInput.location,
           imageUri: entryInput.imageUri,
           imagePreviewUri: entryInput.imagePreviewUri,
+          storagePath: entryInput.storagePath,
           notes: entryInput.notes,
           chatHistory: entryInput.chatHistory,
           scan: entryInput.scan,
@@ -672,6 +835,29 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         }
       }
 
+      if (hasSupabaseConfig && userId) {
+        const syncEntry =
+          resolvedEntry ??
+          normalizeEntry({
+            id,
+            createdAt: inputCreatedAt,
+            title: entryInput.title,
+            locationName: entryInput.locationName,
+            location: entryInput.location,
+            imageUri: entryInput.imageUri,
+            imagePreviewUri: entryInput.imagePreviewUri,
+            storagePath: entryInput.storagePath,
+            notes: entryInput.notes,
+            chatHistory: entryInput.chatHistory,
+            scan: entryInput.scan,
+          });
+        void upsertScanJournalRow(userId, {
+          id: syncEntry.id,
+          storage_path: syncEntry.storagePath ?? null,
+          payload: entryToRemotePayload(syncEntry),
+        });
+      }
+
       const out =
         resolvedEntry ??
         normalizeEntry({
@@ -682,6 +868,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
           location: entryInput.location,
           imageUri: entryInput.imageUri,
           imagePreviewUri: entryInput.imagePreviewUri,
+          storagePath: entryInput.storagePath,
           notes: entryInput.notes,
           chatHistory: entryInput.chatHistory,
           scan: entryInput.scan,
@@ -690,7 +877,7 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       console.log('[ScanJournal] addEntry', { id: out.id, title: out.title, createdAt: out.createdAt });
       return out;
     },
-    [persist, sortEntries],
+    [persist, sortEntries, userId],
   );
 
   const getEntryById = useCallback(
@@ -719,6 +906,12 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
             location: patch.location ?? e.location,
             imageUri: typeof patch.imageUri === 'string' ? patch.imageUri : e.imageUri,
             imagePreviewUri: typeof patch.imagePreviewUri === 'string' ? patch.imagePreviewUri : e.imagePreviewUri,
+            storagePath:
+              patch.storagePath !== undefined
+                ? patch.storagePath
+                  ? String(patch.storagePath)
+                  : undefined
+                : e.storagePath,
             notes: typeof patch.notes === 'string' ? patch.notes : e.notes,
             chatHistory: Array.isArray(patch.chatHistory) ? patch.chatHistory : e.chatHistory,
             scan: e.scan,
@@ -747,10 +940,64 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         }
       }
 
+      if (hasSupabaseConfig && userId) {
+        const row = nextSnapshot.find((e) => e.id === id);
+        if (row) {
+          void upsertScanJournalRow(userId, {
+            id: row.id,
+            storage_path: row.storagePath ?? null,
+            payload: entryToRemotePayload(row),
+          });
+        }
+      }
+
       return updated;
     },
-    [persist, sortEntries],
+    [persist, sortEntries, userId],
   );
+
+  /**
+   * If a scan was saved while offline / before auth, `storage_path` may be empty while a local
+   * file URI still exists. Upload once and upsert the row when the user session is available.
+   */
+  useEffect(() => {
+    if (!hasSupabaseConfig || !userId || entries.length === 0) return;
+
+    void (async () => {
+      for (const e of entries) {
+        if (e.storagePath) continue;
+        if (storageBackfillTriedRef.current.has(e.id)) continue;
+
+        const localUri = (() => {
+          const u = e.imageUri?.trim() ?? '';
+          if (u.length > 0 && !u.startsWith('data:')) return u;
+          const p = e.imagePreviewUri?.trim() ?? '';
+          if (p.length > 0 && !p.startsWith('data:')) return p;
+          return '';
+        })();
+        if (!localUri) continue;
+
+        storageBackfillTriedRef.current.add(e.id);
+        try {
+          const uploaded = await uploadScanJournalImage({
+            userId,
+            entryId: e.id,
+            localUri,
+            mimeType: 'image/jpeg',
+          });
+          if (uploaded?.path) {
+            await updateEntry(e.id, { storagePath: uploaded.path });
+            console.log('[ScanJournal] backfilled storage_path', { id: e.id });
+          }
+        } catch (err) {
+          console.log('[ScanJournal] storage backfill failed', {
+            id: e.id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    })();
+  }, [entries, updateEntry, userId]);
 
   const removeEntry = useCallback(
     async (id: string) => {
@@ -758,6 +1005,10 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       setErrorMessage(null);
       let nextSnapshot: ScanJournalEntry[] = [];
       setEntries((prev) => {
+        const victim = prev.find((e) => e.id === id);
+        if (victim?.storagePath) {
+          void deleteScanJournalImage(victim.storagePath);
+        }
         const next = prev.filter((e) => e.id !== id);
         nextSnapshot = next;
         return next;
@@ -769,9 +1020,12 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
         const message = e instanceof Error ? e.message : String(e);
         console.log('[ScanJournal] removeEntry persist failed', { message });
       }
+      if (hasSupabaseConfig && userId) {
+        void deleteScanJournalRow(userId, id);
+      }
       console.log('[ScanJournal] removeEntry', { id });
     },
-    [persist],
+    [persist, userId],
   );
 
   const clearAll = useCallback(async () => {
@@ -786,8 +1040,16 @@ export const [ScanJournalProvider, useScanJournal] = createContextHook<ScanJourn
       const message = e instanceof Error ? e.message : String(e);
       console.log('[ScanJournal] clearAll persist failed', { message });
     }
+    if (hasSupabaseConfig && userId) {
+      try {
+        await deleteAllUserScanImages(userId);
+      } catch (e) {
+        console.log('[ScanJournal] clearAll storage wipe failed', e instanceof Error ? e.message : String(e));
+      }
+      await deleteAllScanJournalRows(userId);
+    }
     console.log('[ScanJournal] clearAll');
-  }, [persist]);
+  }, [persist, userId]);
 
   const value = useMemo<ScanJournalContextValue>(
     () => ({

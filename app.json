@@ -1,10 +1,8 @@
-
-
 {
   "expo": {
     "name": "Bush Tucka Tracker",
     "slug": "bush-tucka-tracka",
-  "version": "2.0.2",
+    "version": "2.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rork-app",
@@ -17,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-       "buildNumber": "4",
+      "buildNumber": "4",
       "bundleIdentifier": "app.rork.bush-tucka-tracker",
       "icon": "./assets/images/icon.png",
       "config": {
@@ -35,6 +33,7 @@
       }
     },
     "android": {
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -76,10 +75,26 @@
         }
       ],
       "./plugins/withReactNativeMaps",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Bush Tucka Tracker to choose photos to scan plants and set recipe images.",
+          "cameraPermission": "Allow Bush Tucka Tracker to take photos for plant scanning."
+        }
+      ],
       "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "30746df5-2087-42aa-81da-f27a6d755195"
+      }
+    },
+    "owner": "evish3652"
   }
 }
