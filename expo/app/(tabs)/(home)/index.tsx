@@ -187,11 +187,8 @@ Return JSON with keys:
             if (json?.promptFeedback?.blockReason) throw new Error(`Gemini blocked the response: ${json.promptFeedback.blockReason}`);
             if (!text) throw new Error('Gemini returned an empty response.');
             setScanPhase('parsing');
-            let parsed: GeminiScanResult;
-            try { parsed = parseGeminiResult(text); } catch (parseError) {
-              const message = parseError instanceof Error ? parseError.message : String(parseError);
-              throw new Error(`Could not parse Gemini response as JSON. ${message}`);
-            }
+            // parseGeminiResult never throws — it returns a safe minimum result on failure
+            const parsed: GeminiScanResult = parseGeminiResult(text);
             setScanResult(parsed);
 
             // --- Triple-Verification: Plant.id + iNaturalist ---
@@ -368,7 +365,13 @@ Return JSON with keys:
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             lastError = message;
+            // Model not available — try next candidate
             if (/not found/i.test(message) || /is not supported/i.test(message) || /unsupported/i.test(message)) continue;
+            // Rate limit or resource exhausted — wait 2s then try next candidate
+            if (/resource.?exhausted/i.test(message) || /quota/i.test(message) || /rate.?limit/i.test(message) || /429/i.test(message)) {
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              continue;
+            }
             throw e;
           }
         }

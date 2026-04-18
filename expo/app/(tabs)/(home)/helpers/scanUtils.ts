@@ -126,17 +126,26 @@ export function getGeminiText(json: { candidates?: { content?: { parts?: { text?
     .trim();
 }
 
+/**
+ * Attempts to repair a truncated JSON string by:
+ * 1. Removing trailing commas (common truncation artifact)
+ * 2. Closing any open strings
+ * 3. Closing any open arrays and objects
+ */
 function repairTruncatedJson(raw: string): unknown {
-  // Try to close an incomplete JSON object by counting unclosed braces/brackets
-  // and appending the necessary closing characters
   let text = raw.trim();
-  // Remove trailing comma if present (common truncation artifact)
-  text = text.replace(/,\s*$/, '');
-  // Count open braces and brackets
+
+  // Remove trailing comma or partial key-value that got cut off
+  // e.g. "suggestedUses": ["Eat fresh" -> remove incomplete last item
+  text = text.replace(/,\s*"[^"]*$/, ''); // remove trailing partial key
+  text = text.replace(/,\s*$/, '');        // remove trailing comma
+
+  // Count open braces and brackets, tracking string state
   let braces = 0;
   let brackets = 0;
   let inString = false;
   let escape = false;
+
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (escape) { escape = false; continue; }
@@ -148,25 +157,33 @@ function repairTruncatedJson(raw: string): unknown {
     else if (ch === '[') brackets++;
     else if (ch === ']') brackets--;
   }
+
   // Close any open strings first
   if (inString) text += '"';
-  // Close open arrays then objects
+  // Close open arrays then objects (order matters — innermost first)
   for (let i = 0; i < brackets; i++) text += ']';
   for (let i = 0; i < braces; i++) text += '}';
+
   return JSON.parse(text);
 }
 
+/**
+ * Extracts and parses JSON from a Gemini response string.
+ * Handles: clean JSON, markdown-fenced JSON, JSON embedded in prose,
+ * and truncated/incomplete JSON (via repair).
+ * Never throws without exhausting all recovery strategies.
+ */
 export function extractJsonFromText(rawText: string): unknown {
   const text = rawText.trim();
 
-  // Try fenced code block first
+  // Strategy 1: fenced code block ```json ... ```
   const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fencedMatch?.[1]) {
     try { return JSON.parse(fencedMatch[1]); } catch { /* fall through */ }
     try { return repairTruncatedJson(fencedMatch[1]); } catch { /* fall through */ }
   }
 
-  // Try extracting from first { to last }
+  // Strategy 2: extract from first { to last }
   const firstCurly = text.indexOf('{');
   const lastCurly = text.lastIndexOf('}');
   if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
@@ -174,100 +191,109 @@ export function extractJsonFromText(rawText: string): unknown {
     try { return JSON.parse(candidate); } catch { /* fall through */ }
   }
 
-  // Try parsing the whole text
+  // Strategy 3: parse the whole text as-is
   try { return JSON.parse(text); } catch { /* fall through */ }
 
-  // Last resort: try to repair truncated JSON starting from first {
+  // Strategy 4: repair truncated JSON from first {
   if (firstCurly !== -1) {
-    return repairTruncatedJson(text.slice(firstCurly));
+    try { return repairTruncatedJson(text.slice(firstCurly)); } catch { /* fall through */ }
   }
 
-  return JSON.parse(text); // will throw with a clear message
+  // Strategy 5: repair the whole text
+  try { return repairTruncatedJson(text); } catch { /* fall through */ }
+
+  // All strategies exhausted — throw a clear error
+  throw new Error(`Could not extract JSON from Gemini response. Response length: ${text.length} chars.`);
 }
 
-export function parseGeminiResult(text: string): GeminiScanResult {
-  const parsed = extractJsonFromText(text) as {
-    commonName?: unknown;
-    scientificName?: unknown;
-    confidence?: unknown;
-    bushTuckerLikely?: unknown;
-    safety?: {
-      status?: unknown;
-      summary?: unknown;
-      keyRisks?: unknown;
-    };
-    categories?: unknown;
-    preparation?: {
-      ease?: unknown;
-      steps?: unknown;
-    };
-    seasonality?: {
-      bestMonths?: unknown;
-      notes?: unknown;
-    };
-    culturalKnowledge?: {
-      notes?: unknown;
-      respect?: unknown;
-    };
-    warnings?: unknown;
-    suggestedUses?: unknown;
-  };
+/**
+ * Safe array helper — always returns a string array regardless of input shape.
+ */
+function safeArray(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v)).filter(Boolean).slice(0, max);
+}
 
-  const confidenceRaw = Number(parsed.confidence ?? 0);
+/**
+ * Parses a raw Gemini text response into a typed GeminiScanResult.
+ * All fields have safe defaults — this function never throws on missing/malformed fields.
+ */
+export function parseGeminiResult(text: string): GeminiScanResult {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let parsed: any;
+  try {
+    parsed = extractJsonFromText(text);
+  } catch (e) {
+    // If we truly cannot parse anything, return a safe minimum result
+    // rather than crashing the scan entirely
+    console.warn('[parseGeminiResult] All JSON extraction strategies failed:', e instanceof Error ? e.message : String(e));
+    return {
+      commonName: 'Unconfirmed Plant',
+      scientificName: undefined,
+      confidence: 0,
+      bushTuckerLikely: false,
+      safety: {
+        status: 'unknown',
+        summary: 'Could not fully parse the identification result. Please try scanning again.',
+        keyRisks: [],
+      },
+      categories: [],
+      preparation: { ease: 'unknown', steps: [] },
+      seasonality: { bestMonths: [], notes: '' },
+      culturalKnowledge: { notes: '', respect: [] },
+      warnings: ['Scan result was incomplete — please try again for a full identification.'],
+      suggestedUses: [],
+    };
+  }
+
+  // Safely coerce all fields — nothing here can throw
+  const confidenceRaw = Number(parsed?.confidence ?? 0);
   const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0;
 
-  const safetyStatusRaw = String(parsed.safety?.status ?? 'unknown');
+  const safetyStatusRaw = String(parsed?.safety?.status ?? 'unknown').toLowerCase();
   const safetyStatus: SafetyEdibility['status'] =
-    safetyStatusRaw === 'safe' || safetyStatusRaw === 'caution' || safetyStatusRaw === 'unknown'
-      ? safetyStatusRaw
-      : safetyStatusRaw === 'unsafe'
-        ? 'caution'
-        : safetyStatusRaw === 'uncertain'
-          ? 'unknown'
-          : 'unknown';
+    safetyStatusRaw === 'safe' ? 'safe'
+    : safetyStatusRaw === 'caution' || safetyStatusRaw === 'unsafe' ? 'caution'
+    : 'unknown';
 
-  const prepEaseRaw = String(parsed.preparation?.ease ?? 'unknown');
+  const prepEaseRaw = String(parsed?.preparation?.ease ?? 'unknown').toLowerCase();
   const prepEase: Preparation['ease'] =
-    prepEaseRaw === 'easy' || prepEaseRaw === 'medium' || prepEaseRaw === 'hard' || prepEaseRaw === 'unknown'
-      ? prepEaseRaw
-      : 'unknown';
+    prepEaseRaw === 'easy' ? 'easy'
+    : prepEaseRaw === 'medium' ? 'medium'
+    : prepEaseRaw === 'hard' ? 'hard'
+    : 'unknown';
 
-  const safeArray = (value: unknown, max: number): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value.map((v) => String(v)).filter(Boolean).slice(0, max);
-  };
-
-  const rawCommonName = String(parsed.commonName ?? '').trim();
+  const rawCommonName = String(parsed?.commonName ?? '').trim();
   const commonName = rawCommonName.length > 0 ? rawCommonName : 'Unconfirmed Plant';
 
-  const categories = Array.isArray(parsed.categories)
-    ? parsed.categories.map((c) => String(c)).filter((c) => c.trim().length > 0).slice(0, 12)
+  const categories = Array.isArray(parsed?.categories)
+    ? parsed.categories.map((c: unknown) => String(c)).filter((c: string) => c.trim().length > 0).slice(0, 12)
     : [];
 
   return {
     commonName,
-    scientificName: parsed.scientificName ? String(parsed.scientificName) : undefined,
+    scientificName: parsed?.scientificName ? String(parsed.scientificName) : undefined,
     confidence,
-    bushTuckerLikely: Boolean(parsed.bushTuckerLikely ?? false),
+    bushTuckerLikely: Boolean(parsed?.bushTuckerLikely ?? false),
     safety: {
       status: safetyStatus,
-      summary: String(parsed.safety?.summary ?? ''),
-      keyRisks: safeArray(parsed.safety?.keyRisks, 6),
+      summary: String(parsed?.safety?.summary ?? ''),
+      keyRisks: safeArray(parsed?.safety?.keyRisks, 6),
     },
     categories,
     preparation: {
       ease: prepEase,
-      steps: safeArray(parsed.preparation?.steps, 8),
+      steps: safeArray(parsed?.preparation?.steps, 8),
     },
     seasonality: {
-      bestMonths: safeArray(parsed.seasonality?.bestMonths, 12),
-      notes: String(parsed.seasonality?.notes ?? ''),
+      bestMonths: safeArray(parsed?.seasonality?.bestMonths, 12),
+      notes: String(parsed?.seasonality?.notes ?? ''),
     },
     culturalKnowledge: {
-      notes: refineCulturalNotes(String(parsed.culturalKnowledge?.notes ?? '')),
-      respect: safeArray(parsed.culturalKnowledge?.respect, 6),
+      notes: refineCulturalNotes(String(parsed?.culturalKnowledge?.notes ?? '')),
+      respect: safeArray(parsed?.culturalKnowledge?.respect, 6),
     },
-    warnings: safeArray(parsed.warnings, 8),
-    suggestedUses: safeArray(parsed.suggestedUses, 8),
+    warnings: safeArray(parsed?.warnings, 8),
+    suggestedUses: safeArray(parsed?.suggestedUses, 8),
   };
 }
