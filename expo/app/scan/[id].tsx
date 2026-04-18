@@ -1563,6 +1563,14 @@ ${scanBannerHtml}
                 )}
               </View>
 
+              {entry.scan.verificationNote ? (
+                <View style={styles.verificationBadge} testID="scan-details-verification-badge">
+                  <View style={styles.verificationBadgeRow}>
+                    <Text style={styles.verificationBadgeIcon}>🔬</Text>
+                    <Text style={styles.verificationBadgeText}>{entry.scan.verificationNote}</Text>
+                  </View>
+                </View>
+              ) : null}
               <View style={styles.insightCard} testID="scan-details-guide-culture">
                 <View style={styles.insightHeaderRow}>
                   <Sparkles size={18} color={COLORS.primary} />
@@ -2259,6 +2267,30 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: '800',
     color: 'rgba(234,246,238,0.55)',
+  },
+  verificationBadge: {
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(56,217,137,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.35)',
+  },
+  verificationBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  verificationBadgeIcon: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  verificationBadgeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   gateCard: {
     marginTop: 10,

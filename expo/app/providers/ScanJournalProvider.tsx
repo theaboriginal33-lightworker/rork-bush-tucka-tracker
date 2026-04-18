@@ -42,6 +42,7 @@ export type GeminiScanResult = {
 
   warnings: string[];
   suggestedUses: string[];
+  verificationNote?: string;
 };
 
 export type ScanJournalChatMessage = {
@@ -249,6 +250,7 @@ function compactEntryForNative(entry: ScanJournalEntry): ScanJournalEntry {
     },
     warnings: compactStringArray(scan.warnings, MAX_NATIVE_SCAN_ITEMS, 220),
     suggestedUses: compactStringArray(scan.suggestedUses, MAX_NATIVE_SCAN_ITEMS, 220),
+    verificationNote: compactText(scan.verificationNote, 400),
   };
 
   return {

@@ -229,7 +229,7 @@ Return JSON with keys:
               verificationNote = `${iNatResult.toLocaleString()} community sightings in Australia for ${parsed.scientificName ?? parsed.commonName}.`;
             }
             if (verificationNote) {
-              parsed = { ...parsed, culturalKnowledge: { ...parsed.culturalKnowledge, notes: (parsed.culturalKnowledge?.notes ? parsed.culturalKnowledge.notes + '\n\n' : '') + `🔬 ${verificationNote}` } };
+              parsed = { ...parsed, verificationNote };
             }
             // --- End Triple-Verification ---
 

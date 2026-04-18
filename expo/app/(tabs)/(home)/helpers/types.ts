@@ -31,6 +31,7 @@ export type GeminiScanResult = {
   culturalKnowledge: CulturalKnowledge;
   warnings: string[];
   suggestedUses: string[];
+  verificationNote?: string;
 };
 
 export type GeminiApiResponse = {
