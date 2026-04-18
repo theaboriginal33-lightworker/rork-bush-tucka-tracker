@@ -126,22 +126,63 @@ export function getGeminiText(json: { candidates?: { content?: { parts?: { text?
     .trim();
 }
 
+function repairTruncatedJson(raw: string): unknown {
+  // Try to close an incomplete JSON object by counting unclosed braces/brackets
+  // and appending the necessary closing characters
+  let text = raw.trim();
+  // Remove trailing comma if present (common truncation artifact)
+  text = text.replace(/,\s*$/, '');
+  // Count open braces and brackets
+  let braces = 0;
+  let brackets = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') braces++;
+    else if (ch === '}') braces--;
+    else if (ch === '[') brackets++;
+    else if (ch === ']') brackets--;
+  }
+  // Close any open strings first
+  if (inString) text += '"';
+  // Close open arrays then objects
+  for (let i = 0; i < brackets; i++) text += ']';
+  for (let i = 0; i < braces; i++) text += '}';
+  return JSON.parse(text);
+}
+
 export function extractJsonFromText(rawText: string): unknown {
   const text = rawText.trim();
 
+  // Try fenced code block first
   const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fencedMatch?.[1]) {
-    return JSON.parse(fencedMatch[1]);
+    try { return JSON.parse(fencedMatch[1]); } catch { /* fall through */ }
+    try { return repairTruncatedJson(fencedMatch[1]); } catch { /* fall through */ }
   }
 
+  // Try extracting from first { to last }
   const firstCurly = text.indexOf('{');
   const lastCurly = text.lastIndexOf('}');
   if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
     const candidate = text.slice(firstCurly, lastCurly + 1);
-    return JSON.parse(candidate);
+    try { return JSON.parse(candidate); } catch { /* fall through */ }
   }
 
-  return JSON.parse(text);
+  // Try parsing the whole text
+  try { return JSON.parse(text); } catch { /* fall through */ }
+
+  // Last resort: try to repair truncated JSON starting from first {
+  if (firstCurly !== -1) {
+    return repairTruncatedJson(text.slice(firstCurly));
+  }
+
+  return JSON.parse(text); // will throw with a clear message
 }
 
 export function parseGeminiResult(text: string): GeminiScanResult {

@@ -110,7 +110,7 @@ Return JSON with keys:
 
       const body = {
         contents: [{ role: 'user', parts: [{ text: prompt }, ...imageParts.map(({ inlineData }) => ({ inlineData }))] }],
-        generationConfig: { temperature: 0.15, maxOutputTokens: 2000 },
+        generationConfig: { temperature: 0.15, maxOutputTokens: 4096 },
       };
 
       const normalizeModelName = (name: string) => {
