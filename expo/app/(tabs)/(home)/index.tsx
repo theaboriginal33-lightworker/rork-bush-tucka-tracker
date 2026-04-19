@@ -188,7 +188,7 @@ Return JSON with keys:
             if (!text) throw new Error('Gemini returned an empty response.');
             setScanPhase('parsing');
             // parseGeminiResult never throws — it returns a safe minimum result on failure
-            const parsed: GeminiScanResult = parseGeminiResult(text);
+            let parsed: GeminiScanResult = parseGeminiResult(text);
             setScanResult(parsed);
 
             // --- Triple-Verification: Plant.id + iNaturalist ---
