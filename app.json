@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bush Tucka Tracker",
     "slug": "bush-tucka-tracka",
-    "version": "3.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rork-app",
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "13",
+      "buildNumber": "1",
       "bundleIdentifier": "app.rork.bush-tucka-tracker",
       "icon": "./assets/images/icon.png",
       "config": {
@@ -23,7 +23,9 @@
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We need your location to show plant sightings near you.",
-        "NSLocationAlwaysUsageDescription": "We need your location to show plant sightings near you."
+        "NSLocationAlwaysUsageDescription": "We need your location to show plant sightings near you.",
+        "NSCameraUsageDescription": "Bush Tucka Tracka uses your camera to photograph plants for identification. Photos are sent to Gemini AI to identify the plant species, safety rating, and cultural knowledge. Images are not stored on our servers.",
+        "NSPhotoLibraryUsageDescription": "Bush Tucka Tracka accesses your photo library so you can select existing plant photos for identification. Selected photos are sent to Gemini AI to identify the plant species and are not stored on our servers."
       },
       "appleTeamId": "542P4J57LM",
       "splash": {
