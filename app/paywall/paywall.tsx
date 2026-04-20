@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   Image,
+  Linking,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -317,9 +318,30 @@ export default function PaywallScreen() {
               <Text style={styles.footerLink}>RESTORE PURCHASES</Text>
             </TouchableOpacity>
             <Text style={styles.footerSep}>    </Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>TERMS & PRIVACY</Text>
-            </TouchableOpacity>
+           {/* <TouchableOpacity onPress={() => Linking.openURL('https://bushtuckatracka.com.au/privacy-policy')}>
+  <Text style={styles.footerLink}>TERMS & PRIVACY</Text>
+</TouchableOpacity> */}
+<View style={{ flexDirection: 'row', justifyContent: 'center' }}>
+  
+  <TouchableOpacity
+    onPress={() =>
+      Linking.openURL('https://bushtuckatracka.com.au/privacy-policy')
+    }
+  >
+    <Text style={styles.footerLink}>Privacy Policy</Text>
+  </TouchableOpacity>
+
+  <Text style={{ marginHorizontal: 8 }}>|</Text>
+
+  <TouchableOpacity
+    onPress={() =>
+      Linking.openURL('https://bushtuckatracka.com.au/terms')
+    }
+  >
+    <Text style={styles.footerLink}>Terms of Use</Text>
+  </TouchableOpacity>
+
+</View>
           </View>
 
           <View style={styles.brandRow}>

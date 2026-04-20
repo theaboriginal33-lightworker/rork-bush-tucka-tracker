@@ -7,6 +7,11 @@ import { Platform } from 'react-native';
 
 const ENTITLEMENT_ID = 'premium';
 
+/** App Store uses underscores; Google Play product IDs allow only lowercase letters, digits, and hyphens. */
+const MONTHLY_PRODUCT_IDS = ['bushtucka_monthly_v2', 'bushtucka-monthly-v2'];
+const ANNUAL_PRODUCT_IDS = ['bushtucka_annual', 'bushtucka-annual'];
+const LIFETIME_PRODUCT_IDS = ['bushtucka_lifetime', 'bushtucka-lifetime'];
+
 export type PurchaseResult = {
   success: boolean;
   customerInfo: CustomerInfo;
@@ -39,18 +44,18 @@ export function usePurchases() {
         const current = offerings.current;
 
         const monthly =
-          current?.availablePackages.find(
-            (p) => p.product.identifier === 'bushtucka_monthly_v2'
+          current?.availablePackages.find((p) =>
+            MONTHLY_PRODUCT_IDS.includes(p.product.identifier),
           ) ?? current?.monthly ?? null;
 
         const annual =
-          current?.availablePackages.find(
-            (p) => p.product.identifier === 'bushtucka_annual'
+          current?.availablePackages.find((p) =>
+            ANNUAL_PRODUCT_IDS.includes(p.product.identifier),
           ) ?? current?.annual ?? null;
 
         const lifetime =
-          current?.availablePackages.find(
-            (p) => p.product.identifier === 'bushtucka_lifetime'
+          current?.availablePackages.find((p) =>
+            LIFETIME_PRODUCT_IDS.includes(p.product.identifier),
           ) ?? current?.lifetime ?? null;
 
         setMonthlyPackage(monthly);
