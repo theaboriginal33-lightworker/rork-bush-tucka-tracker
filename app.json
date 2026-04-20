@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bush Tucka Tracker",
     "slug": "bush-tucka-tracka",
-    "version": "2.0.2",
+    "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rork-app",
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "5",
+      "buildNumber": "13",
       "bundleIdentifier": "app.rork.bush-tucka-tracker",
       "icon": "./assets/images/icon.png",
       "config": {

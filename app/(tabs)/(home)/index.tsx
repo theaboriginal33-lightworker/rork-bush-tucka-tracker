@@ -113,7 +113,7 @@ Return JSON with keys:
 
       const body = {
         contents: [{ role: 'user', parts: [{ text: prompt }, ...imageParts.map(({ inlineData }) => ({ inlineData }))] }],
-        generationConfig: { temperature: 0.15, maxOutputTokens: 700 },
+        generationConfig: { temperature: 0.15, maxOutputTokens: 8192, responseMimeType: 'application/json' },
       };
 
       const normalizeModelName = (name: string) => {
@@ -140,7 +140,7 @@ Return JSON with keys:
             listModels('v1').catch(() => [] as string[]),
             listModels('v1beta').catch(() => [] as string[]),
           ]);
-          const preferOrder = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.5-pro-latest'];
+          const preferOrder = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.5-pro-latest'];
           const sortByPreference = (a: string, b: string) => {
             const ai = preferOrder.findIndex((p) => a === p);
             const bi = preferOrder.findIndex((p) => b === p);
@@ -149,17 +149,17 @@ Return JSON with keys:
             if (av !== bv) return av - bv;
             return a.localeCompare(b);
           };
-          const fromV1 = [...new Set(v1Models)].sort(sortByPreference).map((model) => ({ apiVersion: 'v1' as const, model }));
           const fromV1beta = [...new Set(v1betaModels)].sort(sortByPreference).map((model) => ({ apiVersion: 'v1beta' as const, model }));
-          const combined = [...fromV1, ...fromV1beta];
+          const fromV1 = [...new Set(v1Models)].sort(sortByPreference).map((model) => ({ apiVersion: 'v1' as const, model }));
+          const combined = [...fromV1beta, ...fromV1];
           if (combined.length > 0) return combined;
         } catch (e) {
           console.log('[Scan] buildCandidates error', { message: e instanceof Error ? e.message : String(e) });
         }
         return [
-          { apiVersion: 'v1', model: 'gemini-1.5-flash' }, { apiVersion: 'v1', model: 'gemini-1.5-flash-latest' },
-          { apiVersion: 'v1', model: 'gemini-1.5-pro' }, { apiVersion: 'v1beta', model: 'gemini-1.5-flash' },
-          { apiVersion: 'v1beta', model: 'gemini-1.5-flash-latest' }, { apiVersion: 'v1beta', model: 'gemini-1.5-pro' },
+          { apiVersion: 'v1beta', model: 'gemini-2.5-flash' }, { apiVersion: 'v1beta', model: 'gemini-2.0-flash' },
+          { apiVersion: 'v1beta', model: 'gemini-1.5-flash' }, { apiVersion: 'v1beta', model: 'gemini-1.5-flash-latest' },
+          { apiVersion: 'v1beta', model: 'gemini-1.5-pro' }, { apiVersion: 'v1', model: 'gemini-1.5-flash' },
         ];
       };
 
