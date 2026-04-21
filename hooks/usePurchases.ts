@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Purchases, {
   PurchasesPackage,
   CustomerInfo,
+  PURCHASES_ERROR_CODE,
 } from 'react-native-purchases';
 import { Platform } from 'react-native';
 
@@ -12,9 +13,37 @@ const MONTHLY_PRODUCT_IDS = ['bushtucka_monthly_v2', 'bushtucka-monthly-v2'];
 const ANNUAL_PRODUCT_IDS = ['bushtucka_annual', 'bushtucka-annual'];
 const LIFETIME_PRODUCT_IDS = ['bushtucka_lifetime', 'bushtucka-lifetime'];
 
+/** Play Billing 5+ often returns `productId:basePlanId`; RevenueCat passes that as `product.identifier`. */
+function productIdentifierMatches(identifier: string, candidates: string[]): boolean {
+  if (candidates.includes(identifier)) return true;
+  const beforeColon = identifier.split(':')[0];
+  return candidates.includes(beforeColon);
+}
+
+function isPurchaseUserCancelled(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const err = e as Record<string, unknown>;
+  if (err.userCancelled === true) return true;
+  if (err.readableErrorCode === 'PURCHASE_CANCELLED') return true;
+  const code = err.code;
+  if (code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) return true;
+  if (typeof code === 'string' && code.includes('CANCELLED')) return true;
+  return false;
+}
+
+function purchaseErrorMessage(e: unknown): string {
+  if (!e || typeof e !== 'object') return 'Unknown error';
+  const err = e as { message?: string; underlyingErrorMessage?: string };
+  const m = typeof err.message === 'string' ? err.message.trim() : '';
+  const u =
+    typeof err.underlyingErrorMessage === 'string' ? err.underlyingErrorMessage.trim() : '';
+  return [m, u].filter(Boolean).join('\n') || 'Unknown error';
+}
+
 export type PurchaseResult = {
   success: boolean;
   customerInfo: CustomerInfo;
+  userCancelled?: boolean;
 };
 
 export function usePurchases() {
@@ -24,9 +53,65 @@ export function usePurchases() {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+  const [offeringsError, setOfferingsError] = useState<string | null>(null);
+  const [availablePackageIds, setAvailablePackageIds] = useState<string[]>([]);
 
   const isPremium =
     customerInfo?.entitlements.active[ENTITLEMENT_ID] !== undefined;
+
+  const refreshOfferings = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setOfferingsError(null);
+    try {
+      const [offerings, info] = await Promise.all([
+        Purchases.getOfferings(),
+        Purchases.getCustomerInfo(),
+      ]);
+
+      const current = offerings.current;
+      const ids = (current?.availablePackages ?? []).map((p) => p.product.identifier);
+      setAvailablePackageIds(ids);
+
+      const monthly =
+        current?.availablePackages.find((p) =>
+          productIdentifierMatches(p.product.identifier, MONTHLY_PRODUCT_IDS),
+        ) ?? current?.monthly ?? null;
+
+      const annual =
+        current?.availablePackages.find((p) =>
+          productIdentifierMatches(p.product.identifier, ANNUAL_PRODUCT_IDS),
+        ) ?? current?.annual ?? null;
+
+      const lifetime =
+        current?.availablePackages.find((p) =>
+          productIdentifierMatches(p.product.identifier, LIFETIME_PRODUCT_IDS),
+        ) ?? current?.lifetime ?? null;
+
+      setMonthlyPackage(monthly);
+      setAnnualPackage(annual);
+      setLifetimePackage(lifetime);
+      setCustomerInfo(info);
+
+      if (!current) {
+        setOfferingsError('No current offering in RevenueCat. Set a current offering in the dashboard.');
+      } else if (!monthly && !annual && !lifetime) {
+        setOfferingsError(
+          `No matching products in offering "${current.identifier}". Loaded product IDs: ${ids.length ? ids.join(', ') : '(none)'}. Check RevenueCat ↔ Play Console product IDs.`,
+        );
+      } else {
+        setOfferingsError(null);
+      }
+    } catch (e) {
+      console.error('[usePurchases] load error:', e);
+      setOfferingsError(purchaseErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -35,38 +120,7 @@ export function usePurchases() {
     }
 
     const load = async () => {
-      try {
-        const [offerings, info] = await Promise.all([
-          Purchases.getOfferings(),
-          Purchases.getCustomerInfo(),
-        ]);
-
-        const current = offerings.current;
-
-        const monthly =
-          current?.availablePackages.find((p) =>
-            MONTHLY_PRODUCT_IDS.includes(p.product.identifier),
-          ) ?? current?.monthly ?? null;
-
-        const annual =
-          current?.availablePackages.find((p) =>
-            ANNUAL_PRODUCT_IDS.includes(p.product.identifier),
-          ) ?? current?.annual ?? null;
-
-        const lifetime =
-          current?.availablePackages.find((p) =>
-            LIFETIME_PRODUCT_IDS.includes(p.product.identifier),
-          ) ?? current?.lifetime ?? null;
-
-        setMonthlyPackage(monthly);
-        setAnnualPackage(annual);
-        setLifetimePackage(lifetime);
-        setCustomerInfo(info);
-      } catch (e) {
-        console.error('[usePurchases] load error:', e);
-      } finally {
-        setLoading(false);
-      }
+      await refreshOfferings();
     };
 
     load();
@@ -78,18 +132,22 @@ export function usePurchases() {
         remover.call(listener);
       }
     };
-  }, []);
+  }, [refreshOfferings]);
 
   const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<PurchaseResult> => {
     try {
       setPurchasing(true);
-      const { customerInfo } = await Purchases.purchasePackage(pkg);
-      setCustomerInfo(customerInfo);
-      const success = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
-      return { success, customerInfo };
-    } catch (e: any) {
-      if (e.userCancelled) {
-        return { success: false, customerInfo: customerInfo ?? ({} as CustomerInfo) };
+      const { customerInfo: nextInfo } = await Purchases.purchasePackage(pkg);
+      setCustomerInfo(nextInfo);
+      const success = nextInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      return { success, customerInfo: nextInfo };
+    } catch (e: unknown) {
+      if (isPurchaseUserCancelled(e)) {
+        return {
+          success: false,
+          userCancelled: true,
+          customerInfo: customerInfo ?? ({} as CustomerInfo),
+        };
       }
       throw e;
     } finally {
@@ -141,6 +199,9 @@ export function usePurchases() {
     loading,
     purchasing,
     isPremium,
+    offeringsError,
+    availablePackageIds,
+    refreshOfferings,
     purchaseMonthly,
     purchaseAnnual,
     purchaseLifetime,

@@ -12,8 +12,7 @@
     "start-web:lan": "bunx rork start -p mvdyra21f77y4oer3x0a6 --web",
     "start-web-dev": "DEBUG=expo* bunx rork start -p mvdyra21f77y4oer3x0a6 --web --tunnel",
     "lint": "expo lint",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
+    "android": "expo run:android"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

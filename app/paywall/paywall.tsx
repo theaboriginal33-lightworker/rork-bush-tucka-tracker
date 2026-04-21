@@ -9,6 +9,7 @@ import {
   Platform,
   Image,
   Linking,
+  ToastAndroid,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -47,11 +48,14 @@ export default function PaywallScreen() {
   const suppressAlreadyPremiumEffectRef = useRef(false);
   const {
     purchasing,
+    loading: purchasesLoading,
     isPremium,
     customerInfo,
     monthlyPackage,
     annualPackage,
     lifetimePackage,
+    offeringsError,
+    refreshOfferings,
     purchaseMonthly,
     purchaseAnnual,
     purchaseLifetime,
@@ -90,18 +94,13 @@ export default function PaywallScreen() {
     : selectedPlan === "lifetime" ? lifetimePackage
     : null;
 
-  const handlePurchase = async () => {
-    if (!selectedPlan) {
-      Alert.alert("Choose a plan", "Please select Monthly, Annual, or Lifetime first.");
-      return;
+  const runPurchaseFlow = async () => {
+    if (!selectedPlan || !selectedPackage) return;
+
+    if (Platform.OS === "android") {
+      ToastAndroid.show("Opening Google Play…", ToastAndroid.SHORT);
     }
-    if (!selectedPackage) {
-      Alert.alert(
-        "Product Not Loaded",
-        "This product couldn't be loaded. Make sure you're signed into a Sandbox account."
-      );
-      return;
-    }
+
     try {
       let result: Awaited<ReturnType<typeof purchaseMonthly>> | null = null;
       if (selectedPlan === "monthly") result = await purchaseMonthly();
@@ -120,10 +119,57 @@ export default function PaywallScreen() {
         Alert.alert("Success", "You now have full access to the app.", [
           { text: "OK", onPress: () => router.replace("/") },
         ]);
+        return;
       }
-    } catch (e: any) {
-      Alert.alert("Purchase Failed", e?.message ?? "Something went wrong. Please try again.");
+
+      if (result?.userCancelled) {
+        return;
+      }
+
+      Alert.alert(
+        "Purchase incomplete",
+        "Google Play closed without activating premium. Try again, or use Restore purchases. If this persists, check RevenueCat entitlement \"premium\" and Play Console product IDs.",
+      );
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Something went wrong. Please try again.";
+      Alert.alert("Purchase failed", msg);
     }
+  };
+
+  const handlePurchase = () => {
+    if (!selectedPlan) {
+      Alert.alert("Choose a plan", "Please select Monthly, Annual, or Lifetime first.");
+      return;
+    }
+    if (!selectedPackage) {
+      const detail =
+        offeringsError ??
+        (purchasesLoading
+          ? "Still loading products from RevenueCat — wait a moment and try again."
+          : "Install the build from Play internal testing and use the same Google account. Products must match RevenueCat offerings.");
+      Alert.alert("Product not ready", detail, [
+        { text: "Retry", onPress: () => void refreshOfferings() },
+        { text: "OK", style: "cancel" },
+      ]);
+      return;
+    }
+
+    if (Platform.OS === "android") {
+      Alert.alert(
+        "Continue to Google Play",
+        "The Google Play purchase screen will open next. Use the account that is on your internal testing list.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Continue", onPress: () => void runPurchaseFlow() },
+        ],
+      );
+      return;
+    }
+
+    void runPurchaseFlow();
   };
 
   const handleRestore = async () => {
@@ -298,10 +344,13 @@ export default function PaywallScreen() {
 
           {/* CTA — Sandbox test: triggers Apple purchase sheet */}
           <TouchableOpacity
-            style={[styles.ctaBtn, (!selectedPackage || purchasing) && { opacity: 0.6 }]}
+            style={[
+              styles.ctaBtn,
+              (!selectedPlan || purchasing || (!selectedPackage && !!selectedPlan)) && { opacity: 0.65 },
+            ]}
             onPress={handlePurchase}
             activeOpacity={0.88}
-            disabled={!selectedPackage || purchasing}
+            disabled={purchasing}
           >
             {purchasing ? (
               <ActivityIndicator color="#051a05" />
@@ -310,7 +359,7 @@ export default function PaywallScreen() {
             )}
           </TouchableOpacity>
           {/* Sandbox test note — remove before production */}
-          <Text style={styles.sandboxNote}>Sandbox test mode active</Text>
+      
 
           {/* Footer */}
           <View style={styles.footer}>

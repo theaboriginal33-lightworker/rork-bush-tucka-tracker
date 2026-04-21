@@ -116,7 +116,7 @@ export default function RootLayout() {
     Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
 
    const iosApiKey = 'appl_QpqHbDZfeZExbXsXsPYUXlpPGOZ';
-    const androidApiKey = 'test_MMHuIjBwrJjpTreIYTwyLbBWXfW';
+    const androidApiKey = 'goog_GEUDQnpmAWlidKDAYjldhArfjzj';
 
     if (Platform.OS === 'ios') {
       Purchases.configure({ apiKey: iosApiKey });
