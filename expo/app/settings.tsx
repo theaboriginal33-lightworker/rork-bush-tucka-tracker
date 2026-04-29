@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -6,16 +7,36 @@ import {
   Linking,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
+  Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ShieldCheck, LogIn, LogOut, ExternalLink, ChevronRight, ChevronLeft } from 'lucide-react-native';
+import {
+  ShieldCheck,
+  LogIn,
+  LogOut,
+  ExternalLink,
+  ChevronRight,
+  ChevronLeft,
+  FileText,
+  Scale,
+  Trash2,
+  Crown
+} from 'lucide-react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '@/constants/colors';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { supabase } from '@/constants/supabase';
+import { usePurchases } from '@/hooks/usePurchases';
+import Purchases from 'react-native-purchases';
+import { syncSubscriptionToSupabase } from '@/hooks/useSubscriptionSync';
+
+const PRIVACY_POLICY_URL = 'https://bushtuckatracka.com.au/privacy-policy';
+const TERMS_URL = 'https://bushtuckatracka.com.au/terms';
 
 function maskEmail(email: string): string {
   const at = email.indexOf('@');
@@ -27,7 +48,115 @@ function maskEmail(email: string): string {
 }
 
 export default function SettingsScreen() {
-  const { user, hasConfig, isReady, signOut } = useAuth();
+  const { user, hasConfig, isReady, signOut, refreshOnboarding } = useAuth();
+  const { isPremium, customerInfo, loading: purchasesLoading } = usePurchases();
+
+  const [profileSub, setProfileSub] = useState<{
+    subscription_active: boolean | null;
+    subscription_plan: string | null;
+    revenuecat_expiration_date: string | null;
+  }>({ subscription_active: null, subscription_plan: null, revenuecat_expiration_date: null });
+
+  useEffect(() => {
+    let mounted = true;
+    if (!hasConfig || !user) return;
+
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('subscription_active, subscription_plan, revenuecat_expiration_date')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+        setProfileSub({
+          subscription_active: typeof data?.subscription_active === 'boolean' ? data.subscription_active : null,
+          subscription_plan: typeof data?.subscription_plan === 'string' ? data.subscription_plan : null,
+          revenuecat_expiration_date: typeof data?.revenuecat_expiration_date === 'string' ? data.revenuecat_expiration_date : null,
+        });
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [hasConfig, user]);
+
+  const entitlement = customerInfo?.entitlements.active?.premium as any | undefined;
+  const activeSubscriptions = (customerInfo as any)?.activeSubscriptions as string[] | undefined;
+  const allExpirationDates = (customerInfo as any)?.allExpirationDates as Record<string, string | null> | undefined;
+
+  const bestActiveProductId = (() => {
+    const entitlementPid = entitlement?.productIdentifier as string | undefined;
+    if (entitlementPid) return entitlementPid;
+
+    const subs = Array.isArray(activeSubscriptions) ? activeSubscriptions.filter(Boolean) : [];
+    if (subs.length === 0) return undefined;
+
+    // Pick the product with the furthest expiration date (lifetime often has no expiration date).
+    let best: { id: string; t: number } | null = null;
+    for (const id of subs) {
+      const raw = allExpirationDates?.[id] ?? null;
+      const t = raw ? new Date(raw).getTime() : -1;
+      if (!best || t > best.t) best = { id, t };
+    }
+    return best?.id ?? subs[0];
+  })();
+  const activeLabel =
+    purchasesLoading ? 'Checking…'
+    : isPremium ? 'Active'
+    : 'Not active';
+  const planLabel =
+    bestActiveProductId ??
+    profileSub.subscription_plan ??
+    (isPremium ? 'premium' : '—');
+  const expiryLabel = (() => {
+    const raw =
+      (bestActiveProductId ? allExpirationDates?.[bestActiveProductId] : null) ??
+      (entitlement?.expirationDate as string | undefined) ??
+      profileSub.revenuecat_expiration_date ??
+      null;
+    if (!raw) return '—';
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString();
+  })();
+
+  const onPressManageInStore = useCallback(() => {
+    const url =
+      Platform.OS === 'ios'
+        ? 'https://apps.apple.com/account/subscriptions'
+        : Platform.OS === 'android'
+          ? 'https://play.google.com/store/account/subscriptions'
+          : null;
+    if (!url) return;
+    void Linking.openURL(url);
+  }, []);
+
+  const onPressChangePlan = useCallback(() => {
+    if (purchasesLoading) {
+      Alert.alert('Checking subscription…');
+      return;
+    }
+    router.push('/paywall/paywall');
+  }, [purchasesLoading]);
+
+  const onPressRefreshSubscription = useCallback(async () => {
+    if (!user) return;
+    if (Platform.OS === 'web') return;
+    try {
+      const info = await Purchases.getCustomerInfo();
+      await syncSubscriptionToSupabase({ userId: user.id, customerInfo: info });
+      await refreshOnboarding();
+      Alert.alert('Updated', 'Subscription status refreshed.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Could not refresh', msg);
+    }
+  }, [user, refreshOnboarding]);
 
   const headerGlow = useRef<Animated.Value>(new Animated.Value(0)).current;
 
@@ -37,8 +166,8 @@ export default function SettingsScreen() {
     if (!user) return { title: 'Not signed in', subtitle: 'Log in to sync your collections across devices.' };
 
     const email = typeof user.email === 'string' ? user.email : null;
-    if (!email) return { title: 'Signed in', subtitle: 'Your account is active.' };
-    return { title: 'Signed in', subtitle: maskEmail(email) };
+if (!email) return { title: 'Signed in', subtitle: 'Your account is active.' };
+return { title: 'Signed in', subtitle: email };
   }, [hasConfig, isReady, user]);
 
   const runHeaderPulse = useCallback(() => {
@@ -105,6 +234,57 @@ export default function SettingsScreen() {
     }
   }, [runHeaderPulse]);
 
+
+
+  const openLegalUrl = useCallback(
+    async (url: string) => {
+      runHeaderPulse();
+      try {
+        const canOpen = await Linking.canOpenURL(url);
+        if (!canOpen) {
+          Alert.alert('Cannot open link', url);
+          return;
+        }
+        await Linking.openURL(url);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        Alert.alert('Could not open link', message);
+      }
+    },
+    [runHeaderPulse]
+  );
+
+  const onPressDeleteAccount = useCallback(() => {
+    if (!user) return;
+    runHeaderPulse();
+    Alert.alert(
+      'Request Account Deletion',
+      'We will send a deletion request to our support team. Your account will be removed within 7 business days.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Request',
+          style: 'destructive',
+          onPress: () => {
+            const email = typeof user.email === 'string' ? user.email : '';
+            const subject = encodeURIComponent('Account Deletion Request');
+            const body = encodeURIComponent(
+              `Hello,\n\nI would like to request the deletion of my account.\n\nAccount Email: ${email}\n\nPlease confirm once my account has been removed.\n\nThank you.`
+            );
+            const mailtoUrl = `mailto:support@bushtuckatracka.com.au?subject=${subject}&body=${body}`;
+  
+            Linking.openURL(mailtoUrl).catch(() => {
+              Alert.alert(
+                'Could not open email',
+                'Please contact us directly at support@bushtuckatracka.com.au to request account deletion.'
+              );
+            });
+          },
+        },
+      ]
+    );
+  }, [user, runHeaderPulse]);
+
   const headerGlowOpacity = headerGlow.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
@@ -139,6 +319,12 @@ export default function SettingsScreen() {
           <View style={styles.backButton} />
         </View>
 
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.header} testID="settings-header">
           <Animated.View
             pointerEvents="none"
@@ -155,6 +341,8 @@ export default function SettingsScreen() {
             <View style={styles.badge} testID="settings-badge">
               <ShieldCheck size={18} color={COLORS.primary} />
             </View>
+
+
             {showBusy ? (
               <View style={styles.busy} testID="settings-busy">
                 <ActivityIndicator color={COLORS.primary} />
@@ -166,6 +354,8 @@ export default function SettingsScreen() {
             {authState.subtitle}
           </Text>
         </View>
+
+      
 
         <View style={styles.card} testID="settings-card">
           <View style={styles.sectionHeader}>
@@ -203,7 +393,7 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.kvRow}>
                 <Text style={styles.kvKey}>Email</Text>
-                <Text style={styles.kvValue}>{typeof user.email === 'string' ? user.email : '—'}</Text>
+              <Text style={styles.kvValue}>{typeof user.email === 'string' ? user.email : '—'}</Text>
               </View>
             </View>
           ) : null}
@@ -235,6 +425,19 @@ export default function SettingsScreen() {
               </Pressable>
             ) : null}
 
+{hasConfig && user ? (
+  <Pressable
+    onPress={onPressDeleteAccount}
+    style={({ pressed }) => [styles.dangerButton, pressed ? styles.dangerButtonPressed : null]}
+    testID="settings-delete-account"
+  >
+    <View style={styles.primaryButtonInner}>
+      <Trash2 size={18} color={COLORS.error} />
+      <Text style={styles.dangerButtonText}>Request Account Deletion</Text>
+    </View>
+  </Pressable>
+) : null}
+
             {hasConfig && !isReady ? (
               <Text style={styles.hint} testID="settings-hint">
                 Checking your session…
@@ -242,6 +445,93 @@ export default function SettingsScreen() {
             ) : null}
           </View>
         </View>
+
+        <View style={styles.card} testID="settings-legal-card">
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle} testID="settings-legal-section-title">
+              Legal
+            </Text>
+          </View>
+
+          {hasConfig && user ? (
+            <View style={styles.card} testID="settings-subscription-card">
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Crown size={18} color={COLORS.text} />
+                  <Text style={[styles.sectionTitle, { fontSize: 16 }]}>Subscription</Text>
+                </View>
+                <Text style={[styles.hint, { marginTop: 0 }]}>
+                  {activeLabel}
+                </Text>
+              </View>
+
+              <View style={{ marginTop: 10, gap: 6 }}>
+                <Text style={styles.hint}>Plan: {planLabel}</Text>
+                <Text style={styles.hint}>Expiry: {expiryLabel}</Text>
+               
+              </View>
+
+              <View style={{ marginTop: 12, gap: 10 }}>
+                <Pressable
+                  onPress={onPressChangePlan}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed ? styles.primaryButtonPressed : null,
+                    { backgroundColor: '#4ade80' },
+                    purchasesLoading ? { opacity: 0.6 } : null,
+                  ]}
+                  testID="settings-change-plan"
+                >
+                  <View style={styles.primaryButtonInner}>
+                    <Crown size={18} color="#051a05" />
+                    <Text style={[styles.primaryButtonText, { color: '#051a05' }]}>
+                      {isPremium ? 'Change plan' : 'Choose a plan'}
+                    </Text>
+                  </View>
+                </Pressable>
+
+             
+
+           
+              </View>
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
+            style={({ pressed }) => [styles.legalRow, pressed ? styles.legalRowPressed : null]}
+            testID="settings-privacy-policy"
+          >
+            <View style={styles.rowLeft}>
+              <FileText size={18} color={COLORS.textSecondary} />
+              <Text style={styles.rowText}>Privacy policy</Text>
+            </View>
+            <ChevronRight size={18} color={COLORS.textSecondary} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => void openLegalUrl(TERMS_URL)}
+            style={({ pressed }) => [styles.legalRow, pressed ? styles.legalRowPressed : null]}
+            testID="settings-terms"
+          >
+            <View style={styles.rowLeft}>
+              <Scale size={18} color={COLORS.textSecondary} />
+              <Text style={styles.rowText}>Terms of use</Text>
+            </View>
+            <ChevronRight size={18} color={COLORS.textSecondary} />
+          </Pressable>
+        </View>
+
+        {/* Upgrade card */}
+
+
+        <View style={{ flex: 1 }} />
+        <Image
+          source={require('../assets/images/kangaroo.png')}
+          style={styles.heroImage}
+          resizeMode="contain"
+        />
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -254,6 +544,36 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
+    flexGrow: 1,
+  },
+  playVideoBanner: {
+    marginHorizontal: 18,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(56,217,137,0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  playVideoBannerPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  playVideoBannerText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: COLORS.text,
+    letterSpacing: 0.2,
   },
   topNav: {
     flexDirection: 'row',
@@ -409,6 +729,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.text,
   },
+  legalRow: {
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(7,17,11,0.35)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(56,217,137,0.16)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  legalRowPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.99 }],
+  },
   kv: {
     borderRadius: 18,
     padding: 14,
@@ -487,4 +823,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
+   heroImage: {
+    
+    right:"10%",
+  width: 230,
+  height: 200,
+  bottom:"5%"
+},
 });

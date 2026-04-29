@@ -1,0 +1,5 @@
+# Supabase local / deploy config
+# https://supabase.com/docs/guides/functions
+
+[functions.delete-account]
+verify_jwt = true

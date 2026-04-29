@@ -1,9 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { Platform } from 'react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScanJournalEntry } from '@/app/providers/ScanJournalProvider';
 import { useScanJournal } from '@/app/providers/ScanJournalProvider';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { hasSupabaseConfig } from '@/constants/supabase';
+import { uploadScanJournalImage } from '@/constants/scanImagesStorage';
+import {
+  bulkUpsertCookbookManualRows,
+  cookRecipeEntryToRemotePayload,
+  deleteAllCookbookManualRows,
+  deleteCookbookManualRow,
+  fetchCookbookManualRows,
+  type CookbookManualRemoteRow,
+} from '@/constants/cookbookRemote';
 
 export type CookRecipeEntrySource = 'collection' | 'tucka-guide';
 
@@ -18,6 +29,9 @@ export type CookRecipeEntry = {
 
   title: string;
   imageUri?: string;
+  imagePreviewUri?: string;
+  /** Supabase `scan-images` path when this row comes from Collection (scan journal). */
+  storagePath?: string;
 
   commonName: string;
   scientificName?: string;
@@ -27,6 +41,8 @@ export type CookRecipeEntry = {
   suggestedUses: string[];
 
   guideText?: string;
+  /** For cross-device merge: bump on each manual save (remote payload). */
+  clientUpdatedAt?: number;
 };
 
 export type CookbookImageInput = {
@@ -61,9 +77,42 @@ async function getLegacyFileSystem(): Promise<LegacyFileSystemModule | null> {
   }
 }
 
-const MANUAL_STORAGE_KEY = 'bush-tucka.cookbook.manual.v1';
-const IMAGE_OVERRIDE_KEY = 'bush-tucka.cookbook.imageOverrides.v1';
-const TITLE_OVERRIDE_KEY = 'bush-tucka.cookbook.titleOverrides.v1';
+/** Legacy (pre–per-user) keys — migrated once per user on first load. */
+const LEGACY_MANUAL_STORAGE_KEY = 'bush-tucka.cookbook.manual.v1';
+const LEGACY_IMAGE_OVERRIDE_KEY = 'bush-tucka.cookbook.imageOverrides.v1';
+const LEGACY_TITLE_OVERRIDE_KEY = 'bush-tucka.cookbook.titleOverrides.v1';
+
+const manualStorageKeyForUser = (uid: string) => `bush-tucka.cookbook.manual.v1::${uid}`;
+const imageOverrideKeyForUser = (uid: string) => `bush-tucka.cookbook.imageOverrides.v1::${uid}`;
+const titleOverrideKeyForUser = (uid: string) => `bush-tucka.cookbook.titleOverrides.v1::${uid}`;
+
+function remoteRowToCookEntry(row: CookbookManualRemoteRow): CookRecipeEntry | null {
+  const p = row.payload;
+  if (!p || typeof p !== 'object') return null;
+  try {
+    return normalizeManualEntry(p as CookRecipeEntry);
+  } catch {
+    return null;
+  }
+}
+
+function mergeCookbookManualLists(local: CookRecipeEntry[], remote: CookRecipeEntry[]): CookRecipeEntry[] {
+  const byId = new Map<string, CookRecipeEntry>();
+  for (const r of remote) {
+    const n = normalizeManualEntry(r);
+    byId.set(n.id, n);
+  }
+  for (const l of local) {
+    const n = normalizeManualEntry(l);
+    const ex = byId.get(n.id);
+    const lT = n.clientUpdatedAt ?? n.createdAt;
+    const rT = ex ? ex.clientUpdatedAt ?? ex.createdAt : 0;
+    if (!ex || lT > rT) {
+      byId.set(n.id, n);
+    }
+  }
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+}
 
 function normalizeCookEntryFromScan(scanEntry: ScanJournalEntry): CookRecipeEntry {
   const scan = scanEntry.scan;
@@ -74,6 +123,8 @@ function normalizeCookEntryFromScan(scanEntry: ScanJournalEntry): CookRecipeEntr
     scanEntryId: scanEntry.id,
     title: String(scanEntry.title ?? scan.commonName ?? 'Unconfirmed Plant'),
     imageUri: scanEntry.imagePreviewUri ?? scanEntry.imageUri,
+    imagePreviewUri: scanEntry.imagePreviewUri,
+    storagePath: scanEntry.storagePath,
     commonName: String(scan.commonName ?? 'Unconfirmed Plant'),
     scientificName: scan.scientificName ? String(scan.scientificName) : undefined,
     confidence: Number.isFinite(scan.confidence) ? Math.max(0, Math.min(1, Number(scan.confidence))) : 0,
@@ -93,6 +144,20 @@ function safeParseJson<T>(raw: string | null): T | null {
   }
 }
 
+/** Collection rows use the scan id as the Cook row id; guides may link via `scanEntryId`. */
+function resolveScanJournalIdForCookEntry(
+  cookbookEntryId: string,
+  scanEntries: ScanJournalEntry[],
+  manualEntries: CookRecipeEntry[],
+): string | null {
+  if (scanEntries.some((s) => s.id === cookbookEntryId)) {
+    return cookbookEntryId;
+  }
+  const manual = manualEntries.find((e) => e.id === cookbookEntryId);
+  const linked = manual?.scanEntryId?.trim();
+  return linked && linked.length > 0 ? linked : null;
+}
+
 function normalizeManualEntry(input: CookRecipeEntry): CookRecipeEntry {
   const sRaw = String((input as CookRecipeEntry).safetyStatus ?? 'unknown');
   const safetyStatus: CookRecipeEntry['safetyStatus'] = sRaw === 'safe' || sRaw === 'caution' || sRaw === 'unknown' ? sRaw : 'unknown';
@@ -108,6 +173,10 @@ function normalizeManualEntry(input: CookRecipeEntry): CookRecipeEntry {
     chatMessageId: (input as CookRecipeEntry).chatMessageId ? String((input as CookRecipeEntry).chatMessageId) : undefined,
     title: String((input as CookRecipeEntry).title ?? 'Saved guide'),
     imageUri: (input as CookRecipeEntry).imageUri ? String((input as CookRecipeEntry).imageUri) : undefined,
+    imagePreviewUri: (input as CookRecipeEntry).imagePreviewUri
+      ? String((input as CookRecipeEntry).imagePreviewUri)
+      : undefined,
+    storagePath: (input as CookRecipeEntry).storagePath ? String((input as CookRecipeEntry).storagePath) : undefined,
     commonName: String((input as CookRecipeEntry).commonName ?? 'Unconfirmed Plant'),
     scientificName: (input as CookRecipeEntry).scientificName ? String((input as CookRecipeEntry).scientificName) : undefined,
     confidence: Number.isFinite((input as CookRecipeEntry).confidence)
@@ -118,6 +187,9 @@ function normalizeManualEntry(input: CookRecipeEntry): CookRecipeEntry {
       ? (input as CookRecipeEntry).suggestedUses.map((u) => String(u)).filter((u) => u.trim().length > 0).slice(0, 24)
       : [],
     guideText: typeof (input as CookRecipeEntry).guideText === 'string' ? (input as CookRecipeEntry).guideText : undefined,
+    clientUpdatedAt: Number.isFinite((input as CookRecipeEntry).clientUpdatedAt)
+      ? Number((input as CookRecipeEntry).clientUpdatedAt)
+      : undefined,
   };
 }
 
@@ -135,6 +207,8 @@ type CookbookContextValue = {
     commonName?: string;
     scientificName?: string;
     imageUri?: string;
+    imagePreviewUri?: string;
+    storagePath?: string;
     confidence?: number;
     safetyStatus?: CookRecipeEntry['safetyStatus'];
     scanEntryId?: string;
@@ -154,7 +228,15 @@ type CookbookContextValue = {
 };
 
 export const [CookbookProvider, useCookbook] = createContextHook<CookbookContextValue>(() => {
-  const { entries: scanEntries, isLoading: scanIsLoading, errorMessage: scanErrorMessage } = useScanJournal();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  const {
+    entries: scanEntries,
+    isLoading: scanIsLoading,
+    errorMessage: scanErrorMessage,
+    updateEntry: updateScanJournalEntry,
+  } = useScanJournal();
 
   const [manualEntries, setManualEntries] = useState<CookRecipeEntry[]>([]);
   const [manualIsLoading, setManualIsLoading] = useState<boolean>(true);
@@ -165,43 +247,89 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
   const [titleOverrides, setTitleOverrides] = useState<Record<string, string | null>>({});
   const [titleOverridesIsLoading, setTitleOverridesIsLoading] = useState<boolean>(true);
 
-  const loadManual = useCallback(async () => {
-    console.log('[Cookbook] loading manual entries');
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = userId;
+
+  const loadManualForUser = useCallback(async (uid: string) => {
+    console.log('[Cookbook] loading manual entries for user', { uid: uid.slice(0, 8) });
     setManualIsLoading(true);
     try {
-      const timeoutMs = 2500;
+      const timeoutMs = 8000;
       const startedAt = Date.now();
 
-      const raw = await Promise.race<string | null>([
-        AsyncStorage.getItem(MANUAL_STORAGE_KEY),
+      const userKey = manualStorageKeyForUser(uid);
+      let raw = await Promise.race<string | null>([
+        AsyncStorage.getItem(userKey),
         new Promise<string | null>((resolve) => {
           setTimeout(() => resolve(null), timeoutMs);
         }),
       ]);
 
+      if (!raw || raw.length === 0) {
+        const legacy = await AsyncStorage.getItem(LEGACY_MANUAL_STORAGE_KEY);
+        if (legacy && legacy.length > 0) {
+          raw = legacy;
+          await AsyncStorage.setItem(userKey, legacy);
+          console.log('[Cookbook] migrated legacy manual cookbook to user key');
+        }
+      }
+
       const durationMs = Date.now() - startedAt;
-      console.log('[Cookbook] loadManual finished', { durationMs, timedOut: raw === null });
+      console.log('[Cookbook] loadManual local finished', { durationMs, timedOut: raw === null });
 
       const parsed = safeParseJson<CookRecipeEntry[]>(raw) ?? [];
-      const normalized = Array.isArray(parsed) ? parsed.map((e) => normalizeManualEntry(e)) : [];
-      normalized.sort((a, b) => b.createdAt - a.createdAt);
-      console.log('[Cookbook] loaded manual entries', { count: normalized.length });
-      setManualEntries(normalized);
+      let local = Array.isArray(parsed) ? parsed.map((e) => normalizeManualEntry(e)) : [];
+
+      if (hasSupabaseConfig) {
+        try {
+          const rows = await fetchCookbookManualRows(uid);
+          const remote = rows.map(remoteRowToCookEntry).filter((e): e is CookRecipeEntry => e !== null);
+          const merged = mergeCookbookManualLists(local, remote);
+          local = merged;
+          console.log('[Cookbook] merged manual with remote', { localCount: local.length, remoteCount: rows.length });
+
+          if (merged.length > 0) {
+            const ok = await bulkUpsertCookbookManualRows(
+              uid,
+              merged.map((e) => ({ id: e.id, payload: cookRecipeEntryToRemotePayload(e as unknown as Record<string, unknown>) })),
+            );
+            if (ok) console.log('[Cookbook] synced merged guides to Supabase', { count: merged.length });
+          }
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Cookbook] remote manual fetch failed; using local only', { message });
+        }
+      }
+
+      local.sort((a, b) => b.createdAt - a.createdAt);
+      setManualEntries(local);
+      try {
+        await AsyncStorage.setItem(userKey, JSON.stringify(local));
+      } catch (persistErr) {
+        console.log('[Cookbook] cache persist after merge failed', persistErr);
+      }
       setManualErrorMessage(null);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.log('[Cookbook] loadManual failed', { message });
+      console.log('[Cookbook] loadManualForUser failed', { message });
       setManualErrorMessage('Could not load saved guide items.');
     } finally {
       setManualIsLoading(false);
     }
   }, []);
 
-  const loadImageOverrides = useCallback(async () => {
-    console.log('[Cookbook] loading image overrides');
+  const loadImageOverridesForUser = useCallback(async (uid: string) => {
+    console.log('[Cookbook] loading image overrides for user');
     setImageOverridesIsLoading(true);
     try {
-      const raw = await AsyncStorage.getItem(IMAGE_OVERRIDE_KEY);
+      let raw = await AsyncStorage.getItem(imageOverrideKeyForUser(uid));
+      if (!raw) {
+        raw = await AsyncStorage.getItem(LEGACY_IMAGE_OVERRIDE_KEY);
+        if (raw) {
+          await AsyncStorage.setItem(imageOverrideKeyForUser(uid), raw);
+          console.log('[Cookbook] migrated legacy image overrides');
+        }
+      }
       const parsed = safeParseJson<Record<string, string | null>>(raw) ?? {};
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         setImageOverrides(parsed);
@@ -218,11 +346,18 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
     }
   }, []);
 
-  const loadTitleOverrides = useCallback(async () => {
-    console.log('[Cookbook] loading title overrides');
+  const loadTitleOverridesForUser = useCallback(async (uid: string) => {
+    console.log('[Cookbook] loading title overrides for user');
     setTitleOverridesIsLoading(true);
     try {
-      const raw = await AsyncStorage.getItem(TITLE_OVERRIDE_KEY);
+      let raw = await AsyncStorage.getItem(titleOverrideKeyForUser(uid));
+      if (!raw) {
+        raw = await AsyncStorage.getItem(LEGACY_TITLE_OVERRIDE_KEY);
+        if (raw) {
+          await AsyncStorage.setItem(titleOverrideKeyForUser(uid), raw);
+          console.log('[Cookbook] migrated legacy title overrides');
+        }
+      }
       const parsed = safeParseJson<Record<string, string | null>>(raw) ?? {};
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         setTitleOverrides(parsed);
@@ -240,19 +375,47 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
   }, []);
 
   useEffect(() => {
-    void loadManual();
-    void loadImageOverrides();
-    void loadTitleOverrides();
-  }, [loadImageOverrides, loadManual, loadTitleOverrides]);
+    if (!userId) {
+      setManualEntries([]);
+      setImageOverrides({});
+      setTitleOverrides({});
+      setManualIsLoading(false);
+      setImageOverridesIsLoading(false);
+      setTitleOverridesIsLoading(false);
+      return;
+    }
+    void loadManualForUser(userId);
+    void loadImageOverridesForUser(userId);
+    void loadTitleOverridesForUser(userId);
+  }, [userId, loadManualForUser, loadImageOverridesForUser, loadTitleOverridesForUser]);
 
   const persistManual = useCallback(async (next: CookRecipeEntry[]) => {
+    const uid = userIdRef.current;
+    if (!uid) {
+      console.log('[Cookbook] persistManual skipped (no user)');
+      return;
+    }
+    const key = manualStorageKeyForUser(uid);
     try {
-      await AsyncStorage.setItem(MANUAL_STORAGE_KEY, JSON.stringify(next));
+      await AsyncStorage.setItem(key, JSON.stringify(next));
       console.log('[Cookbook] persisted manual entries', { count: next.length });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.log('[Cookbook] persistManual failed', { message });
       setManualErrorMessage('Could not save your guide item.');
+      return;
+    }
+    if (hasSupabaseConfig && uid) {
+      const ok = await bulkUpsertCookbookManualRows(
+        uid,
+        next.map((e) => ({
+          id: e.id,
+          payload: cookRecipeEntryToRemotePayload(e as unknown as Record<string, unknown>),
+        })),
+      );
+      if (!ok) {
+        console.log('[Cookbook] Supabase cookbook sync failed (local saved)');
+      }
     }
   }, []);
 
@@ -321,8 +484,10 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
   }, []);
 
   const persistImageOverrides = useCallback(async (next: Record<string, string | null>) => {
+    const uid = userIdRef.current;
+    if (!uid) return;
     try {
-      await AsyncStorage.setItem(IMAGE_OVERRIDE_KEY, JSON.stringify(next));
+      await AsyncStorage.setItem(imageOverrideKeyForUser(uid), JSON.stringify(next));
       console.log('[Cookbook] persisted image overrides', { count: Object.keys(next).length });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -332,8 +497,10 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
   }, []);
 
   const persistTitleOverrides = useCallback(async (next: Record<string, string | null>) => {
+    const uid = userIdRef.current;
+    if (!uid) return;
     try {
-      await AsyncStorage.setItem(TITLE_OVERRIDE_KEY, JSON.stringify(next));
+      await AsyncStorage.setItem(titleOverrideKeyForUser(uid), JSON.stringify(next));
       console.log('[Cookbook] persisted title overrides', { count: Object.keys(next).length });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -377,13 +544,64 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
         }
       }
 
+      const journalTargetId = resolveScanJournalIdForCookEntry(id, scanEntries, manualEntries);
+      const cookOnlyStorageKey = journalTargetId ? null : `cook-${id}`;
+
+      if (hasSupabaseConfig && userId && (journalTargetId || cookOnlyStorageKey)) {
+        try {
+          const uploaded = await uploadScanJournalImage({
+            userId,
+            entryId: journalTargetId ?? cookOnlyStorageKey!,
+            localUri: storedUri,
+            mimeType: image.mimeType,
+          });
+
+          if (uploaded?.path) {
+            if (journalTargetId) {
+              const patch: Parameters<typeof updateScanJournalEntry>[1] = {
+                storagePath: uploaded.path,
+              };
+              if (!storedUri.startsWith('data:')) {
+                patch.imageUri = storedUri;
+              }
+              await updateScanJournalEntry(journalTargetId, patch);
+            } else {
+              setManualEntries((prev) => {
+                const base = Array.isArray(prev) ? prev : [];
+                let changed = false;
+                const next = base.map((e) => {
+                  if (e.id !== id) return e;
+                  changed = true;
+                  return { ...e, storagePath: uploaded.path, clientUpdatedAt: Date.now() };
+                });
+                if (changed) void persistManual(next);
+                return changed ? next : prev;
+              });
+            }
+          } else {
+            console.log('[Cookbook] Supabase recipe photo upload returned null; keeping local override only');
+          }
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.log('[Cookbook] Supabase recipe photo sync failed', { message });
+        }
+      }
+
       setImageOverrides((prev) => {
         const next = { ...(prev ?? {}), [id]: storedUri };
         void persistImageOverrides(next);
         return next;
       });
     },
-    [ensureImageDir, persistImageOverrides],
+    [
+      ensureImageDir,
+      manualEntries,
+      persistImageOverrides,
+      persistManual,
+      scanEntries,
+      updateScanJournalEntry,
+      userId,
+    ],
   );
 
   const clearEntryImage = useCallback(
@@ -428,7 +646,7 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
         const next = base.map((entry) => {
           if (entry.id !== id) return entry;
           updatedManual = true;
-          return { ...entry, title: trimmed };
+          return { ...entry, title: trimmed, clientUpdatedAt: Date.now() };
         });
         if (updatedManual) {
           void persistManual(next);
@@ -469,8 +687,10 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
 
   const refresh = useCallback(async () => {
     console.log('[Cookbook] refresh requested');
-    await Promise.all([loadManual(), loadImageOverrides()]);
-  }, [loadImageOverrides, loadManual]);
+    const uid = userIdRef.current;
+    if (!uid) return;
+    await Promise.all([loadManualForUser(uid), loadImageOverridesForUser(uid), loadTitleOverridesForUser(uid)]);
+  }, [loadImageOverridesForUser, loadManualForUser, loadTitleOverridesForUser]);
 
   const getEntryById = useCallback((id: string) => entries.find((e) => e.id === id), [entries]);
 
@@ -486,20 +706,26 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
       commonName?: string;
       scientificName?: string;
       imageUri?: string;
+      imagePreviewUri?: string;
+      storagePath?: string;
       confidence?: number;
       safetyStatus?: CookRecipeEntry['safetyStatus'];
       scanEntryId?: string;
       chatMessageId?: string;
       suggestedUses?: string[];
     }) => {
+      const now = Date.now();
       const nextEntry: CookRecipeEntry = normalizeManualEntry({
         id: `guide-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        createdAt: Date.now(),
+        createdAt: now,
+        clientUpdatedAt: now,
         source: 'tucka-guide',
         scanEntryId: input.scanEntryId,
         chatMessageId: input.chatMessageId,
         title: input.title,
         imageUri: input.imageUri,
+        imagePreviewUri: input.imagePreviewUri,
+        storagePath: input.storagePath,
         commonName: input.commonName ?? 'Unconfirmed Plant',
         scientificName: input.scientificName,
         confidence: typeof input.confidence === 'number' ? input.confidence : 0,
@@ -533,6 +759,8 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
         const updated = base.filter((e) => e.id !== id);
         if (updated.length !== base.length) {
           void persistManual(updated);
+          const uid = userIdRef.current;
+          if (hasSupabaseConfig && uid) void deleteCookbookManualRow(uid, id);
           console.log('[Cookbook] removed manual entry', { id });
         } else {
           console.log('[Cookbook] removeEntry noop (not manual)', { id });
@@ -546,6 +774,11 @@ export const [CookbookProvider, useCookbook] = createContextHook<CookbookContext
   const clearAllManual = useCallback(async () => {
     setManualEntries([]);
     await persistManual([]);
+    const uid = userIdRef.current;
+    if (hasSupabaseConfig && uid) {
+      const ok = await deleteAllCookbookManualRows(uid);
+      if (!ok) console.log('[Cookbook] clearAll remote delete failed');
+    }
     console.log('[Cookbook] cleared manual entries');
   }, [persistManual]);
 

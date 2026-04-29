@@ -8,8 +8,12 @@ import * as Sharing from 'expo-sharing';
 import { ChevronLeft, Edit3, FileDown, ImageUp, Share2, Trash2, X } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { buildShareUrl } from '@/constants/shareLinks';
+import { getSignedScanImageUrl } from '@/constants/scanImagesStorage';
+import { hasSupabaseConfig } from '@/constants/supabase';
 import { useCookbook } from '@/app/providers/CookbookProvider';
 import { useScanJournal } from '@/app/providers/ScanJournalProvider';
+import { useResolvedScanImageUri } from '@/hooks/useResolvedScanImageUri';
+import { pickerAllowsEditing, prepareMediaLibraryPicker } from '@/utils/iosImagePicker';
 
 type LegacyFileSystemModule = typeof import('expo-file-system/legacy');
 type ExpoPrintModule = typeof import('expo-print');
@@ -165,9 +169,13 @@ export default function CookGuideDetailsScreen() {
     return getScanEntryById(entry.scanEntryId);
   }, [entry?.scanEntryId, getScanEntryById]);
 
-  const imageUri = useMemo(() => {
-    return safeImageUri(entry?.imageUri) ?? null;
-  }, [entry?.imageUri]);
+  const resolvedImageUri = useResolvedScanImageUri({
+    storagePath: entry?.storagePath ?? scanEntry?.storagePath,
+    imagePreviewUri: entry?.imagePreviewUri ?? scanEntry?.imagePreviewUri,
+    imageUri: entry?.imageUri,
+  });
+
+  const localEntryImageUri = useMemo(() => safeImageUri(entry?.imageUri) ?? null, [entry?.imageUri]);
 
   const [isImageBusy, setIsImageBusy] = useState<boolean>(false);
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
@@ -213,9 +221,17 @@ export default function CookGuideDetailsScreen() {
       setIsImageBusy(true);
       console.log('[CookGuide] onPickImage start', { id: entry.id });
 
+      if (Platform.OS !== 'web') {
+        const ok = await prepareMediaLibraryPicker();
+        if (!ok) {
+          Alert.alert('Permission needed', 'Photo library access is required to set a recipe photo.');
+          return;
+        }
+      }
+
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsEditing: pickerAllowsEditing(),
         quality: 0.9,
         base64: Platform.OS === 'web',
       });
@@ -305,7 +321,18 @@ export default function CookGuideDetailsScreen() {
     if (rawEntryImageUri && (entryImageScheme === 'file' || entryImageScheme === 'content')) {
       entryImageUri = await imageToBase64DataUri(rawEntryImageUri);
     }
-    const canEmbedImage = Boolean(entryImageUri) && (entryImageUri?.startsWith('data:') || (entryImageScheme !== 'file' && entryImageScheme !== 'content' && entryImageScheme !== 'ph'));
+    let canEmbedImage =
+      Boolean(entryImageUri) &&
+      (entryImageUri?.startsWith('data:') ||
+        (entryImageScheme !== 'file' && entryImageScheme !== 'content' && entryImageScheme !== 'ph'));
+
+    if (!canEmbedImage && entry.storagePath?.trim() && hasSupabaseConfig) {
+      const signed = await getSignedScanImageUrl(entry.storagePath.trim());
+      if (signed) {
+        entryImageUri = signed;
+        canEmbedImage = true;
+      }
+    }
 
     const scanImageRaw = scanEntry?.imagePreviewUri ?? scanEntry?.imageUri;
     const rawScanImageUri = safeImageUri(scanImageRaw);
@@ -314,7 +341,17 @@ export default function CookGuideDetailsScreen() {
     if (rawScanImageUri && (scanImageScheme === 'file' || scanImageScheme === 'content')) {
       scanImageUri = await imageToBase64DataUri(rawScanImageUri);
     }
-    const canEmbedScanImage = Boolean(scanImageUri) && (scanImageUri?.startsWith('data:') || (scanImageScheme !== 'file' && scanImageScheme !== 'content' && scanImageScheme !== 'ph'));
+    let canEmbedScanImage =
+      Boolean(scanImageUri) &&
+      (scanImageUri?.startsWith('data:') || (scanImageScheme !== 'file' && scanImageScheme !== 'content' && scanImageScheme !== 'ph'));
+
+    if (!canEmbedScanImage && scanEntry?.storagePath?.trim() && hasSupabaseConfig) {
+      const signed = await getSignedScanImageUrl(scanEntry.storagePath.trim());
+      if (signed) {
+        scanImageUri = signed;
+        canEmbedScanImage = true;
+      }
+    }
 
     const title = escHtml(entry.title);
     const common = escHtml(entry.commonName);
@@ -634,7 +671,7 @@ export default function CookGuideDetailsScreen() {
               <Image
                 source={{
                   uri:
-                    imageUri ??
+                    resolvedImageUri ??
                     'https://images.unsplash.com/photo-1541989458574-2bb5d1e4d05e?q=80&w=1800&auto=format&fit=crop',
                 }}
                 style={styles.heroImage}
@@ -654,7 +691,7 @@ export default function CookGuideDetailsScreen() {
                     <ImageUp size={18} color={COLORS.text} />
                   </TouchableOpacity>
 
-                  {imageUri ? (
+                  {localEntryImageUri ? (
                     <TouchableOpacity
                       style={[styles.imageActionButton, styles.imageActionDanger, isImageBusy && styles.imageActionButtonDisabled]}
                       onPress={onRemoveImage}

@@ -36,6 +36,9 @@ import {
   parseGeminiResult,
 } from './helpers/scanUtils';
 import { styles, DARK } from './helpers/styles';
+import { hasSupabaseConfig, supabase } from '@/constants/supabase';
+import { uploadScanJournalImage } from '@/constants/scanImagesStorage';
+import { pickerAllowsEditing, prepareCameraPicker, prepareMediaLibraryPicker } from '@/utils/iosImagePicker';
 
 export default function HomeScreen() {
   const { addEntry } = useScanJournal();
@@ -137,7 +140,11 @@ Return JSON with keys:
             listModels('v1').catch(() => [] as string[]),
             listModels('v1beta').catch(() => [] as string[]),
           ]);
+<<<<<<< HEAD:expo/app/(tabs)/(home)/index.tsx
           const preferOrder = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.5-pro-latest'];
+=======
+          const preferOrder = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.5-pro-latest'];
+>>>>>>> onboarding_flow:app/(tabs)/(home)/index.tsx
           const sortByPreference = (a: string, b: string) => {
             const ai = preferOrder.findIndex((p) => a === p);
             const bi = preferOrder.findIndex((p) => b === p);
@@ -146,18 +153,24 @@ Return JSON with keys:
             if (av !== bv) return av - bv;
             return a.localeCompare(b);
           };
-          const fromV1 = [...new Set(v1Models)].sort(sortByPreference).map((model) => ({ apiVersion: 'v1' as const, model }));
           const fromV1beta = [...new Set(v1betaModels)].sort(sortByPreference).map((model) => ({ apiVersion: 'v1beta' as const, model }));
-          const combined = [...fromV1, ...fromV1beta];
+          const fromV1 = [...new Set(v1Models)].sort(sortByPreference).map((model) => ({ apiVersion: 'v1' as const, model }));
+          const combined = [...fromV1beta, ...fromV1];
           if (combined.length > 0) return combined;
         } catch (e) {
           console.log('[Scan] buildCandidates error', { message: e instanceof Error ? e.message : String(e) });
         }
         return [
+<<<<<<< HEAD:expo/app/(tabs)/(home)/index.tsx
           { apiVersion: 'v1', model: 'gemini-2.5-flash' }, { apiVersion: 'v1', model: 'gemini-2.5-flash-lite' },
           { apiVersion: 'v1', model: 'gemini-1.5-flash' }, { apiVersion: 'v1', model: 'gemini-1.5-flash-latest' },
           { apiVersion: 'v1', model: 'gemini-1.5-pro' }, { apiVersion: 'v1beta', model: 'gemini-2.5-flash' },
           { apiVersion: 'v1beta', model: 'gemini-1.5-flash' }, { apiVersion: 'v1beta', model: 'gemini-1.5-flash-latest' },
+=======
+          { apiVersion: 'v1beta', model: 'gemini-2.5-flash' }, { apiVersion: 'v1beta', model: 'gemini-2.0-flash' },
+          { apiVersion: 'v1beta', model: 'gemini-1.5-flash' }, { apiVersion: 'v1beta', model: 'gemini-1.5-flash-latest' },
+          { apiVersion: 'v1beta', model: 'gemini-1.5-pro' }, { apiVersion: 'v1', model: 'gemini-1.5-flash' },
+>>>>>>> onboarding_flow:app/(tabs)/(home)/index.tsx
         ];
       };
 
@@ -338,11 +351,38 @@ Return JSON with keys:
                 }
               } catch { persistedImageUri = undefined; previewImageUri = undefined; }
 
+              let storagePath: string | undefined;
+              if (hasSupabaseConfig) {
+                const { data: sessionWrap } = await supabase.auth.getSession();
+                const { data: authData } = await supabase.auth.getUser();
+                const uid = sessionWrap?.session?.user?.id ?? authData?.user?.id ?? null;
+                const uploadSource = persistedImageUri ?? previewImageUri;
+                if (uid && uploadSource) {
+                  try {
+                    const uploaded = await uploadScanJournalImage({
+                      userId: uid,
+                      entryId,
+                      localUri: uploadSource,
+                      mimeType: typeof mimeType === 'string' ? mimeType : 'image/jpeg',
+                    });
+                    if (uploaded) storagePath = uploaded.path;
+                    else {
+                      console.log('[Scan] Supabase storage upload returned null (see [scanImagesStorage] logs)');
+                    }
+                  } catch (upErr) {
+                    console.log('[Scan] Supabase storage upload failed', upErr);
+                  }
+                } else if (hasSupabaseConfig && uploadSource && !uid) {
+                  console.log('[Scan] Skipping storage upload: no auth session/user id yet');
+                }
+              }
+
               const savedEntry = await addEntry({
                 id: entryId,
                 title: parsed.commonName?.trim().length ? parsed.commonName : 'Unconfirmed Plant',
                 imageUri: persistedImageUri,
                 imagePreviewUri: previewImageUri,
+                storagePath,
                 chatHistory: [],
                 scan: parsed as unknown as JournalGeminiScanResult,
               });
@@ -383,7 +423,7 @@ Return JSON with keys:
         setScanError(message);
         Alert.alert('Scan failed', message);
       } finally { setAnalyzing(false); }
-    }, [addEntry, geminiApiKey, mode, scanImages]);
+    }, [addEntry, geminiApiKey, mode, scanImages, hasSupabaseConfig]);
 
   const collectImages = useCallback(
     async (source: 'camera' | 'library'): Promise<ScanImage[] | null> => {
@@ -394,13 +434,19 @@ Return JSON with keys:
       }
       if (source === 'library') {
         if (Platform.OS !== 'web') {
-          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== 'granted') { Alert.alert('Permission needed', 'Sorry, we need photo library permissions to make this work!'); return null; }
+          const ok = await prepareMediaLibraryPicker();
+          if (!ok) {
+            Alert.alert('Permission needed', 'Sorry, we need photo library permissions to make this work!');
+            return null;
+          }
         }
       } else {
         if (Platform.OS !== 'web') {
-          const { status } = await ImagePicker.requestCameraPermissionsAsync();
-          if (status !== 'granted') { Alert.alert('Permission needed', 'Sorry, we need camera permissions to make this work!'); return null; }
+          const ok = await prepareCameraPicker();
+          if (!ok) {
+            Alert.alert('Permission needed', 'Sorry, we need camera permissions to make this work!');
+            return null;
+          }
         }
       }
 
@@ -410,7 +456,7 @@ Return JSON with keys:
           const stepLabel = i === 0 ? 'front view' : i === 1 ? 'side view' : 'close-up (leaf/fruit)';
           Alert.alert(`360 Identify · ${i + 1} / ${count}`, `Capture a ${stepLabel}. Keep the plant sharp and fill the frame.`, [{ text: 'OK' }]);
         }
-        const allowsEditing = Platform.OS !== 'ios';
+        const allowsEditing = pickerAllowsEditing();
         const result = source === 'camera'
           ? await ImagePicker.launchCameraAsync({ allowsEditing, aspect: [4, 3], quality: 0.92, base64: true, exif: false })
           : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing, aspect: [4, 3], quality: 0.92, base64: true, exif: false, selectionLimit: 1 });

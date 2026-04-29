@@ -23,6 +23,7 @@ import { LEARN_HERO_IMAGE_OVERRIDES } from '@/constants/learnImageOverrides';
 import { hasSupabaseConfig, supabase, supabasePublicDebugInfo } from '@/constants/supabase';
 import { useLearnImages } from '@/app/providers/LearnImageProvider';
 import * as ImagePicker from 'expo-image-picker';
+import { pickerAllowsEditing, prepareMediaLibraryPicker } from '@/utils/iosImagePicker';
 
 type LearnPlant = {
   id: string;
@@ -467,19 +468,16 @@ export default function LearnScreen() {
       if (!slug) throw new Error('Missing plant id');
 
       if (Platform.OS !== 'web') {
-        const existingPerm = await ImagePicker.getMediaLibraryPermissionsAsync();
-        if (!existingPerm.granted) {
-          const requested = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!requested.granted) {
-            console.log('[learn] media library permission denied');
-            throw new Error('Photos permission is required to change the image.');
-          }
+        const ok = await prepareMediaLibraryPicker();
+        if (!ok) {
+          console.log('[learn] media library permission denied');
+          throw new Error('Photos permission is required to change the image.');
         }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: pickerAllowsEditing(),
         quality: 0.9,
         aspect: [1, 1],
       });
